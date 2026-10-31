@@ -21,15 +21,20 @@ APP_NAME="hyprMac"
 : "${LSREGISTER:=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister}"
 : "${ACTIVATE_SETTINGS:=/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings}"
 : "${OPEN:=/usr/bin/open}"
-: "${OSASCRIPT:=/usr/bin/osascript}"
 : "${PKILL:=/usr/bin/pkill}"
 : "${KILLALL:=/usr/bin/killall}"
 : "${PYTHON:=/usr/bin/python3}"
 : "${UID_VAL:=$(/usr/bin/id -u)}"
-HYPR_CMD_VARS="DEFAULTS PLUTIL LAUNCHCTL TCCUTIL LSREGISTER ACTIVATE_SETTINGS OPEN OSASCRIPT PKILL KILLALL PYTHON"
+HYPR_CMD_VARS="DEFAULTS PLUTIL LAUNCHCTL TCCUTIL LSREGISTER ACTIVATE_SETTINGS OPEN PKILL KILLALL PYTHON"
 
-# Runs after every change to com.apple.WindowManager (empty: nothing).
+# Runs after every change to com.apple.WindowManager (empty: nothing). We never
+# restart WindowManager ourselves: that drops the user's window state.
 : "${HYPR_WM_APPLY_CMD:=}"
+# Optional probe: exit 0 when Stage Manager is still visually active. When
+# empty, install assumes it is if it was enabled before the change, because
+# WindowManager does not observe preference writes made with defaults.
+: "${HYPR_WM_ACTIVE_CMD:=}"
+WM_NOTE="Stage Manager change applies after logout or toggle in Control Center"
 : "${KEEP_CONFIG:=0}"
 : "${DRY_RUN:=0}"
 
@@ -56,17 +61,37 @@ NC_DOMAIN="com.apple.ncprefs"
 HOTKEY_IDS="125 126"
 ACCESSIBILITY_URL="x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
 
-# Residue the app itself creates at runtime (cleaned by uninstall unless it
-# already existed before install).
-residue_paths() {
+# Residue the app (or macOS on its behalf) creates at runtime. Uninstall
+# deletes it, except paths that existed before install: those are backed up
+# by install and restored exactly.
+residue_fixed() {
     printf '%s\n' \
         "$HOME/Library/Preferences/$BUNDLE_ID.plist" \
         "$HOME/Library/Caches/$BUNDLE_ID" \
-        "$HOME/Library/Saved Application State/$BUNDLE_ID.savedState"
+        "$HOME/Library/Saved Application State/$BUNDLE_ID.savedState" \
+        "$HOME/Library/Logs/$APP_NAME"
+}
+# Glob residue, one family per argument: httpstorages | crashreports.
+residue_glob() {
     local p
-    for p in "$HOME/Library/HTTPStorages/$BUNDLE_ID"*; do
-        if [ -e "$p" ] || [ -L "$p" ]; then printf '%s\n' "$p"; fi
-    done
+    case "$1" in
+        httpstorages) for p in "$HOME/Library/HTTPStorages/$BUNDLE_ID"*; do
+                if [ -e "$p" ] || [ -L "$p" ]; then printf '%s\n' "$p"; fi; done ;;
+        crashreports) for p in "$HOME/Library/Logs/DiagnosticReports/$APP_NAME-"*; do
+                if [ -e "$p" ] || [ -L "$p" ]; then printf '%s\n' "$p"; fi; done ;;
+    esac
+}
+RESIDUE_GLOBS="httpstorages crashreports"
+residue_glob_label() {
+    case "$1" in
+        httpstorages) printf '%s*' "$(tilde "$HOME/Library/HTTPStorages/$BUNDLE_ID")" ;;
+        crashreports) printf '%s-*' "$(tilde "$HOME/Library/Logs/DiagnosticReports/$APP_NAME")" ;;
+    esac
+}
+residue_paths() {
+    residue_fixed
+    local g
+    for g in $RESIDUE_GLOBS; do residue_glob "$g"; done
 }
 
 # ------------------------------------------------------------------ output --
@@ -362,8 +387,8 @@ EOF
     else
         printf 'launchagent %s not-loaded\n' "$BUNDLE_ID"
     fi
-    n="$("$LSREGISTER" -dump 2>/dev/null | /usr/bin/grep -c -F "$BUNDLE_ID" || true)"
-    printf 'lsregister %s lines=%s\n' "$BUNDLE_ID" "${n:-0}"
+    n="$(lsregister_records)"
+    printf 'lsregister %s records=%s\n' "$(tilde "$APP_DEST")" "${n:-0}"
 
     # Files install writes: compare contents.
     fp_path "$APP_DEST" content
@@ -375,14 +400,35 @@ EOF
     fp_path "$STATE_DIR" type
     fp_path "$CONFIG_PARENT" type
     fp_path "$CONFIG_DIR" type
-    fp_path "$HOME/Library/Preferences/$BUNDLE_ID.plist" type
-    fp_path "$HOME/Library/Caches/$BUNDLE_ID" type
-    fp_path "$HOME/Library/Saved Application State/$BUNDLE_ID.savedState" type
-    local p any=0
-    for p in "$HOME/Library/HTTPStorages/$BUNDLE_ID"*; do
-        if [ -e "$p" ] || [ -L "$p" ]; then fp_path "$p" type; any=1; fi
+    local p g any
+    while IFS= read -r p; do fp_path "$p" type; done <<EOF
+$(residue_fixed)
+EOF
+    for g in $RESIDUE_GLOBS; do
+        any=0
+        while IFS= read -r p; do
+            [ -n "$p" ] || continue
+            fp_path "$p" type
+            any=1
+        done <<EOF
+$(residue_glob "$g")
+EOF
+        [ "$any" = 1 ] || printf 'path %s none\n' "$(residue_glob_label "$g")"
     done
-    [ "$any" = 1 ] || printf 'path %s none\n' "$(tilde "$HOME/Library/HTTPStorages/$BUNDLE_ID")*"
+}
+
+# Number of LaunchServices records whose path is exactly the installed bundle
+# (build copies registered by Spotlight/Finder are ignored). Records look like
+# "path:                       /Users/me/Applications/hyprMac.app (0x1b88)".
+lsregister_records() {
+    { "$LSREGISTER" -dump 2>/dev/null || true; } | /usr/bin/awk -v want="$APP_DEST" '
+        /^path:/ {
+            p = $0
+            sub(/^path:[ \t]+/, "", p)
+            sub(/ \(0x[0-9A-Fa-f]+\)$/, "", p)
+            if (p == want) n++
+        }
+        END { print n + 0 }'
 }
 
 # verify_snapshots BEFORE AFTER -> 0 when identical (modulo KEEP_CONFIG).
@@ -407,21 +453,31 @@ verify_snapshots() {
 # ------------------------------------------------------------- app process --
 app_running() { "$PKILL" -0 -x "$APP_NAME" >/dev/null 2>&1; }
 
+# Stop the app with signals only (no Apple Events, so no Automation/TCC
+# prompt): SIGTERM through launchd when the agent is loaded, else pkill; the
+# app quits cleanly on SIGTERM. After 3 s, SIGKILL.
 quit_app() {
     if is_dry; then
-        run "$OSASCRIPT" -e "quit app id \"$BUNDLE_ID\""
+        printf '%s[dry-run]%s stop %s: %s, else %s; SIGKILL after 3 s\n' "$C_DIM" "$C_RESET" "$APP_NAME" \
+            "$(show_cmd "$LAUNCHCTL" kill SIGTERM "$AGENT_TARGET")" "$(show_cmd "$PKILL" -TERM -x "$APP_NAME")"
         return 0
     fi
     app_running || return 0
-    info "quitting $APP_NAME"
-    run "$OSASCRIPT" -e "quit app id \"$BUNDLE_ID\"" >/dev/null 2>&1 || warn "graceful quit failed"
+    info "stopping $APP_NAME (SIGTERM)"
+    local sent=0
+    if "$LAUNCHCTL" print "$AGENT_TARGET" >/dev/null 2>&1; then
+        if run "$LAUNCHCTL" kill SIGTERM "$AGENT_TARGET" >/dev/null 2>&1; then sent=1; fi
+    fi
+    # Not started by launchd (or launchd had no process): signal it directly.
+    if [ "$sent" = 0 ]; then run "$PKILL" -TERM -x "$APP_NAME" || true; fi
     local i=0
     while [ "$i" -lt 30 ]; do
         app_running || return 0
         sleep 0.1
         i=$((i + 1))
     done
-    run "$PKILL" -x "$APP_NAME" || true
+    warn "$APP_NAME did not exit within 3 s; sending SIGKILL"
+    run "$PKILL" -KILL -x "$APP_NAME" || true
 }
 
 # ---------------------------------------------------- settings application --
@@ -431,6 +487,27 @@ activate_hotkeys() {
     else
         warn "activateSettings not found; log out and back in for the keyboard shortcut change to apply"
     fi
+}
+
+# Is a recorded original value ("bool true", "integer 1", ...) enabled?
+wm_spec_enabled() {
+    case "$1" in
+        "bool true" | "bool 1" | "bool YES") return 0 ;;
+        integer\ 0 | float\ 0 | float\ 0.0 | absent | bool\ *) return 1 ;;
+        integer\ * | float\ *) return 0 ;;
+        string\ 1 | string\ true | string\ YES | string\ yes) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Should we tell the user the Stage Manager change is not visible yet?
+# $1: the value Stage Manager had before the change (manifest spec).
+wm_maybe_still_active() {
+    if [ -n "$HYPR_WM_ACTIVE_CMD" ]; then
+        /bin/sh -c "$HYPR_WM_ACTIVE_CMD" >/dev/null 2>&1
+        return $?
+    fi
+    wm_spec_enabled "$1"
 }
 
 wm_apply() {
@@ -503,6 +580,9 @@ undo_wm() { # "absent" | "<type> <value>"
         *) err "cannot restore $WM_DOMAIN $WM_KEY of type '$type'"; return 1 ;;
     esac
     wm_apply
+    if [ "$type" != absent ] && wm_spec_enabled "$spec"; then
+        info "Stage Manager restored to enabled. $WM_NOTE."
+    fi
 }
 
 undo_wm_domain_absent() {

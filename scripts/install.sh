@@ -9,7 +9,7 @@
 # before the first change so the rollback can be verified.
 #
 # Environment: APP_SRC (app bundle to install, default ../build/hyprMac.app),
-# HYPR_WM_APPLY_CMD, KEEP_CONFIG (uninstall), DRY_RUN=1, and the command
+# HYPR_WM_APPLY_CMD, HYPR_WM_ACTIVE_CMD, KEEP_CONFIG (uninstall), DRY_RUN=1, and the command
 # overrides listed in lib/common.sh. HYPR_FAIL_AT=<step> injects a failure
 # (used by the sandbox tests).
 set -Eeuo pipefail
@@ -49,6 +49,8 @@ fi
 
 # ------------------------------------------------------------ error handling --
 CURRENT_STEP="init"
+WM_ORIG="absent"
+INSTALL_NOTES=()
 MODE="install"
 PENDING_DIRS=()
 
@@ -305,11 +307,29 @@ EOF
         esac
         wval="$("$PLUTIL" -extract "$WM_KEY" raw "$f")"
         record "wm_globally_enabled $wtype $wval"
+        WM_ORIG="$wtype $wval"
     else
         record "wm_globally_enabled absent"
+        WM_ORIG="absent"
     fi
     run "$DEFAULTS" write "$WM_DOMAIN" "$WM_KEY" -bool false
     wm_apply
+
+    step wm_verify "checking that Stage Manager reads back as off"
+    if is_dry; then
+        run "$DEFAULTS" read "$WM_DOMAIN" "$WM_KEY"
+    else
+        local readback
+        readback="$("$DEFAULTS" read "$WM_DOMAIN" "$WM_KEY" 2>/dev/null)" || readback="(unreadable)"
+        case "$readback" in
+            0 | false) ok "$WM_DOMAIN $WM_KEY reads back as off" ;;
+            *) fail "$WM_DOMAIN $WM_KEY reads back as '$readback' after writing false" ;;
+        esac
+    fi
+    if wm_maybe_still_active "$WM_ORIG"; then
+        warn "Stage Manager may still be visible: $WM_NOTE."
+        INSTALL_NOTES+=("$WM_NOTE.")
+    fi
 
     step config "creating $(tilde "$CONFIG_DIR")"
     if [ -e "$CONFIG_DIR" ] || [ -L "$CONFIG_DIR" ]; then
@@ -361,6 +381,10 @@ EOF
         ok "hyprMac installed. Enable it under Accessibility, then use ⌥1–9 / ⌥⇧1–9."
         info "undo everything with 'make uninstall' (record: $(tilde "$MANIFEST"))"
     fi
+    local n
+    for n in ${INSTALL_NOTES[@]+"${INSTALL_NOTES[@]}"}; do
+        printf '%snote:%s %s\n' "$C_YELLOW" "$C_RESET" "$n"
+    done
 }
 
 if [ -f "$MANIFEST" ]; then
