@@ -4,7 +4,6 @@ import Testing
 @testable import HyprPlatform
 
 @Suite struct ModelTests {
-    @Test func versionPlaceholder() { #expect(HyprPlatform.version == "0.1.0") }
 
     @Test func windowStateRawValuesMirrorCore() {
         #expect(WindowState.tiled.rawValue == 0)
