@@ -3,6 +3,8 @@
 hyprMac runs in the menu bar (a 2×2 grid icon) and has no Dock icon. After `make install` it starts at every login.
 
 ## Shortcuts
+These are the defaults; all three can be changed in [`config.keys`](#keys-and-app-rules).
+
 | Keys | Action |
 |---|---|
 | ⌥1 … ⌥9 | Switch to Desktop N. This is the **native** macOS shortcut; hyprMac only listens so it can warn you when Desktop N doesn't exist |
@@ -34,6 +36,8 @@ hyprMac asks for permission to show notifications the first time it runs. If you
 | **Couldn't move window to Desktop N** | A throw failed. The body says why: no titlebar area to grab, a fullscreen window, macOS didn't switch in time, or an Accessibility error. See [LIMITATIONS](LIMITATIONS.md#moving-windows-between-spaces) |
 | **Configuration error — kept previous settings** | `init.lua` failed to load. The body has `file:line: message` |
 | **Tiling paused: Stage Manager is on** | Turn Stage Manager off in Control Center; tiling resumes by itself. This also appears right after `make install` until you toggle Stage Manager off once (or log out): install writes the setting, but macOS only applies it live after that |
+| **Some shortcuts are unavailable** | A configured shortcut couldn't be registered because another app owns it. Change it under `keys` in `init.lua` |
+| **Desktop switch shortcut mismatch** | `keys.switch` isn't the modifier set of any enabled "Switch to Desktop N" shortcut in macOS. Make them match |
 | **Rectangle is running** | Rectangle can move windows too. Quit it if windows jump around. hyprMac shows this once per run and never touches Rectangle |
 | **Accessibility permission was removed** | hyprMac stopped tiling. Re-enable it in System Settings and it resumes automatically |
 
@@ -43,6 +47,25 @@ The config file is `~/.config/hyprmac/init.lua`. The keys and their ranges are i
 To apply an edit, use one of these:
 - the menu bar item ▸ **Reload Configuration**;
 - from a terminal: `pkill -HUP -x hyprMac`. hyprMac reloads on `SIGHUP`, and a plain `SIGTERM` (`pkill -x hyprMac`) quits it cleanly.
+
+### Keys and app rules
+```lua
+config = {
+    keys = {
+        throw        = "alt+shift",       -- modifiers + 1–9: move the focused window to Desktop N
+        toggle_float = "alt+shift+f",     -- modifiers + exactly one key: float / tile the focused window
+        switch       = "alt",             -- modifiers hyprMac LISTENS for with 1–9 (see below)
+    },
+    rules = {
+        ignore = { "com.example.app" },   -- never managed: never tiled, never moved, no throw / toggle
+        float  = { "com.apple.calculator" }, -- always floating; ⌥⇧F can still tile it
+    },
+}
+```
+- **Grammar:** names are joined with `+` and are case-insensitive. Modifiers: `alt` (`opt`, `option`), `shift`, `ctrl` (`control`), `cmd` (`command`). Keys: `a`–`z`, `0`–`9`, `f1`–`f12`, `space`, `tab`, `return`, `escape`, `grave`, `minus`, `equal`, `comma`, `period`, `slash`. `throw` and `switch` take modifiers only; `toggle_float` needs at least one modifier and exactly one key. `throw` must differ from `switch`, and `toggle_float` can't be a throw shortcut (for example `alt+shift+3`).
+- **Reload** (menu or `SIGHUP`) registers the shortcuts again. If another app already owns one, you get a **Some shortcuts are unavailable** notification.
+- **`switch` is not what switches Desktops.** macOS does that, with the shortcut under System Settings ▸ Keyboard ▸ Keyboard Shortcuts ▸ Mission Control ▸ *Switch to Desktop N*. `switch` only tells hyprMac which keys to watch for the "Desktop N doesn't exist" notice. When it doesn't match an enabled macOS shortcut you get a **Desktop switch shortcut mismatch** notification. The throw doesn't depend on it: it presses the modifiers of the macOS shortcut it reads from `com.apple.symbolichotkeys` (read-only), and uses `switch` only when that can't be read.
+- **Rules** are bundle ids (`osascript -e 'id of app "Calculator"'`), at most 200 per list. `float` adds to the built-in list (Archive Utility, Calculator). An app in `ignore` is skipped entirely, including by the throw and toggle shortcuts; a reload stops managing its windows where they are.
 
 If the file has an error, nothing changes: hyprMac keeps the last good settings and tells you the file, line and problem. A missing file means the built-in defaults (inner gap 8, outer gap 12, split ratio 0.5).
 
@@ -65,7 +88,7 @@ Go through these in order:
 6. **Is another window manager running?** Rectangle, yabai, Amethyst, AeroSpace and similar tools can undo hyprMac's work. Quit them.
 
 ### ⌥N doesn't switch Desktops
-The switch itself is done by macOS, not hyprMac:
+(With a different `keys.switch`, read that shortcut wherever ⌥ appears here.) The switch itself is done by macOS, not hyprMac:
 1. Open System Settings ▸ Keyboard ▸ Keyboard Shortcuts… ▸ **Mission Control**.
 2. Expand Mission Control and make sure **Switch to Desktop N** is ticked and set to ⌥N. `make install` adds ⌥8 and ⌥9 if they were unbound; ⌥1–⌥7 are yours to set.
 3. Desktop N must exist. Add Desktops in Mission Control (the "+" at the top right).

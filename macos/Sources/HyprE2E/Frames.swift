@@ -66,13 +66,22 @@ enum Frames {
         }
     }
 
-    /// Normal (layer 0) on-screen windows that do not belong to `excluding`.
+    static func isIgnored(pid: pid_t, bundleIDs: Set<String>) -> Bool {
+        guard !bundleIDs.isEmpty, let id = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier else { return false }
+        return bundleIDs.contains(id)
+    }
+
+    /// Normal (layer 0) on-screen windows that do not belong to `excluding`, nor to an app hyprMac was
+    /// told to ignore (`rules.ignore`: the terminal running the tests): those are never tiled or moved,
+    /// so they are not part of any layout.
     static func foreignWindows(excluding pids: Set<pid_t>) -> [(owner: String, title: String)] {
+        let ignored = Set(HyprApp.ignoredBundleIDs)
         guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
                 as? [[String: Any]] else { return [] }
         return list.compactMap { d in
             guard (d[kCGWindowLayer as String] as? Int) == 0,
                   let pid = (d[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value, !pids.contains(pid),
+                  !isIgnored(pid: pid, bundleIDs: ignored),
                   let b = d[kCGWindowBounds as String],
                   let r = CGRect(dictionaryRepresentation: b as! CFDictionary), r.width > 40, r.height > 40
             else { return nil }

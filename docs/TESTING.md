@@ -160,7 +160,9 @@ throw-rapid                              two throws 150 ms apart: second never l
 missing-space-notice                     ⌥(count+1)
 display-cache                            skipped: needs 2+ displays (manual check)
 config-reload bad-config-survives        SIGHUP
+custom-keys                              toggle_float = ctrl+alt+t (config.keys): that combo toggles, ⌥⇧F doesn't
 ```
+Every scenario's config carries `rules.ignore = { <bundle id of the frontmost app at start> }`: the terminal running the tests can't be hidden, and without the rule hyprMac would tile it next to the fixtures. The harness's "other windows still on screen" warning skips that app too.
 Details of the newer ones:
 - **`hung-app-isolation`:** while fixture A's main thread is blocked, fixture B's window must be tiled within 1 s, **and** a SIGHUP must come back as `config_loaded` within 500 ms. The second check proves hyprMac itself (menu bar, signal handling) isn't stuck behind the hung app.
 - **`throw-titlebar-variants`:** for each variant the result must be `moved` (and the window fills Space 2) or a clean `noGrabPoint` (no Space switch, window untouched). Which one each variant got is printed as a TAP note, together with the titlebar roles the grab candidates hit.
