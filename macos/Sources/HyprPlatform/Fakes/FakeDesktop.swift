@@ -38,6 +38,8 @@ public struct FakeWindowQuirks: Equatable, Sendable {
     public var snapsBack = false
     /// Titlebar hit-test regions (e.g. a tab `AXRadioButton`); elsewhere the titlebar is the window.
     public var titlebarRegions: [FakeTitlebarRegion] = []
+    /// Real macOS: a minimized standard window reports subrole "AXDialog" (observed on macOS 26/27).
+    public var minimizedReportsDialog = true
     public init() {}
 }
 
@@ -106,6 +108,8 @@ public final class FakeDesktop: @unchecked Sendable {
         var selectedTab = true
         var quirks: FakeWindowQuirks
         var beforeFullscreen: (space: SpaceID, frame: CGRect)?
+        /// Mid fullscreen animation: AX doesn't list the window and the window server has no Space for it.
+        var inTransition = false
     }
 
     public let clock: FakeClock
@@ -351,10 +355,17 @@ public final class FakeDesktop: @unchecked Sendable {
                 w.beforeFullscreen = nil
                 displayList[d].active = before.space
             }
+            w.inTransition = false
             windowTable[ref] = w
             emit(.window(.resized, pid: ref.pid, window: ref))
             emit(.activeSpaceChanged)
         }
+    }
+
+    /// Real macOS, just before a window reports fullscreen: it drops out of its app's AX window list and
+    /// belongs to no Space. `setFullscreen(_, true)` (or another call with `false`) ends it.
+    public func setFullscreenTransition(_ ref: WindowRef, _ on: Bool) {
+        locked { windowTable[ref]?.inTransition = on }
     }
 
     public func closeWindow(_ ref: WindowRef) {

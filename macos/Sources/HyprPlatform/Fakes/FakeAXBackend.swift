@@ -71,7 +71,7 @@ public final class FakeAXBackend: AXBackend, @unchecked Sendable {
     }
 
     public func windows(pid: pid_t) throws -> [WindowRef] {
-        try call(.windows(pid), pid: pid) { desk.zOrder.filter { $0.pid == pid } }
+        try call(.windows(pid), pid: pid) { desk.zOrder.filter { $0.pid == pid && desk.windowTable[$0]?.inTransition != true } }
     }
 
     public func facts(of r: WindowRef) throws -> WindowFacts {
@@ -79,7 +79,7 @@ public final class FakeAXBackend: AXBackend, @unchecked Sendable {
             let w = try window(r)
             let app = desk.appTable[r.pid]!
             let main = desk.zOrder.first { $0.pid == r.pid && desk.windowTable[$0]?.minimized == false }
-            return WindowFacts(role: w.role, subrole: w.subrole, title: w.title, frame: w.frame,
+            return WindowFacts(role: w.role, subrole: w.minimized && w.quirks.minimizedReportsDialog ? "AXDialog" : w.subrole, title: w.title, frame: w.frame,
                                isMinimized: w.minimized, isFullscreen: w.fullscreen, isResizable: w.resizable,
                                isMain: main == r, isFocused: desk.focusedRef == r, bundleID: app.info.bundleID,
                                activationPolicy: app.info.activationPolicy, hasCloseButton: w.hasCloseButton,

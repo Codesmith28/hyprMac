@@ -43,7 +43,8 @@ public final class FakeSpaceProvider: SpaceProvider {
     public func spaces(of window: CGWindowID) -> [SpaceID] {
         desk.locked {
             guard !desk.spacesUnavailable,
-                  let w = desk.windowTable.values.first(where: { $0.ref.windowID == window }), !w.minimized else { return [] }
+                  let w = desk.windowTable.values.first(where: { $0.ref.windowID == window }), !w.minimized,
+                  !w.inTransition else { return [] }
             return [w.space]
         }
     }
