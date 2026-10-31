@@ -352,11 +352,18 @@ do_upgrade() {
     if [ -e "$APP_DEST" ]; then run rm -rf "$APP_DEST"; fi
     run /usr/bin/ditto "$APP_SRC" "$APP_DEST"
     run "$LSREGISTER" -f "$APP_DEST"
+    # Ad-hoc signing: macOS ties the Accessibility grant to the old build's code hash, so the
+    # toggle in System Settings still looks "on" but no longer applies. Reset it so the new
+    # build gets a clean prompt (the manifest's tcc_reset from the first install still covers
+    # uninstall).
+    step upgrade_tcc "resetting Accessibility for the new build (re-enable it when asked)"
+    run "$TCCUTIL" reset Accessibility "$BUNDLE_ID" || warn "tccutil reset failed (continuing)"
     if manifest_has "launchagent_loaded" && [ -f "$AGENT_PLIST" ]; then
         step upgrade_agent "reloading the LaunchAgent"
         run "$LAUNCHCTL" bootstrap "gui/$UID_VAL" "$AGENT_PLIST"
     fi
-    if is_dry; then info "dry run: nothing was changed"; else ok "hyprMac upgraded"; fi
+    run "$OPEN" "$ACCESSIBILITY_URL" || warn "could not open System Settings"
+    if is_dry; then info "dry run: nothing was changed"; else ok "hyprMac upgraded — re-enable hyprMac under Accessibility (remove any old hyprMac entry first)"; fi
 }
 
 # ------------------------------------------------------------- fresh install --
