@@ -11,11 +11,12 @@ struct Options {
     var fixtureSelfTest = false
     var hideOthers = true
     var stagger = 400
+    var skipStageManagerCheck = false
 
     static let usage = """
     usage: hyprmac-e2e --app PATH --fixture PATH [--scenario NAME ...] [--list] [--keep-going]
                        [--timeout S] [--oracle-selftest] [--fixture-selftest]
-                       [--no-hide-others] [--stagger MS]
+                       [--no-hide-others] [--stagger MS] [--skip-stage-manager-check]
 
       --app PATH          hyprMac.app to test (launched with --config/--event-log)
       --fixture PATH      hyprmac-fixture binary (default: next to this binary)
@@ -27,6 +28,9 @@ struct Options {
       --fixture-selftest  launch the fixture, read its windows, quit it (no hyprMac, no input events)
       --no-hide-others    do not hide other apps during the run (their windows will be tiled too)
       --stagger MS        delay between fixture windows (default 400)
+      --skip-stage-manager-check
+                          do not refuse to start when Stage Manager is on (hyprMac's own
+                          paused/stage_manager event still bails out the run)
 
     exit status: 0 all passed or skipped, 1 a scenario failed, 2 preflight/usage error
     """
@@ -60,6 +64,7 @@ struct Options {
             case "--oracle-selftest": o.oracleSelfTest = true
             case "--fixture-selftest": o.fixtureSelfTest = true
             case "--no-hide-others": o.hideOthers = false
+            case "--skip-stage-manager-check": o.skipStageManagerCheck = true
             case "--stagger":
                 let v = value(a)
                 guard let s = Int(v), s >= 0 else { usageError("--stagger: bad value '\(v)'") }
