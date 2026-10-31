@@ -159,6 +159,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
         case let .conflictingApp(name):
             notifier.post(title: "\(name) is running",
                           body: "\(name) may move windows too. Quit it if windows jump around.", id: "conflict-\(name)")
+        case let .hotkeysUnavailable(what):
+            notifier.post(title: "Some shortcuts are unavailable",
+                          body: "\(what) — another app may be using them. Change them in init.lua (keys).",
+                          id: "hotkeys")
+        case let .switchShortcutMismatch(configured, native):
+            let body = native.isEmpty
+                ? "No “Switch to Desktop N” shortcut is enabled in System Settings ▸ Keyboard ▸ Keyboard Shortcuts ▸ Mission Control."
+                : "keys.switch is \(configured), but macOS switches Desktops with \(native.joined(separator: " / ")). Make them match."
+            notifier.post(title: "Desktop switch shortcut mismatch", body: body, id: "switch-shortcut")
         case .permissionLost:
             notifier.post(title: "Accessibility permission was removed",
                           body: "hyprMac paused. Re-enable it in System Settings ▸ Privacy & Security ▸ Accessibility.",

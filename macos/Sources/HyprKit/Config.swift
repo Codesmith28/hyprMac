@@ -1,5 +1,15 @@
 import CHyprCore
 import Foundation
+import HyprPlatform
+
+/// `config.rules`: bundle ids.
+public struct AppRules: Equatable {
+    /// Never managed: never tiled, never moved.
+    public var ignore: [String]
+    /// Always floating (⌥⇧F can still tile them); added to the built-in float list.
+    public var float: [String]
+    public init(ignore: [String] = [], float: [String] = []) { self.ignore = ignore; self.float = float }
+}
 
 /// Validated configuration (mirrors `hm_config`).
 public struct Config: Equatable {
@@ -9,6 +19,8 @@ public struct Config: Equatable {
     /// Windows first seen narrower / shorter than this float (0 disables that axis).
     public var floatMinWidth: Double
     public var floatMinHeight: Double
+    public var keys: KeyBindings = .defaults
+    public var rules = AppRules()
 
     public static var defaults: Config { var c = hm_config(); hm_config_default(&c); return Config(c) }
 
@@ -17,9 +29,24 @@ public struct Config: Equatable {
         floatMinWidth = c.float_min_w; floatMinHeight = c.float_min_h
     }
     public init(innerGap: Double, outerGap: Double, splitRatio: Double = 0.5,
-                floatMinWidth: Double = 400, floatMinHeight: Double = 300) {
+                floatMinWidth: Double = 400, floatMinHeight: Double = 300,
+                keys: KeyBindings = .defaults, rules: AppRules = AppRules()) {
         self.innerGap = innerGap; self.outerGap = outerGap; self.splitRatio = splitRatio
         self.floatMinWidth = floatMinWidth; self.floatMinHeight = floatMinHeight
+        self.keys = keys; self.rules = rules
+    }
+
+    /// Parses the JSON of `hm_config_load_extras` (canonical, already validated by the core).
+    public static func parseExtras(json: String) -> (keys: KeyBindings, rules: AppRules)? {
+        guard let data = json.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let k = root["keys"] as? [String: String],
+              let t = k["throw"], let f = k["toggle_float"], let s = k["switch"],
+              let keys = KeyBindings(throw: t, toggleFloat: f, switch: s),
+              let r = root["rules"] as? [String: Any],
+              let ignore = r["ignore"] as? [String], let float = r["float"] as? [String]
+        else { return nil }
+        return (keys, AppRules(ignore: ignore, float: float))
     }
     var c: hm_config {
         hm_config(inner_gap: innerGap, outer_gap: outerGap, split_ratio: splitRatio,
@@ -53,11 +80,23 @@ public final class ConfigStore {
         var c = current.c
         var err = [CChar](repeating: 0, count: 1024)
         let status = hm_config_load_file(path.path, &c, &err, err.count)
-        if status == HM_OK {
-            current = Config(c)
-            return .loaded(current)
+        guard status == HM_OK else {
+            return .failedKeptPrevious(message: String(cString: err), kept: current)
         }
-        return .failedKeptPrevious(message: String(cString: err), kept: current)
+        // keys and rules come through their own call (the numeric struct stays frozen).
+        var json = [CChar](repeating: 0, count: 256 * 1024)
+        let extrasStatus = hm_config_load_extras(path.path, &json, json.count, &err, err.count)
+        guard extrasStatus == HM_OK else {
+            return .failedKeptPrevious(message: String(cString: err), kept: current)
+        }
+        guard let extras = Config.parseExtras(json: String(cString: json)) else {
+            return .failedKeptPrevious(message: "\(path.path): unreadable keys/rules", kept: current)
+        }
+        var loaded = Config(c)
+        loaded.keys = extras.keys
+        loaded.rules = extras.rules
+        current = loaded
+        return .loaded(current)
     }
 
     /// Creates the config file from the bundled example if it doesn't exist. Returns its URL.

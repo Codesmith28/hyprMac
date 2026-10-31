@@ -44,9 +44,9 @@ final class Context {
     // MARK: processes
 
     @discardableResult
-    func startHypr(_ gaps: Gaps = .defaults) throws -> HyprApp {
+    func startHypr(_ gaps: Gaps = .defaults, extraConfig: String = "") throws -> HyprApp {
         self.gaps = gaps
-        let h = try HyprApp(app: options.app!, workDir: workDir, gaps: gaps)
+        let h = try HyprApp(app: options.app!, workDir: workDir, gaps: gaps, extraConfig: extraConfig)
         hypr = h
         try h.waitStarted(expect: gaps, timeout: remaining(10))
         return h

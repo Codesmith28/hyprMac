@@ -16,6 +16,7 @@
 // trivially destructible locals.
 #include "hypr/config.hpp"
 #include "hypr/hypr_core.h"
+#include "hypr/keyspec.hpp"
 
 #include "lua.hpp"
 
@@ -27,6 +28,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -262,10 +264,54 @@ std::string describe_key(lua_State *L, int idx) {
 
 struct Field {
     std::string_view name;
-    enum Kind { Number, Table } kind;
-    double *target;                 // Number
-    std::vector<Field> children;    // Table
+    enum Kind { Number, Table, String, StringList } kind;
+    double *target;                          // Number
+    std::vector<Field> children;             // Table
+    std::optional<std::string> *str;         // String
+    std::vector<std::string> *list;          // StringList
 };
+
+Field num_field(std::string_view n, double *t) { return {n, Field::Number, t, {}, nullptr, nullptr}; }
+Field table_field(std::string_view n, std::vector<Field> c) { return {n, Field::Table, nullptr, std::move(c), nullptr, nullptr}; }
+Field str_field(std::string_view n, std::optional<std::string> *t) { return {n, Field::String, nullptr, {}, t, nullptr}; }
+Field list_field(std::string_view n, std::vector<std::string> *t) { return {n, Field::StringList, nullptr, {}, nullptr, t}; }
+
+// Reads the list at the top of the stack into `out`: a Lua sequence of non-empty strings,
+// at most hypr::kMaxRuleEntries. Raw, non-allocating API only. Returns an error or "".
+std::string read_string_list(lua_State *L, const std::string &path, std::vector<std::string> *out) {
+    const int t = lua_gettop(L);
+    std::vector<std::pair<lua_Integer, std::string>> items;
+    std::string error;
+    lua_pushnil(L);
+    while (lua_next(L, t) != 0) {
+        if (error.empty()) {
+            if (!lua_isinteger(L, -2) || lua_tointeger(L, -2) < 1) {
+                error = path + " must be a list of strings (found key " + describe_key(L, -2) + ")";
+            } else if (items.size() >= hypr::kMaxRuleEntries) {
+                error = path + " has too many entries (max " + std::to_string(hypr::kMaxRuleEntries) + ")";
+            } else {
+                lua_Integer idx = lua_tointeger(L, -2);
+                std::string elem = path + "[" + std::to_string(idx) + "]";
+                if (lua_type(L, -1) != LUA_TSTRING) {
+                    error = elem + " must be a string, got " + luaL_typename(L, -1);
+                } else {
+                    size_t len = 0;
+                    const char *v = lua_tolstring(L, -1, &len);
+                    if (len == 0) error = elem + " must not be empty";
+                    else items.emplace_back(idx, std::string(v, len));
+                }
+            }
+        }
+        lua_pop(L, 1);
+    }
+    if (!error.empty()) return error;
+    std::sort(items.begin(), items.end());
+    for (size_t i = 0; i < items.size(); ++i)
+        if (items[i].first != static_cast<lua_Integer>(i + 1)) return path + " must be a list without holes";
+    out->clear();
+    for (auto &it : items) out->push_back(std::move(it.second));
+    return "";
+}
 
 // Walks the table at the top of the stack. Only raw, non-allocating API calls
 // are used, so no Lua code runs and nothing can raise.
@@ -295,6 +341,19 @@ std::string check_table(lua_State *L, const std::string &where, const std::vecto
                     *match->target = static_cast<double>(lua_tonumber(L, -1));
                 else
                     type_error = path + " must be a number, got " + luaL_typename(L, -1);
+            } else if (match->kind == Field::String) {
+                if (lua_type(L, -1) == LUA_TSTRING) {
+                    size_t len = 0;
+                    const char *v = lua_tolstring(L, -1, &len);
+                    *match->str = std::string(v, len);
+                } else {
+                    type_error = path + " must be a string, got " + luaL_typename(L, -1);
+                }
+            } else if (match->kind == Field::StringList) {
+                if (lua_type(L, -1) == LUA_TTABLE)
+                    type_error = read_string_list(L, path, match->list);
+                else
+                    type_error = path + " must be a list of strings, got " + luaL_typename(L, -1);
             } else if (lua_type(L, -1) == LUA_TTABLE) {
                 type_error = check_table(L, path, match->children);
             } else {
@@ -325,8 +384,25 @@ int fetch_config(lua_State *L) {
     return 1;
 }
 
-hm_status run(const char *src, size_t len, const std::string &path, hm_config *inout, char *err,
-              size_t err_cap) {
+// Grammar + cross-field validation of config.keys. Messages carry their "keys.<name>:" prefix.
+std::string parse_keys(const std::optional<std::string> &t, const std::optional<std::string> &tf,
+                       const std::optional<std::string> &sw, hypr::Keys *out) {
+    struct Item { const char *name; const std::optional<std::string> *text; bool key; hypr::Chord *dst; };
+    const Item items[] = {{"throw", &t, false, &out->throw_to},
+                          {"toggle_float", &tf, true, &out->toggle_float},
+                          {"switch", &sw, false, &out->switch_to}};
+    for (const Item &it : items) {
+        if (!it.text->has_value()) continue;
+        hypr::Chord c;
+        std::string e = hypr::parse_chord(**it.text, it.key, c);
+        if (!e.empty()) return std::string("keys.") + it.name + ": " + e;
+        *it.dst = c;
+    }
+    return hypr::validate_keys(*out);
+}
+
+hm_status run(const char *src, size_t len, const std::string &path, hm_config *inout, hypr::Extras *extras_out,
+              char *err, size_t err_cap) {
     if (len > kMaxSourceBytes) {
         write_err(err, err_cap,
                   path + ": config file too large (" + std::to_string(len) + " bytes, max " +
@@ -355,6 +431,8 @@ hm_status run(const char *src, size_t len, const std::string &path, hm_config *i
     std::string message;
     hm_status status = HM_OK;
     hypr::Config cfg;  // missing keys take built-in defaults
+    hypr::Extras extras;
+    std::optional<std::string> key_throw, key_toggle, key_switch;
 
     lua_pushcfunction(L, setup_state);
     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
@@ -397,23 +475,24 @@ hm_status run(const char *src, size_t len, const std::string &path, hm_config *i
             message = std::string("config must be a table, got ") + luaL_typename(L, -1);
         } else {
             std::vector<Field> schema = {
-                {"gaps", Field::Table, nullptr,
-                 {{"inner", Field::Number, &cfg.inner_gap, {}},
-                  {"outer", Field::Number, &cfg.outer_gap, {}}}},
-                {"split_ratio", Field::Number, &cfg.split_ratio, {}},
-                {"float", Field::Table, nullptr,
-                 {{"min_width", Field::Number, &cfg.float_min_w, {}},
-                  {"min_height", Field::Number, &cfg.float_min_h, {}}}},
+                table_field("gaps", {num_field("inner", &cfg.inner_gap), num_field("outer", &cfg.outer_gap)}),
+                num_field("split_ratio", &cfg.split_ratio),
+                table_field("float", {num_field("min_width", &cfg.float_min_w), num_field("min_height", &cfg.float_min_h)}),
+                table_field("keys", {str_field("throw", &key_throw), str_field("toggle_float", &key_toggle),
+                                     str_field("switch", &key_switch)}),
+                table_field("rules", {list_field("ignore", &extras.rules.ignore), list_field("float", &extras.rules.float_)}),
             };
             message = check_table(L, "config", schema);
         }
     }
+    if (message.empty()) message = parse_keys(key_throw, key_toggle, key_switch, &extras.keys);
     if (message.empty()) message = hypr::validate(cfg);
     if (!message.empty()) {
         write_err(err, err_cap, path + ": " + message);
         status = HM_ERR_CONFIG;
     } else {
         *inout = cfg.to_c();
+        if (extras_out != nullptr) *extras_out = std::move(extras);
     }
     return status;
 }
@@ -428,14 +507,16 @@ extern "C" hm_status hm_config_load_string(const char *lua_source, const char *c
     }
     try {
         std::string path = (chunk_name != nullptr && *chunk_name) ? chunk_name : "<string>";
-        return run(lua_source, std::strlen(lua_source), path, inout, err, err_cap);
+        return run(lua_source, std::strlen(lua_source), path, inout, nullptr, err, err_cap);
     } catch (...) {
         write_err(err, err_cap, "internal error while loading configuration");
         return HM_ERR_INTERNAL;
     }
 }
 
-extern "C" hm_status hm_config_load_file(const char *path, hm_config *inout, char *err, size_t err_cap) {
+namespace {
+
+hm_status load_file_impl(const char *path, hm_config *inout, hypr::Extras *extras_out, char *err, size_t err_cap) {
     if (path == nullptr || inout == nullptr) {
         write_err(err, err_cap, "invalid argument: null path or config");
         return HM_ERR_INVALID_ARGUMENT;
@@ -482,9 +563,41 @@ extern "C" hm_status hm_config_load_file(const char *path, hm_config *inout, cha
             return HM_ERR_CONFIG;
         }
         buf.resize(n);
-        return run(buf.data(), buf.size(), p, inout, err, err_cap);
+        return run(buf.data(), buf.size(), p, inout, extras_out, err, err_cap);
     } catch (...) {
         write_err(err, err_cap, "internal error while loading configuration");
         return HM_ERR_INTERNAL;
     }
+}
+
+}  // namespace
+
+extern "C" hm_status hm_config_load_file(const char *path, hm_config *inout, char *err, size_t err_cap) {
+    return load_file_impl(path, inout, nullptr, err, err_cap);
+}
+
+extern "C" hm_status hm_config_load_extras(const char *path, char *json, size_t json_cap, char *err,
+                                           size_t err_cap) {
+    if (json == nullptr || json_cap == 0) {
+        write_err(err, err_cap, "invalid argument: null or empty json buffer");
+        return HM_ERR_INVALID_ARGUMENT;
+    }
+    json[0] = '\0';
+    hm_config scratch{};
+    hm_config_default(&scratch);
+    hypr::Extras extras;
+    hm_status st = load_file_impl(path, &scratch, &extras, err, err_cap);
+    if (st != HM_OK) return st;
+    try {
+        std::string text = hypr::extras_to_json(extras);
+        if (text.size() + 1 > json_cap) {
+            write_err(err, err_cap, std::string(path) + ": keys/rules JSON does not fit the buffer");
+            return HM_ERR_INVALID_ARGUMENT;
+        }
+        std::memcpy(json, text.c_str(), text.size() + 1);
+    } catch (...) {
+        write_err(err, err_cap, "internal error while loading configuration");
+        return HM_ERR_INTERNAL;
+    }
+    return HM_OK;
 }

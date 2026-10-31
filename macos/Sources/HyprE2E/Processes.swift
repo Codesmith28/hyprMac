@@ -192,7 +192,7 @@ final class HyprApp {
     let log: EventLog
     let outputURL: URL
 
-    init(app: URL, workDir: URL, gaps: Gaps) throws {
+    init(app: URL, workDir: URL, gaps: Gaps, extraConfig: String = "") throws {
         let exe = app.appendingPathComponent("Contents/MacOS/hyprMac")
         guard FileManager.default.isExecutableFile(atPath: exe.path) else {
             throw HarnessError("no executable at \(exe.path) (run `make app`)")
@@ -203,7 +203,7 @@ final class HyprApp {
         FileManager.default.createFile(atPath: logURL.path, contents: nil)
         FileManager.default.createFile(atPath: outputURL.path, contents: nil)
         log = EventLog(url: logURL)
-        try HyprApp.writeConfig(HyprApp.config(gaps), to: configURL)
+        try HyprApp.writeConfig(HyprApp.config(gaps, extra: extraConfig), to: configURL)
 
         process.executableURL = exe
         process.arguments = ["--config", configURL.path, "--event-log", logURL.path]
@@ -215,8 +215,16 @@ final class HyprApp {
         Children.add(process)
     }
 
-    static func config(_ g: Gaps) -> String {
-        "config = { gaps = { inner = \(fmt(g.inner)), outer = \(fmt(g.outer)) } }\n"
+    /// Bundle ids of apps hyprMac must leave alone (`rules.ignore`): the app running the tests, i.e.
+    /// the frontmost app at start (the user's terminal). It cannot be hidden while it runs the
+    /// harness, so without this hyprMac would tile it next to the fixtures. Set once by `main`.
+    nonisolated(unsafe) static var ignoredBundleIDs: [String] = []
+
+    /// `extra` is spliced into the config table, e.g. `keys = { toggle_float = "ctrl+alt+t" },`.
+    static func config(_ g: Gaps, extra: String = "") -> String {
+        let ignore = ignoredBundleIDs.map { "\"\($0)\"" }.joined(separator: ", ")
+        return "config = { gaps = { inner = \(fmt(g.inner)), outer = \(fmt(g.outer)) },"
+            + " rules = { ignore = { \(ignore) } }, \(extra) }\n"
     }
 
     static func writeConfig(_ text: String, to url: URL) throws {

@@ -76,8 +76,12 @@ config = {
     },
     split_ratio = 0.5, -- share of a split given to the existing window (0.1 – 0.9)
     float = { min_width = 400, min_height = 300 }, -- smaller windows float (0 – 2000, 0 = off)
+    keys = { throw = "alt+shift", toggle_float = "alt+shift+f", switch = "alt" }, -- shortcuts
+    rules = { ignore = {}, float = {} },           -- bundle ids: never managed / always floating
 }
 ```
+
+The shortcut grammar (`"ctrl+alt+t"`) and the app rules are described in [USAGE](docs/USAGE.md#keys-and-app-rules).
 
 - **Applying changes.** Reload after editing with the menu bar item ▸ **Reload Configuration**, or `pkill -HUP -x hyprMac`.
 - **Errors.** A file with an error is rejected as a whole: hyprMac keeps the previous settings and shows a notification with the file, line and message.

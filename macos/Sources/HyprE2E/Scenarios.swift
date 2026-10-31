@@ -10,7 +10,7 @@ enum Catalog {
         hungAppIsolation, snapBackNoLoop, lateWindow,
         throwToSpace2, throwHeldModifiers, throwTitlebarVariants, throwNoSpace, throwAlreadyThere,
         throwRapid, missingSpaceNotice, displayCache, configReload, badConfigSurvives,
-        floatSmall,
+        floatSmall, customKeys,
     ]
 
     static func named(_ name: String) -> Scenario? { all.first { $0.name == name } }

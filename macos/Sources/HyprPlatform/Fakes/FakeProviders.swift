@@ -106,7 +106,7 @@ public final class FakeEventPoster: EventPoster {
                 desk.grabbed = nil
             case .keyDown(let code, let flags):
                 guard desk.nativeSwitchEnabled,
-                      flags.intersection(SpaceKeyFilter.relevantModifiers) == .maskAlternate,
+                      flags.intersection(SpaceKeyFilter.relevantModifiers) == desk.nativeSwitchFlags,
                       let n = DigitKeys.digit(forKeyCode: code),
                       let info = DisplayGeometry.display(containing: desk.cursor, in: desk.displayList.map(\.info)),
                       let d = desk.displayList.first(where: { $0.info.id == info.id }),

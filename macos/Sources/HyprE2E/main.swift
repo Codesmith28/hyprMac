@@ -67,9 +67,10 @@ if !wms.isEmpty {
 }
 
 let session = Session()
+if let bundle = session.frontmost?.bundleIdentifier { HyprApp.ignoredBundleIDs = [bundle] }
 let spaces = Spaces.userSpaces
 print("# user Spaces: \(spaces.count) (ids \(spaces.map(String.init).joined(separator: ","))), current index \(session.originalSpaceIndex.map(String.init) ?? "?")")
-print("# frontmost: \(session.frontmost?.localizedName ?? "?")")
+print("# frontmost: \(session.frontmost?.localizedName ?? "?") (hyprMac ignores it: rules.ignore = \(HyprApp.ignoredBundleIDs))")
 
 // Ctrl-C / kill: stop children, give the desktop back.
 var signalSources: [DispatchSourceSignal] = []

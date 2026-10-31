@@ -69,6 +69,14 @@ hm_status hm_config_validate(const hm_config *cfg, char *err, size_t err_cap);
  * "not found"; callers treat that as "use defaults", not as an error. */
 hm_status hm_config_load_file(const char *path, hm_config *inout, char *err, size_t err_cap);
 
+/* Loads the same file and returns its `keys` and `rules` (validated, defaults filled in,
+ * canonical spelling) as compact JSON:
+ *   {"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt"},
+ *    "rules":{"ignore":[...],"float":[...]}}
+ * Errors are reported exactly like hm_config_load_file; *json is "" then. HM_ERR_INVALID_ARGUMENT
+ * when json_cap is too small (256 KB always suffices). */
+hm_status hm_config_load_extras(const char *path, char *json, size_t json_cap, char *err, size_t err_cap);
+
 /* Same as hm_config_load_file but from an in-memory chunk (used by tests). */
 hm_status hm_config_load_string(const char *lua_source, const char *chunk_name,
                                 hm_config *inout, char *err, size_t err_cap);
