@@ -18,10 +18,17 @@ extension Catalog {
         pump(0.15)
         post(.leftMouseDown, from)
         pump(0.15)
+        // The first dragged event only arms the resize (the window ignores it): spend a 1 pt one on it.
+        post(.leftMouseDragged, CGPoint(x: from.x + (to.x > from.x ? 1 : -1), y: from.y))
+        pump(0.05)
         for i in 1...steps {
             let t = Double(i) / Double(steps)
             post(.leftMouseDragged, CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t))
             pump(0.04)
+        }
+        for _ in 0..<3 { // let the window catch up with the pointer before releasing
+            post(.leftMouseDragged, to)
+            pump(0.05)
         }
         pump(0.1)
         post(.leftMouseUp, to)

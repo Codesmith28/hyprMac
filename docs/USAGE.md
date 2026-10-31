@@ -11,6 +11,8 @@ These are the defaults; all three can be changed in [`config.keys`](#keys-and-ap
 | ⌥⇧1 … ⌥⇧9 | Move the focused window to Desktop N. You follow it, and it keeps focus |
 | ⌥⇧F | Toggle the focused window between floating and tiled. Floating restores the size the window had when hyprMac first saw it, centred on the display. Tiling it again inserts it back into the layout. The choice sticks until you toggle again or the window closes. It beats automatic floating (a window that fights its tile), but not windows macOS can't resize (dialogs, fixed-size windows). Fullscreen windows are ignored |
 
+**Resizing by hand (Hyprland style).** Drag the edge of a tiled window and let go: hyprMac adopts the new size. The split boundary next to the edge you moved follows it (left/top edge: the split where the window is the second half; right/bottom edge: where it is the first half), the neighbours reflow, and the ratio sticks for later layouts. Ratios are limited to 10 %–90 % and to the windows' minimum sizes. An edge on the screen boundary, or a window with no split on that axis, snaps back. Moving a window by its titlebar (no size change) snaps it back to its tile. A window that resizes itself without the mouse still counts as a fight. The log line is `{"event":"user_resize",...}`.
+
 New windows tile automatically. The window that has focus is split along its longer side, and the new window takes the second half. Close, minimize, hide or fullscreen a window and the others reflow. When it comes back, it gets its old tile.
 
 The menu bar item ▸ **Keyboard Shortcuts…** shows the same list.
