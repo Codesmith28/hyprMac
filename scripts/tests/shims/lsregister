@@ -10,8 +10,15 @@ case "${1:-}" in
     -u)
         grep -vF "$2"$'\t' "$db" >"$db.tmp" || true; mv "$db.tmp" "$db" ;;
     -dump)
+        # Same shape as the real dump: "path:<spaces><path> (0x<id>)", plus
+        # plug-in records nested under the bundle path.
+        i=4096
         while IFS=$'\t' read -r p b; do
-            printf 'path:        %s\nidentifier:  %s\n--------\n' "$p" "$b"
+            i=$((i + 4))
+            printf -- '--------------------------------------------------------------------------------\n'
+            printf 'path:                       %s (0x%x)\n' "$p" "$i"
+            printf 'name:                       hyprMac\nidentifier:                 %s\n' "$b"
+            printf 'path:                       %s/Contents/PlugIns/Widget.appex (0x%x)\n' "$p" "$((i + 1))"
         done <"$db" ;;
     *) echo "fake lsregister: unsupported $*" >&2; exit 64 ;;
 esac
