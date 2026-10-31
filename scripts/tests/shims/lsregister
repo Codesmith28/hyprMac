@@ -1,0 +1,17 @@
+#!/bin/bash
+# Fake lsregister: "<path>\t<bundle id>" records in $FAKE_STATE/lsregister.db.
+. "$(dirname "$0")/_lib.sh"
+db="$FAKE_STATE/lsregister.db"; touch "$db"
+case "${1:-}" in
+    -f)
+        bid="$(/usr/bin/plutil -extract CFBundleIdentifier raw "$2/Contents/Info.plist")"
+        grep -vF "$2"$'\t' "$db" >"$db.tmp" || true
+        printf '%s\t%s\n' "$2" "$bid" >>"$db.tmp"; mv "$db.tmp" "$db" ;;
+    -u)
+        grep -vF "$2"$'\t' "$db" >"$db.tmp" || true; mv "$db.tmp" "$db" ;;
+    -dump)
+        while IFS=$'\t' read -r p b; do
+            printf 'path:        %s\nidentifier:  %s\n--------\n' "$p" "$b"
+        done <"$db" ;;
+    *) echo "fake lsregister: unsupported $*" >&2; exit 64 ;;
+esac

@@ -1,0 +1,4 @@
+#!/bin/bash
+# plutil only edits the files it is given; pass through to the real one.
+. "$(dirname "$0")/_lib.sh"
+exec /usr/bin/plutil "$@"

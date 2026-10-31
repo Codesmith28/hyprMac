@@ -1,0 +1,70 @@
+#!/usr/bin/python3 -I
+"""Fake `defaults`: domains are binary plists in $HOME/Library/Preferences."""
+import os, plistlib, sys
+
+if os.environ.get("HYPR_SANDBOX") != "1" or not os.path.isdir(os.environ.get("FAKE_STATE", "")):
+    sys.stderr.write("shim defaults: not in a sandbox, refusing\n"); sys.exit(97)
+args = sys.argv[1:]
+with open(os.path.join(os.environ["FAKE_STATE"], "calls.log"), "a") as log:
+    log.write("defaults " + " ".join(args) + "\n")
+call = "defaults " + " ".join(args)
+for pat in filter(None, os.environ.get("FAKE_FAIL", "").split("|")):
+    if call.startswith(pat):
+        sys.stderr.write("defaults: injected failure (%s)\n" % pat); sys.exit(1)
+
+PREFS = os.path.join(os.environ["HOME"], "Library", "Preferences")
+def path(dom): return os.path.join(PREFS, dom + ".plist")
+def load(dom):
+    try:
+        with open(path(dom), "rb") as f: return plistlib.load(f)
+    except FileNotFoundError: return None
+def save(dom, d):
+    os.makedirs(PREFS, exist_ok=True)
+    with open(path(dom), "wb") as f: plistlib.dump(d, f, fmt=plistlib.FMT_BINARY, sort_keys=True)
+def show(v):
+    if isinstance(v, bool): return "1" if v else "0"
+    return str(v)
+def die(msg, code=1):
+    sys.stderr.write(msg + "\n"); sys.exit(code)
+
+if not args: die("usage: defaults <verb> ...")
+verb, rest = args[0], args[1:]
+if verb == "read":
+    d = load(rest[0])
+    if d is None: die("Domain %s does not exist" % rest[0])
+    if len(rest) == 1: print(d); sys.exit(0)
+    if rest[1] not in d: die("The domain/default pair of (%s, %s) does not exist" % (rest[0], rest[1]))
+    print(show(d[rest[1]]))
+elif verb == "write":
+    dom, key = rest[0], rest[1]
+    if len(rest) == 3: val = rest[2]
+    else:
+        t, raw = rest[2], rest[3]
+        if t == "-bool": val = raw.lower() in ("true", "yes", "1")
+        elif t in ("-int", "-integer"): val = int(raw)
+        elif t == "-float": val = float(raw)
+        elif t == "-string": val = raw
+        else: die("unsupported type " + t)
+    d = load(dom) or {}
+    d[key] = val
+    save(dom, d)
+elif verb == "delete":
+    d = load(rest[0])
+    if d is None: die("Domain (%s) not found.\nDefaults have not been changed." % rest[0])
+    if len(rest) == 1: os.remove(path(rest[0]))
+    else:
+        if rest[1] not in d: die("Domain (%s) not found.\nDefaults have not been changed." % rest[0])
+        del d[rest[1]]
+        save(rest[0], d)
+elif verb == "export":
+    data = plistlib.dumps(load(rest[0]) or {}, fmt=plistlib.FMT_BINARY, sort_keys=True)
+    if rest[1] == "-": sys.stdout.buffer.write(data)
+    else:
+        with open(rest[1], "wb") as f: f.write(data)
+elif verb == "import":
+    src = sys.stdin.buffer.read() if rest[1] == "-" else open(rest[1], "rb").read()
+    d = plistlib.loads(src)
+    if not isinstance(d, dict): die("not a dictionary")
+    save(rest[0], d)
+else:
+    die("fake defaults: unsupported verb " + verb)

@@ -30,8 +30,11 @@
 //    first leaf in tree order. Orientation uses the target's current computed
 //    rectangle (with the snapshot's usable rect).
 //  * Plan placements are in tree order (first child before second child).
-//  * Min size used for layout is the per-axis max of the latest non-zero
-//    snapshot hint and the latest hm_engine_report_min_size value.
+//  * Min sizes are merged PER AXIS: a positive value replaces the stored one,
+//    0 means "unknown on this axis" and keeps it (the executor reports only the
+//    axis that overflowed). Layout uses the per-axis max of the snapshot hint
+//    and the reported value. Re-reporting the same size changes nothing, so a
+//    relayout after it yields identical geometry.
 //  * forget_space also drops the ghosts recorded against that space.
 #include "hypr/bsp_layout.hpp"
 #include "hypr/config.hpp"
