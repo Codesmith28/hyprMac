@@ -1,11 +1,23 @@
 -- ~/.config/hyprmac/init.lua
 -- hyprMac configuration. Everything is optional; delete a line to use the default.
--- Reload from the menu bar (hyprMac ▸ Reload Configuration) after editing.
+-- Reload from the menu bar (hyprMac ▸ Reload Configuration) after editing,
+-- or from a terminal with: pkill -HUP -x hyprMac
+--
+-- If this file has a mistake (a syntax error, an unknown key, a wrong type or a
+-- value out of range), hyprMac rejects the whole file, keeps the settings it had
+-- and shows a notification with the line and the problem.
+--
+-- The file runs in a sandbox: only the base, string, math and table libraries
+-- are available (no io, os, require or load), with memory and time limits.
+-- Gaps follow one rule: two tiles plus the inner gap fill their parent exactly,
+-- and the outer gap is applied once, around the whole usable screen area.
 
 config = {
     gaps = {
         inner = 8,   -- points between adjacent windows      (0 – 200)
         outer = 12,  -- points between windows and the edges (0 – 200)
     },
+    -- A new window splits the focused one along its longer side and takes the
+    -- second half; split_ratio is the share the existing window keeps.
     split_ratio = 0.5, -- share of a split given to the existing window (0.1 – 0.9)
 }
