@@ -95,11 +95,15 @@ public final class FakeMouseMonitor: MouseMonitoring {
 public final class FakeThrowHotkeys: ThrowHotkeys {
     private var onThrow: ((Int) -> Void)?
     public var failingDigits: [Int] = []
+    public var onToggleFloat: (() -> Void)?
+    public var toggleFloatFailed = false
     public init() {}
     @discardableResult
     public func start(onThrow: @escaping (Int) -> Void) -> [Int] { self.onThrow = onThrow; return failingDigits }
     public func stop() { onThrow = nil }
     public func press(_ n: Int) { onThrow?(n) }
+    /// Simulates ⌥⇧F.
+    public func pressToggleFloat() { onToggleFloat?() }
 }
 
 public final class FakeSpaceKeyObserver: SpaceKeyObserving {
