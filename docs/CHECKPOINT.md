@@ -44,30 +44,23 @@ Hyprland-style BSP tiler for macOS on **native** Spaces:
 | `feat/e2e`, `feat/app-contract`, `feat/e2e-v2` | Fixture app + E2E harness (scenarios plus v2 throw scenarios), app ↔ harness contract |
 | `feat/docs` | README, `docs/USAGE.md`, `LIMITATIONS.md`, `TESTING.md` (refreshed in e2e-v2) |
 
+### Merged since (2026-10-31, all green: core 169, platform 170, kit 70, install-sandbox 29)
+| Branch | Content |
+|---|---|
+| `feat/e2e-v2` | v2 throw scenarios, fixture titlebar variants, docs refresh |
+| `fix/live-review` | AX timeout (system-wide 0.25 s), one-call `facts()`, observers off main, Ghostty grab point (top+3 band), mouse flags, non-blocking `isPaused` |
+| `fix/rollback-review` | Manifest allowlist (C1), keep state on failed undo (H1), journaled undo (H2), `-dict-add` hotkeys (M4), exit 3 = UNVERIFIED (M9), refuse root/empty HOME (M8) |
+
 ### In progress
-At the time of writing, these agents are running in Herdr panes, each in its own git worktree under `/Users/codesmith28/Projects/hyprMac-<name>`:
+Nothing is running in the background. The only unmerged work is the half-written `scripts/tests/regressions.sh` (uncommitted, in the `hyprMac-core` worktree; optional).
 
-| Branch (worktree) | Scope, narrowed for budget | Brief / report |
-|---|---|---|
-| `fix/rollback-review` (`hyprMac-install`) | Rollback review findings **C1, H1, H2, M4, M8, M9** | `.agent-brief.md` in the worktree; report at `<scratchpad>/reports/rollback-fixes.md` |
-| `fix/live-review` (`hyprMac-platform`) | Live review findings **#1–#4, #10**, plus making `isPaused` non-blocking | report at `<scratchpad>/reports/live-fixes.md` |
-
-- **Stopped for budget:** `test/rollback-regressions`. Its `scripts/tests/regressions.sh` is **uncommitted** in the `hyprMac-core` worktree and was only partly written. Optional to finish.
-- **Scratchpad:** `/private/tmp/claude-501/-Users-codesmith28-Projects-hyprMac/9d28b89d-c040-4025-b975-4ad60fcdc766/scratchpad/reports/`. It holds every agent report, including `rollback-review.md` and `platform-live-review.md` (the full findings lists). It lives in /tmp and **may vanish after a reboot**; the key findings are summarised below.
-
-### Next steps, in order
-1. **Merge `fix/live-review` and `fix/rollback-review`** once their reports say done. Run `make test` on `main` after each merge.
-2. **Real run.** The user must watch. The terminal (Ghostty) already has Accessibility.
-   1. `make preflight`, then `make install`. Grant Accessibility to `hyprMac` when prompted.
-   2. Quit the installed hyprMac from its menu bar (the harness launches its own copy).
-   3. `make test-e2e E2E_ARGS="--keep-going"`. Use a subset if budget is short: `--scenario tile-1 tile-3 close-reflow minimize-restore fullscreen-restore throw-to-space-2 missing-space-notice config-reload`.
-   4. Try ⌥⇧2 by hand on Ghostty and Chrome.
-   5. `make uninstall`, which must print "rollback verified". Then `make verify-rollback`.
-3. **Update this file** with the results. Commit.
+### Next steps
+1. **Real run:** `make preflight` and `make install DRY_RUN=1` were checked and are clean. Next are `make install`, a short e2e subset, a manual ⌥⇧2 on Ghostty, then `make uninstall` (it must print "rollback verified") and `make verify-rollback`.
+2. Record the results here, and commit.
 
 ### Known open findings (deferred for budget; list them as known gaps)
-- **Rollback review:** H3 (the snapshot is too narrow: collateral damage to other keys isn't detected), H4 (the sandbox guard can be bypassed; affects tests only), M2 (a preloaded LaunchAgent isn't restored), M3 (an interrupted install that is re-run gets treated as an upgrade), M5 (TCC reset is lossy; a BTM disabled override persists), M6 (an already-running app isn't detected), M7 (a user-edited config is deleted), L1–L8.
-- **Live review:** #5 (observer use-after-free race), #6 (no destroyed notification for windows on other Spaces), #7 (cache of dead pids), #8 (Carbon can't detect ⌥⇧N clashes), #9 (NSScreen read off main), #11 (thread leak per restart, executor queue pruning).
+- **Rollback review (C1/H1/H2/M4/M8/M9 are FIXED):** H3 (the snapshot is too narrow: collateral damage to other keys isn't detected), H4 (the sandbox guard can be bypassed; affects tests only), M2 (a preloaded LaunchAgent isn't restored), M3 (an interrupted install that is re-run gets treated as an upgrade), M5 (TCC reset is lossy; a BTM disabled override persists), M6 (an already-running app isn't detected), M7 (a user-edited config is deleted), L1–L8.
+- **Live review (#1-#7, #10, #11 mostly FIXED):** #8 (Carbon can't detect ⌥⇧N clashes), #9 (NSScreen read off main), #11 (thread leak per restart, executor queue pruning).
 - **Perf:** dwindle insertion of N windows arriving at once is O(n²) (1.3 ms for 200); irrelevant in practice.
 
 ## Orchestration notes for whoever resumes
