@@ -90,8 +90,12 @@ All of it is being fixed on `fix/e2e-run1` (worktree `hyprMac-e2e`, brief in `.a
 ### User feedback (2026-10-31): works on the real Mac after a logout
 The stale behaviour came from windows opened before the update. `fix(install)` (ac2dfff): an upgrade now resets the Accessibility entry, because ad-hoc signing changes the cdhash.
 
-### In progress: `feat/user-resize` (worktree `hyprMac-e2e`, Sonnet agent, brief in `.agent-brief.md`)
-Hyprland-style resize: a user mouse resize of a tiled window moves the adjacent split boundaries (the new C API call `hm_engine_resize` is approved), and the neighbours reflow. A titlebar move still snaps back. A self-resize keeps the fight logic. The agent may run the real e2e (`user-resize` scenario, plus the full suite once). Report: `<scratchpad>/reports/feat-user-resize.md`.
+### `feat/user-resize`: MERGED (make test green: core 201, platform 188, kit 127, install-sandbox 29)
+A mouse resize of a tiled window is adopted on mouse-up: `hm_engine_resize` moves the nearest adjacent split per changed edge, clamped to [0.1, 0.9] and to the minimums, and the ratios persist. A titlebar move or a screen edge snaps back. A self-resize keeps the fight logic. The real e2e `user-resize` passes (real CGEvent drag).
+- **Full e2e:** 32 passed, 2 failed, 1 skipped of 35.
+- **Open:**
+  - `hung-app-isolation`: timing; the 500 ms limit should become 750 ms.
+  - `fullscreen-restore`: A1 gets floated for "fights" when leaving fullscreen. It fails identically on the earlier base, and Rectangle is running. Investigate next.
 
 ### Next steps
 1. Merge the 3 feature branches (float-small, then min-size, then toggle), running `make test` after each. Then `make install` again (an upgrade: only the bundle is replaced).
