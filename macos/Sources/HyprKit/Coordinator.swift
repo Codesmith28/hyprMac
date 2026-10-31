@@ -24,7 +24,9 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         public var clock: TimeSource
         /// Builds the platform event source; nil means "no live events" (tests drive `handle`).
         public var makeEvents: ((DispatchQueue, @escaping (PlatformEvent) -> Void) -> PlatformEvents)?
-        /// Runs `block` on the main thread (tests run inline).
+        /// Runs `block` on the main thread (tests run inline). Production must always hop
+        /// asynchronously: delegate callbacks are delivered through it and may call back into
+        /// the coordinator (e.g. read `isPaused`).
         public var onMain: (@escaping () -> Void) -> Void
 
         public init(ax: AXBackend, windowServer: WindowServerQuery, spaces: SpaceProvider,
@@ -62,6 +64,9 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     public weak var delegate: TilingControllerDelegate?
     public let queue = DispatchQueue(label: "dev.codesmith28.hyprmac.coordinator")
     private let moverQueue = DispatchQueue(label: "dev.codesmith28.hyprmac.mover")
+    /// Delegate callbacks leave `queue` through here, so a delegate may synchronously call back
+    /// into the coordinator (`isPaused` does `queue.sync`) without re-entering `queue`.
+    private let deliveryQueue = DispatchQueue(label: "dev.codesmith28.hyprmac.delivery")
     private let deps: Dependencies
     private let tuning: Tuning
     private let logger = Logger(subsystem: "dev.codesmith28.hyprmac", category: "coordinator")
@@ -99,7 +104,13 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     private var activity = 0
     private var planCount = 0
 
-    public var isPaused: Bool { queue.sync { userPaused || stageManagerPaused } }
+    private let queueKey = DispatchSpecificKey<Bool>()
+
+    /// Safe from any thread, including the coordinator queue itself.
+    public var isPaused: Bool {
+        if DispatchQueue.getSpecific(key: queueKey) == true { return userPaused || stageManagerPaused }
+        return queue.sync { userPaused || stageManagerPaused }
+    }
 
     public init(deps: Dependencies, configStore: ConfigStore, tuning: Tuning = Tuning()) {
         self.deps = deps
@@ -112,6 +123,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         self.mover = SpaceMover(ax: deps.ax, spaces: deps.spaces, displays: deps.displays,
                                 poster: deps.poster, clock: deps.clock, transitions: transitions)
         executor.delegate = self
+        queue.setSpecific(key: queueKey, value: true)
     }
 
     /// Production wiring.
@@ -122,7 +134,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             systemState: SystemStateReader(), poster: SystemEventPoster(), hotkeys: HotkeyCenter(),
             spaceKeys: SpaceKeyObserver(), clock: SystemTimeSource(),
             makeEvents: { queue, handler in PlatformEvents(queue: queue, handler: handler) },
-            onMain: { block in if Thread.isMainThread { block() } else { DispatchQueue.main.async(execute: block) } })
+            onMain: { block in DispatchQueue.main.async(execute: block) })
         return Coordinator(deps: deps, configStore: ConfigStore(path: configPath))
     }
 
@@ -151,11 +163,13 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     }
 
     public func stop() {
-        deps.onMain { [self] in
+        let teardown = { [self] in
             deps.hotkeys.stop()
             deps.spaceKeys.stop()
             events?.stop()
         }
+        // At quit an async hop may never run; on the main thread tear down right away.
+        if Thread.isMainThread { teardown() } else { deps.onMain(teardown) }
         queue.sync {
             running = false
             reconcileGeneration += 1 // invalidates scheduled reconciles
@@ -493,18 +507,25 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         }
     }
 
+    /// Never calls the delegate from `queue` (or from inside a `queue.sync`): the callback is
+    /// handed to `deliveryQueue` and from there to `onMain`.
     private func notify(_ notice: TilingNotice) {
-        deps.onMain { [weak self] in
+        deliver { [weak self] in
             guard let self else { return }
             self.delegate?.tiling(self, didPost: notice)
         }
     }
 
     private func stateChanged() {
-        deps.onMain { [weak self] in
+        deliver { [weak self] in
             guard let self else { return }
             self.delegate?.tilingStateChanged(self)
         }
+    }
+
+    private func deliver(_ block: @escaping () -> Void) {
+        let onMain = deps.onMain
+        deliveryQueue.async { onMain(block) }
     }
 
     // MARK: helpers
@@ -558,7 +579,10 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             moverQueue.sync {}
             guard executor.waitUntilIdle(timeout: max(0.1, deadline.timeIntervalSinceNow)) else { return false }
             let quiet = queue.sync { outstandingTimers == 0 && !throwInFlight && activity == before }
-            if quiet, executor.waitUntilIdle(timeout: 1), queue.sync(execute: { activity == before }) { return true }
+            if quiet, executor.waitUntilIdle(timeout: 1), queue.sync(execute: { activity == before }) {
+                deliveryQueue.sync {} // delegate callbacks posted so far have run (inline onMain)
+                return true
+            }
             Thread.sleep(forTimeInterval: 0.005)
         }
         return false
