@@ -35,6 +35,11 @@
 //    axis that overflowed). Layout uses the per-axis max of the snapshot hint
 //    and the reported value. Re-reporting the same size changes nothing, so a
 //    relayout after it yields identical geometry.
+//  * resize: for each edge of `desired` that differs from the window's laid-out frame (> 0.5 pt),
+//    the nearest ancestor split on that axis with the window in the SECOND child (left/top edge)
+//    or FIRST child (right/bottom edge) gets ratio = (boundary - rect.start [- gap]) / (L - gap),
+//    clamped to [0.1, 0.9] and to both subtrees' minimum sizes. Edges with no such split are
+//    ignored (the plan snaps them back). Outermost splits are adjusted first.
 //  * forget_space also drops the ghosts recorded against that space.
 #include "hypr/bsp_layout.hpp"
 #include "hypr/config.hpp"
@@ -82,6 +87,9 @@ public:
     hm_status relayout(SpaceId space, Plan &out);
     hm_status report_min_size(WindowId w, double min_w, double min_h);
     hm_status swap(WindowId a, WindowId b, Plan &out);
+    // The user resized `w` to `desired`: move the adjacent split boundaries (see engine.cpp) and
+    // return the plan for the window's space. HM_ERR_UNKNOWN_WINDOW unless `w` is a tiled leaf.
+    hm_status resize(WindowId w, const Rect &desired, Plan &out);
     void forget_window(WindowId w);
     void forget_space(SpaceId space);
 

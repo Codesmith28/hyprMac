@@ -161,6 +161,14 @@ hm_status hm_engine_report_min_size(hm_engine *engine, hm_window_id window, doub
  * by drag-to-swap). Returns HM_ERR_UNKNOWN_WINDOW if either isn't tiled. */
 hm_status hm_engine_swap(hm_engine *engine, hm_window_id a, hm_window_id b, hm_plan *out);
 
+/* The user dragged `window`'s edges so it now occupies `desired`. For every edge that moved, the
+ * nearest ancestor split on that axis (window in the SECOND child for left/top, FIRST child for
+ * right/bottom) gets a new ratio putting the boundary on that edge (gaps respected), clamped to
+ * [0.1, 0.9] and the subtrees' minimum sizes. Edges with no such split (screen boundary) are
+ * ignored. Returns the full plan for the window's space. HM_ERR_UNKNOWN_WINDOW if the window is not
+ * a tiled leaf; HM_ERR_INVALID_ARGUMENT for a non-finite rect. */
+hm_status hm_engine_resize(hm_engine *engine, hm_window_id window, hm_rect desired, hm_plan *out);
+
 /* Drop a window everywhere, including ghost slots (app terminated). */
 void hm_engine_forget_window(hm_engine *engine, hm_window_id window);
 
