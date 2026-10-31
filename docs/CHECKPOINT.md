@@ -51,11 +51,20 @@ Hyprland-style BSP tiler for macOS on **native** Spaces:
 | `fix/live-review` | AX timeout (system-wide 0.25 s), one-call `facts()`, observers off main, Ghostty grab point (top+3 band), mouse flags, non-blocking `isPaused` |
 | `fix/rollback-review` | Manifest allowlist (C1), keep state on failed undo (H1), journaled undo (H2), `-dict-add` hotkeys (M4), exit 3 = UNVERIFIED (M9), refuse root/empty HOME (M8) |
 
-### In progress
-Nothing is running in the background. The only unmerged work is the half-written `scripts/tests/regressions.sh` (uncommitted, in the `hyprMac-core` worktree; optional).
+### In progress (2026-10-31): three feature branches, each with its own Sonnet agent
+`make install` has been run FOR REAL. hyprMac is installed and running, and is waiting for the user to grant Accessibility. The supervised e2e run and `make uninstall` are still pending.
+
+| Branch (worktree) | Feature | Report |
+|---|---|---|
+| `feat/float-small` (`hyprMac-core`) | Windows smaller than `config.float.min_width/min_height` (400×300 by default) float when first seen. Appends `float_min_w/h` to `hm_config` (API change approved) | `<scratchpad>/reports/feat-float-small.md` |
+| `feat/min-size-accommodate` (`hyprMac-platform`) | Hyprland-style: siblings shrink so a window gets its minimum size; best effort when that's impossible, with no oscillation | `<scratchpad>/reports/feat-min-size-accommodate.md` |
+| `feat/toggle-float` (`hyprMac-e2e`) | ⌥⇧F toggles the focused window between floating (restored to its original size, centred) and tiled; a `floatOverride` takes precedence | `<scratchpad>/reports/feat-toggle-float.md` |
+
+The shared rules for these branches are in `<scratchpad>/reports/FEATURES-COMMON.md`, and each worktree has its own `.agent-brief.md`. All three branches touch Coordinator.swift, so merge them one at a time and resolve conflicts (toggle's `floatOverride` takes precedence over size-floating).
 
 ### Next steps
-1. **Real run:** `make preflight` and `make install DRY_RUN=1` were checked and are clean. Next are `make install`, a short e2e subset, a manual ⌥⇧2 on Ghostty, then `make uninstall` (it must print "rollback verified") and `make verify-rollback`.
+1. Merge the 3 feature branches (float-small, then min-size, then toggle), running `make test` after each. Then `make install` again (an upgrade: only the bundle is replaced).
+2. **Real run:** install is done (preflight and dry run were clean). Next are `make install`, a short e2e subset, a manual ⌥⇧2 on Ghostty, then `make uninstall` (it must print "rollback verified") and `make verify-rollback`.
 2. Record the results here, and commit.
 
 ### Known open findings (deferred for budget; list them as known gaps)
