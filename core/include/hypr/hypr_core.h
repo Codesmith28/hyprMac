@@ -49,6 +49,8 @@ typedef struct hm_config {
     double inner_gap;   /* px between adjacent tiles; default 8, range [0, 200] */
     double outer_gap;   /* px between tiles and usable-area edge; default 12, range [0, 200] */
     double split_ratio; /* ratio given to the FIRST child of a new split; default 0.5, range [0.1, 0.9] */
+    double float_min_w; /* windows first seen narrower than this float; default 400, range [0, 2000], 0 = off */
+    double float_min_h; /* windows first seen shorter than this float; default 300, range [0, 2000], 0 = off */
 } hm_config;
 
 /* Fill *out with built-in defaults. */

@@ -88,6 +88,11 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     private var idsByPid: [pid_t: Set<UInt64>] = [:]
     private var fights: [UInt64: [TimeInterval]] = [:]
     private var uncooperative: Set<UInt64> = []
+    /// Small-window float decision per window id, made once from the first-seen size (sticky).
+    var floatDecided: [UInt64: Bool] = [:]
+    /// Explicit per-window override of the size rule (internal API for a future "toggle float").
+    var floatOverride: [UInt64: FloatMode] = [:]
+    var currentConfig: Config { configStore.current }
     private var lastTargets: [UInt64: CGRect] = [:]
     private var lastStates: [UInt64: Engine.TileState] = [:]
     private var unresolvedRetries = 0
@@ -342,6 +347,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 idsByPid[w.ref.pid, default: []].insert(id)
                 var state = Self.tileState(w.state)
                 if state == .tiled, uncooperative.contains(id) { state = .floating }
+                if state == .tiled, floatsAsSmall(id: id, frame: w.frame) { state = .floating }
                 lastStates[id] = state
                 seen.insert(id)
                 entries.append(Engine.WindowEntry(id: id, state: state, frame: Self.sanitized(w.frame),

@@ -510,3 +510,34 @@ TEST_CASE("states are independent between loads") {
 }
 
 } // TEST_SUITE
+
+TEST_CASE("float: defaults, partial and full") {
+    auto d = load("config = {}");
+    REQUIRE(d.status == HM_OK);
+    CHECK(d.cfg.float_min_w == 400.0);
+    CHECK(d.cfg.float_min_h == 300.0);
+    auto p = load("config = { float = { min_width = 0 } }");
+    REQUIRE(p.status == HM_OK);
+    CHECK(p.cfg.float_min_w == 0.0);
+    CHECK(p.cfg.float_min_h == 300.0);
+    auto f = load("config = { float = { min_width = 123.5, min_height = 2000 } }");
+    REQUIRE(f.status == HM_OK);
+    CHECK(f.cfg.float_min_w == doctest::Approx(123.5));
+    CHECK(f.cfg.float_min_h == 2000.0);
+}
+
+TEST_CASE("float: out of range and wrong type") {
+    auto r = load("config = { float = { min_width = 2001 } }");
+    CHECK(r.status == HM_ERR_CONFIG);
+    CHECK(r.err == "init.lua: float.min_width must be within [0, 2000]");
+    CHECK(load("config = { float = { min_height = -1 } }").status == HM_ERR_CONFIG);
+    CHECK(load("config = { float = { min_width = 'big' } }").status == HM_ERR_CONFIG);
+    CHECK(load("config = { float = 5 }").status == HM_ERR_CONFIG);
+}
+
+TEST_CASE("float: unknown key suggestions") {
+    auto r = load("config = { flot = {} }");
+    CHECK(r.err == "init.lua: unknown key 'flot' in config (did you mean 'float'?)");
+    auto r2 = load("config = { float = { min_widht = 5 } }");
+    CHECK(r2.err == "init.lua: unknown key 'min_widht' in config.float (did you mean 'min_width'?)");
+}

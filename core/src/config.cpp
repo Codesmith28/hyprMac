@@ -17,6 +17,13 @@ std::string validate(const Config &c) {
     if (auto e = check_gap("gaps.outer", c.outer_gap); !e.empty()) return e;
     if (!std::isfinite(c.split_ratio) || c.split_ratio < kMinRatio || c.split_ratio > kMaxRatio)
         return "split_ratio must be within [0.1, 0.9]";
+    auto check_float = [](const char *name, double v) -> std::string {
+        if (!std::isfinite(v)) return std::string(name) + " must be a finite number";
+        if (v < 0.0 || v > kMaxFloatMin) return std::string(name) + " must be within [0, 2000]";
+        return {};
+    };
+    if (auto e = check_float("float.min_width", c.float_min_w); !e.empty()) return e;
+    if (auto e = check_float("float.min_height", c.float_min_h); !e.empty()) return e;
     return {};
 }
 

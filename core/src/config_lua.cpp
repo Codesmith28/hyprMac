@@ -401,6 +401,9 @@ hm_status run(const char *src, size_t len, const std::string &path, hm_config *i
                  {{"inner", Field::Number, &cfg.inner_gap, {}},
                   {"outer", Field::Number, &cfg.outer_gap, {}}}},
                 {"split_ratio", Field::Number, &cfg.split_ratio, {}},
+                {"float", Field::Table, nullptr,
+                 {{"min_width", Field::Number, &cfg.float_min_w, {}},
+                  {"min_height", Field::Number, &cfg.float_min_h, {}}}},
             };
             message = check_table(L, "config", schema);
         }
