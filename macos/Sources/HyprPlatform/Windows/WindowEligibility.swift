@@ -35,6 +35,8 @@ public enum WindowEligibility {
 
     public static let tiledRole = "AXWindow"
     public static let tiledSubrole = "AXStandardWindow"
+    /// What a minimized standard window reports instead of `tiledSubrole`.
+    public static let minimizedSubrole = "AXDialog"
 
     /// - Parameters:
     ///   - facts: AX facts for the window.
@@ -52,7 +54,11 @@ public enum WindowEligibility {
         // Sheets (AXSheet), popovers (AXPopover), drawers etc. have a non-window role.
         guard facts.role == tiledRole else { return .excluded(.role(facts.role)) }
         // AXDialog, AXSystemDialog, AXFloatingWindow, AXUnknown, no subrole (Finder desktop), ...
-        guard facts.subrole == tiledSubrole else { return .excluded(.subrole(facts.subrole)) }
+        // A minimized standard window reports "AXDialog" (observed on macOS 26): without this it
+        // would vanish from the snapshot, the engine would forget its slot instead of ghosting it,
+        // and unminimizing would dwindle-insert it somewhere else.
+        let minimizedQuirk = facts.isMinimized && facts.subrole == minimizedSubrole
+        guard facts.subrole == tiledSubrole || minimizedQuirk else { return .excluded(.subrole(facts.subrole)) }
         if facts.frame.width <= 0 || facts.frame.height <= 0 { return .excluded(.zeroSize) }
 
         if facts.isMinimized { return .managed(.minimized) }

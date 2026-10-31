@@ -76,7 +76,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
 
     let engine: Engine
     private let configStore: ConfigStore
-    private let identity = WindowIdentityMap()
+    let identity = WindowIdentityMap()
     let discovery: WindowDiscovery
     let executor: GeometryExecutor
     let mover: SpaceMover
@@ -96,6 +96,9 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     var currentConfig: Config { configStore.current }
     var lastTargets: [UInt64: CGRect] = [:]
     var lastStates: [UInt64: Engine.TileState] = [:]
+    /// When each tracked window first went missing from its Space's snapshot with no Space of its own
+    /// (Coordinator+Fullscreen.swift).
+    var limboSince: [UInt64: TimeInterval] = [:]
     private var unresolvedRetries = 0
     private var warnedRectangle = false
     // Toggle floating ↔ tiling (logic in Coordinator+Toggle.swift).
@@ -270,7 +273,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         forgetEngineWindow(id)
     }
 
-    private func forgetEngineWindow(_ id: UInt64) {
+    func forgetEngineWindow(_ id: UInt64) {
         engine.forget(window: id)
         identity.forget(engineID: id)
         uncooperative.remove(id)
@@ -278,6 +281,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         fights[id] = nil
         lastTargets[id] = nil
         lastStates[id] = nil
+        limboSince[id] = nil
     }
 
     private func noteFight(_ window: HyprPlatform.WindowRef) {
@@ -376,6 +380,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                     entries.append(Engine.WindowEntry(id: id, state: state))
                 }
             }
+            keepLimboGhosts(space: snap.space, display: display.id, seen: &seen, entries: &entries)
             if snap.unresolved.isEmpty && snap.unresponsivePids.isEmpty { unresolvedRetries = 0 } else { retryUnresolved() }
             let focused = snap.focused.flatMap { idByRef[$0] }
             do {
