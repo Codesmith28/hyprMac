@@ -49,6 +49,11 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         /// `fightWindow` seconds is treated as floating (prevents feedback loops).
         public var fightLimit = 3
         public var fightWindow: TimeInterval = 10
+        /// Moved/resized notifications arriving this long after a drag ended (AX lags behind
+        /// the mouse) are the user's drag, not the app fighting its tile.
+        public var dragGrace: TimeInterval = 0.5
+        /// How often a throw that hit a still-animating Space transition is retried.
+        public var throwRetries = 3
         public init() {}
     }
 
@@ -75,7 +80,6 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     private var running = false
     private var dragging = false
     private var throwInFlight = false
-    private var pendingReconcile: DispatchWorkItem?
     private var idsByPid: [pid_t: Set<UInt64>] = [:]
     private var fights: [UInt64: [TimeInterval]] = [:]
     private var uncooperative: Set<UInt64> = []
@@ -83,6 +87,17 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     private var lastStates: [UInt64: Engine.TileState] = [:]
     private var unresolvedRetries = 0
     private var warnedRectangle = false
+    /// Engine id per ref, as assigned during reconcile. Event handlers look ids up here instead
+    /// of calling `identity.engineID(for:)`, which would re-assign generations for stale refs
+    /// (a late report about a relaunched app's old window).
+    private var idByRef: [HyprPlatform.WindowRef: UInt64] = [:]
+    private var lastDragEnd: TimeInterval?
+    private var reconcileGeneration = 0
+    /// Timers scheduled on `queue` that haven't fired yet (for `testSettle`).
+    private var outstandingTimers = 0
+    /// Bumped by every state-changing step (for `testSettle`).
+    private var activity = 0
+    private var planCount = 0
 
     public var isPaused: Bool { queue.sync { userPaused || stageManagerPaused } }
 
@@ -143,7 +158,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         }
         queue.sync {
             running = false
-            pendingReconcile?.cancel()
+            reconcileGeneration += 1 // invalidates scheduled reconciles
         }
     }
 
@@ -186,7 +201,11 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                    executor.echo.isEcho(window, observedFrame: frame, now: deps.clock.now()) {
                     return // our own write
                 }
-                noteFight(window)
+                if let end = lastDragEnd, deps.clock.now() - end <= tuning.dragGrace {
+                    // Late notification from the user's drag: snap back, but it's no fight.
+                } else {
+                    noteFight(window)
+                }
                 scheduleReconcile(after: tuning.debounce)
             default:
                 scheduleReconcile(after: tuning.debounce)
@@ -198,7 +217,9 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 uncooperative.remove(id)
                 fights[id] = nil
                 lastTargets[id] = nil
+                lastStates[id] = nil
             }
+            idByRef = idByRef.filter { $0.key.pid != pid }
             executor.forget(pid: pid)
             scheduleReconcile(after: tuning.debounce)
         case .activeSpaceChanged:
@@ -211,6 +232,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             dragging = true
         case .userDragEnded:
             dragging = false
+            lastDragEnd = deps.clock.now()
             scheduleReconcile(after: tuning.dragSettle)
         case .appLaunched, .appHidden, .appShown, .appActivated, .observerRegistrationFailed:
             scheduleReconcile(after: tuning.debounce)
@@ -218,8 +240,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     }
 
     private func noteFight(_ window: HyprPlatform.WindowRef) {
-        let id = identity.engineID(for: window)
-        guard lastTargets[id] != nil else { return } // never tiled by us: not a fight
+        guard let id = idByRef[window], lastTargets[id] != nil else { return } // never tiled by us: not a fight
         let now = deps.clock.now()
         var list = (fights[id] ?? []).filter { now - $0 <= tuning.fightWindow }
         list.append(now)
@@ -234,10 +255,21 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     // MARK: reconcile
 
     func scheduleReconcile(after delay: TimeInterval) {
-        pendingReconcile?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.reconcileNow() }
-        pendingReconcile = work
-        queue.asyncAfter(deadline: .now() + delay, execute: work)
+        reconcileGeneration += 1
+        let gen = reconcileGeneration
+        schedule(after: delay) { [weak self] in
+            guard let self, gen == self.reconcileGeneration else { return } // superseded
+            self.reconcileNow()
+        }
+    }
+
+    /// `asyncAfter` on `queue`, counted so tests can wait for quiescence.
+    private func schedule(after delay: TimeInterval, _ work: @escaping () -> Void) {
+        outstandingTimers += 1
+        queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.outstandingTimers -= 1
+            work()
+        }
     }
 
     /// Reconcile every display's active Space. Internal for tests.
@@ -251,6 +283,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         }
         checkSystemState()
         guard !userPaused, !stageManagerPaused, !dragging, !throwInFlight else { return }
+        activity += 1
 
         for display in deps.displays.displays() {
             guard let snap = discovery.snapshot(display: display.id) else { continue }
@@ -259,6 +292,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             var seen = Set<UInt64>()
             for w in snap.windows {
                 let id = identity.engineID(for: w.ref)
+                idByRef[w.ref] = id
                 // A ghost (minimized/hidden/fullscreen) with no Space of its own must not be
                 // pulled into this Space when the engine already holds it elsewhere.
                 if w.membership == .inferred, let owner = engine.space(of: id), owner != snap.space { continue }
@@ -273,12 +307,21 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             // Windows whose AX calls failed this round keep their last state instead of being
             // deleted from the tree; try again shortly.
             for ref in snap.unresolved {
-                let id = identity.engineID(for: ref)
-                guard !seen.contains(id), engine.space(of: id) == snap.space, let state = lastStates[id] else { continue }
+                guard let id = idByRef[ref], !seen.contains(id), engine.space(of: id) == snap.space,
+                      let state = lastStates[id] else { continue }
+                seen.insert(id)
                 entries.append(Engine.WindowEntry(id: id, state: state))
             }
-            if snap.unresolved.isEmpty { unresolvedRetries = 0 } else { retryUnresolved() }
-            let focused = snap.focused.map { identity.engineID(for: $0) }
+            // An app that didn't answer at all (hung, busy) keeps every window it had here.
+            for pid in snap.unresponsivePids {
+                for id in idsByPid[pid] ?? [] where !seen.contains(id) && engine.space(of: id) == snap.space {
+                    guard let state = lastStates[id] else { continue }
+                    seen.insert(id)
+                    entries.append(Engine.WindowEntry(id: id, state: state))
+                }
+            }
+            if snap.unresolved.isEmpty && snap.unresponsivePids.isEmpty { unresolvedRetries = 0 } else { retryUnresolved() }
+            let focused = snap.focused.flatMap { idByRef[$0] }
             do {
                 let plan = try engine.reconcile(display: display.id, space: snap.space, usable: snap.usable,
                                                 focused: focused, windows: entries)
@@ -294,10 +337,12 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         guard unresolvedRetries < 4 else { return }
         unresolvedRetries += 1
         let delay = [0.1, 0.25, 0.5, 1.0][unresolvedRetries - 1]
-        queue.asyncAfter(deadline: .now() + delay) { [weak self] in self?.reconcileNow() }
+        schedule(after: delay) { [weak self] in self?.reconcileNow() }
     }
 
     private func apply(_ plan: Engine.Plan) {
+        activity += 1
+        planCount += 1
         var placements: [(HyprPlatform.WindowRef, CGRect)] = []
         for p in plan.placements {
             guard let ref = identity.ref(forEngineID: p.id) else { continue }
@@ -313,9 +358,10 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
 
     public func geometryExecutor(_ executor: GeometryExecutor, didReport event: ExecutorEvent) {
         queue.async { [self] in
+            activity += 1
             switch event {
             case let .minSizeDiscovered(ref, size):
-                let id = identity.engineID(for: ref)
+                guard let id = idByRef[ref] else { return }
                 try? engine.reportMinSize(window: id, size: size)
                 if let space = engine.space(of: id), let plan = try? engine.relayout(space: space) {
                     apply(plan)
@@ -323,7 +369,13 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             case let .windowGone(ref):
                 executor.forget(ref)
                 scheduleReconcile(after: tuning.debounce)
-            case .landed, .mismatch, .failed:
+            case let .mismatch(ref, _, _):
+                // The app put itself somewhere else (snapped back, clamped). Count it as a fight
+                // and re-plan; after `fightLimit` the window floats, which ends the loop.
+                guard let id = idByRef[ref], !uncooperative.contains(id) else { return }
+                noteFight(ref)
+                scheduleReconcile(after: tuning.debounce)
+            case .landed, .failed:
                 break
             }
         }
@@ -338,12 +390,16 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             if n > count {
                 EventLog.shared.emit("missing_space", ["n": n, "count": count])
                 notify(.missingSpace(requested: n, count: count))
+            } else if let target = deps.spaces.userSpace(index: n, display: display),
+                      target.id != deps.spaces.activeSpace(display: display) {
+                // macOS is about to animate; a throw posted during the animation would be dropped.
+                transitions.noteTransition(at: deps.clock.now())
             }
         }
     }
 
     /// ⌥⇧N: throw the focused window to Desktop N with the drag trick (focus follows).
-    func throwFocusedWindow(toSpace n: Int) {
+    func throwFocusedWindow(toSpace n: Int, attempt: Int = 0) {
         queue.async { [self] in
             guard !throwInFlight else { return }
             guard let pid = try? deps.ax.focusedApplication(),
@@ -351,15 +407,32 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 EventLog.shared.emit("throw", ["n": n, "result": "noFocusedWindow"])
                 return
             }
+            activity += 1
             throwInFlight = true
+            let sourceSpace = idByRef[window].flatMap { engine.space(of: $0) }
             moverQueue.async { [self] in
                 let result = mover.move(window, toSpace: n)
                 queue.async { [self] in
+                    activity += 1
                     throwInFlight = false
                     EventLog.shared.emit("throw", ["n": n, "result": Self.name(result)])
                     switch result {
-                    case .moved, .alreadyThere, .transitionInFlight:
+                    case .moved:
+                        // Tile the window into the target Space now, then close the hole it left
+                        // in the source Space (no longer visible, so no reconcile would reach it).
+                        reconcileNow()
+                        if let src = sourceSpace, let id = idByRef[window], engine.space(of: id) != src,
+                           let plan = try? engine.relayout(space: src) {
+                            apply(plan)
+                        }
+                    case .alreadyThere:
                         break
+                    case .transitionInFlight:
+                        // A ⌥N now would be silently dropped: retry once the animation settled.
+                        if attempt < tuning.throwRetries {
+                            let wait = max(0.05, transitions.remaining(now: deps.clock.now()))
+                            schedule(after: wait) { [weak self] in self?.throwFocusedWindow(toSpace: n, attempt: attempt + 1) }
+                        }
                     case let .noSuchSpace(_, available):
                         if let available { notify(.missingSpace(requested: n, count: available)) }
                     case .refusedFullscreen:
@@ -468,7 +541,26 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     // Test hooks
     func testStartWithoutInput() { queue.sync { running = true; applyConfig(reload: false); checkSystemState() } }
     func testUncooperative() -> Set<UInt64> { queue.sync { uncooperative } }
-    func testEngineID(_ ref: HyprPlatform.WindowRef) -> UInt64 { identity.engineID(for: ref) }
+    /// The engine id last assigned to `ref` (nil if never reconciled). Doesn't touch generations.
+    func testEngineID(_ ref: HyprPlatform.WindowRef) -> UInt64? { queue.sync { idByRef[ref] } }
     func testTiledCount(space: UInt64) -> Int { queue.sync { engine.tiledCount(space: space) } }
+    func testSpaceOf(_ id: UInt64) -> UInt64? { queue.sync { engine.space(of: id) } }
+    func testPlanCount() -> Int { queue.sync { planCount } }
+    func testDump(space: UInt64) -> String { queue.sync { engine.debugDump(space: space) } }
     func testWaitForExecutor() -> Bool { executor.waitUntilIdle(timeout: 5) }
+
+    /// Waits until nothing is left to do: no scheduled reconcile or retry, no throw in flight,
+    /// the executor idle, and no state change during one full pass.
+    func testSettle(timeout: TimeInterval = 10) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            let before = queue.sync { activity }
+            moverQueue.sync {}
+            guard executor.waitUntilIdle(timeout: max(0.1, deadline.timeIntervalSinceNow)) else { return false }
+            let quiet = queue.sync { outstandingTimers == 0 && !throwInFlight && activity == before }
+            if quiet, executor.waitUntilIdle(timeout: 1), queue.sync(execute: { activity == before }) { return true }
+            Thread.sleep(forTimeInterval: 0.005)
+        }
+        return false
+    }
 }
