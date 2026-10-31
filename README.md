@@ -13,7 +13,7 @@ It is also a learning project. The layout engine is C++20 with a C API, the macO
 - **⌥⇧1–⌥⇧9 throw the focused window to Desktop N.** macOS has no public API for this, so hyprMac uses a "drag trick": it holds the window by its titlebar, switches Desktop, and lets go. The window lands on the new Desktop and keeps focus, as in Hyprland's `movetoworkspace`. See [LIMITATIONS](docs/LIMITATIONS.md#moving-windows-between-spaces).
 - **Windows come back to the same spot.** A window that goes fullscreen, is minimized, or whose app is hidden (⌘H) leaves a placeholder in the layout. When it returns, it gets the same tile back.
 - **Per-display tiling.** Each display is tiled from its own active Space, and each Space has its own layout.
-- **Sensible floating.** Sheets, dialogs, panels, popovers and other non-standard windows are never tiled. Non-resizable windows, windows without a close button, Archive Utility and Calculator float. A window that keeps resizing itself away from its tile (3 times within 10 s) is floated instead of fought; menu ▸ **Retile All Windows** gives it another chance.
+- **Sensible floating.** Sheets, dialogs, panels, popovers and other non-standard windows are never tiled. Non-resizable windows, windows without a close button, Archive Utility and Calculator float. **Small windows float** (like Krohnkite): a window narrower than `float.min_width` or shorter than `float.min_height` when hyprMac first sees it keeps its own frame. A window that keeps resizing itself away from its tile (3 times within 10 s) is floated instead of fought; menu ▸ **Retile All Windows** gives it another chance.
 
 ## Requirements
 - **macOS 14 Sonoma or later.** Developed and tested on macOS 27.2, Apple silicon.
@@ -75,6 +75,7 @@ config = {
         outer = 12,  -- points between windows and the edges (0 – 200)
     },
     split_ratio = 0.5, -- share of a split given to the existing window (0.1 – 0.9)
+    float = { min_width = 400, min_height = 300 }, -- smaller windows float (0 – 2000, 0 = off)
 }
 ```
 
