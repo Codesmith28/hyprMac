@@ -361,8 +361,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 state = resolveFloatOverride(id: id, platform: w.state, frame: w.frame, current: state)
                 lastStates[id] = state
                 seen.insert(id)
-                entries.append(Engine.WindowEntry(id: id, state: state, frame: Self.sanitized(w.frame),
-                                                  minSize: w.minSize ?? .zero))
+                entries.append(Engine.WindowEntry(id: id, state: engineState(id: id, state: state, platform: w.state),
+                                                  frame: Self.sanitized(w.frame), minSize: w.minSize ?? .zero))
             }
             // Windows whose AX calls failed this round keep their last state instead of being
             // deleted from the tree; try again shortly.
