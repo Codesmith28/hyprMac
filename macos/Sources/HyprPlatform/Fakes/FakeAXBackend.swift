@@ -66,6 +66,10 @@ public final class FakeAXBackend: AXBackend, @unchecked Sendable {
         }
     }
 
+    public func forget(pid: pid_t) {
+        desk.locked { desk.forgottenPidList.append(pid) }
+    }
+
     public func windows(pid: pid_t) throws -> [WindowRef] {
         try call(.windows(pid), pid: pid) { desk.zOrder.filter { $0.pid == pid } }
     }

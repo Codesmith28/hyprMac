@@ -74,7 +74,8 @@ public final class FakeDesktop: @unchecked Sendable {
         var enhancedUI = false
         var hung = false
         var hangDuration: TimeInterval = 5
-        var messagingTimeout: Float = 6
+        /// Like the real backend's process-wide default (0.25 s).
+        var messagingTimeout: Float = 0.25
         var euiSlowDelay: TimeInterval = 0.03
         var euiInaccuracy: CGFloat = 13
     }
@@ -127,6 +128,7 @@ public final class FakeDesktop: @unchecked Sendable {
     var pendingSwitch: (display: DisplayID, target: SpaceID, at: TimeInterval, carry: WindowRef?)?
     var transitionEnd: TimeInterval = -.infinity
     var droppedSwitchCount = 0
+    var forgottenPidList: [pid_t] = []
 
     /// Simulate missing SkyLight symbols (synthetic Spaces, no window→Space info).
     public var spacesUnavailable = false
@@ -424,6 +426,8 @@ public final class FakeDesktop: @unchecked Sendable {
     public func clearEvents() { locked { emitted.removeAll() } }
     public var posted: [SyntheticEvent] { locked { postedEvents } }
     public var droppedSwitches: Int { locked { droppedSwitchCount } }
+    /// Pids passed to `ax.forget(pid:)`.
+    public var forgottenPids: [pid_t] { locked { forgottenPidList } }
 
     // MARK: internals (call with lock held)
 
