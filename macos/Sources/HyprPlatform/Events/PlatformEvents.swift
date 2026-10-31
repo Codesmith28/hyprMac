@@ -40,7 +40,8 @@ public final class PlatformEvents {
     private var tokens: [NSObjectProtocol] = []
     public private(set) var hub: AXObserverHub!
 
-    public init(queue: DispatchQueue, registrar: AXObserverRegistrar = SystemAXObserverRegistrar(),
+    public init(queue: DispatchQueue, registrar: AXObserverRegistrar = SystemAXObserverRegistrar.shared,
+                scheduler: DelayScheduler = DispatchDelayScheduler(),
                 apps: AppProvider = SystemAppProvider(), mouse: MouseMonitoring = SystemMouseMonitor(),
                 ownBundleID: String? = WindowEligibility.ownBundleID,
                 handler: @escaping (PlatformEvent) -> Void) {
@@ -49,7 +50,7 @@ public final class PlatformEvents {
         self.apps = apps
         self.mouse = mouse
         self.ownBundleID = ownBundleID
-        self.hub = AXObserverHub(registrar: registrar) { [weak self] e in self?.deliver(e) }
+        self.hub = AXObserverHub(registrar: registrar, scheduler: scheduler) { [weak self] e in self?.deliver(e) }
     }
 
     private func deliver(_ event: PlatformEvent) {
@@ -89,6 +90,7 @@ public final class PlatformEvents {
             if let p = pid(n) { self?.deliver(.appActivated(p)) }
         })
         tokens.append(ws.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: nil) { [weak self] _ in
+            self?.hub.rewatchAll() // windows on the new Space weren't listed at registration
             self?.deliver(.activeSpaceChanged)
         })
         tokens.append(NotificationCenter.default.addObserver(

@@ -19,12 +19,37 @@ final class EventBox: @unchecked Sendable {
         #expect(ObserverRetrySchedule.delays == [0.05, 0.15, 0.4, 1.0])
     }
 
-    @Test func registersImmediatelyWhenReady() {
+    @Test func registersWithoutDelayWhenReady() {
         let reg = FakeAXObserverRegistrar(), sched = FakeDelayScheduler(), box = EventBox()
         let hub = makeHub(reg, sched, box)
         hub.observe(pid: 1)
+        sched.runAll()
         #expect(hub.observedPids == [1])
-        #expect(sched.requestedDelays.isEmpty)
+        #expect(sched.requestedDelays == [0])
+    }
+
+    /// Review #3: registration does blocking AX IPC; `observe` (called on main) must not.
+    @Test func observeNeverRegistersOnTheCallersThread() {
+        let reg = FakeAXObserverRegistrar(), sched = FakeDelayScheduler(), box = EventBox()
+        let hub = makeHub(reg, sched, box)
+        hub.observe(pid: 1)
+        hub.observe(pid: 2)
+        #expect(reg.attempts.isEmpty)
+        #expect(sched.pendingCount == 2)
+        sched.runAll()
+        #expect(Set(reg.attempts) == [1, 2])
+    }
+
+    /// Review #6: windows on other Spaces aren't listed at registration; re-watch on Space change.
+    @Test func rewatchAllRunsOnSchedulerForEveryObservedApp() {
+        let reg = FakeAXObserverRegistrar(), sched = FakeDelayScheduler(), box = EventBox()
+        let hub = makeHub(reg, sched, box)
+        hub.observe(pid: 1); hub.observe(pid: 2)
+        sched.runAll()
+        hub.rewatchAll()
+        #expect(reg.rewatched.isEmpty)
+        sched.runAll()
+        #expect(Set(reg.rewatched) == [1, 2])
     }
 
     @Test func retriesWithBackoffUntilRegistered() {
@@ -34,7 +59,7 @@ final class EventBox: @unchecked Sendable {
         hub.observe(pid: 1)
         #expect(hub.observedPids.isEmpty)
         sched.runAll()
-        #expect(sched.requestedDelays == [0.05, 0.15])
+        #expect(sched.requestedDelays == [0, 0.05, 0.15])
         #expect(reg.attempts == [1, 1, 1])
         #expect(hub.observedPids == [1])
         #expect(box.all.isEmpty)
@@ -46,13 +71,14 @@ final class EventBox: @unchecked Sendable {
         let hub = makeHub(reg, sched, box)
         hub.observe(pid: 1)
         sched.runAll()
-        #expect(sched.requestedDelays == [0.05, 0.15, 0.4, 1.0])
+        #expect(sched.requestedDelays == [0, 0.05, 0.15, 0.4, 1.0])
         #expect(reg.attempts.count == 5)
         #expect(box.all == [.observerRegistrationFailed(1)])
         #expect(hub.observedPids.isEmpty)
         // A later observe (e.g. next launch notification) starts over.
         reg.failuresBeforeSuccess[1] = 0
         hub.observe(pid: 1)
+        sched.runAll()
         #expect(hub.observedPids == [1])
     }
 
@@ -61,6 +87,7 @@ final class EventBox: @unchecked Sendable {
         reg.failuresBeforeSuccess[1] = 1
         let hub = makeHub(reg, sched, box)
         hub.observe(pid: 1)
+        sched.runNext()                // first attempt fails, retry scheduled
         hub.stopObserving(pid: 1)
         sched.runAll()
         #expect(reg.attempts == [1])
@@ -72,6 +99,7 @@ final class EventBox: @unchecked Sendable {
         let hub = makeHub(reg, sched, box)
         hub.observe(pid: 1)
         hub.observe(pid: 1)
+        sched.runAll()
         #expect(reg.attempts == [1])
         hub.stopObserving(pid: 1)
         #expect(reg.unregistered == [1])
@@ -82,6 +110,7 @@ final class EventBox: @unchecked Sendable {
         let reg = FakeAXObserverRegistrar(), sched = FakeDelayScheduler(), box = EventBox()
         let hub = makeHub(reg, sched, box)
         hub.observe(pid: 7)
+        sched.runAll()
         let w = WindowRef(pid: 7, windowID: 3)
         #expect(reg.fire(.window(.moved, pid: 7, window: w), pid: 7))
         #expect(box.all == [.window(.moved, pid: 7, window: w)])
@@ -131,11 +160,14 @@ final class EventBox: @unchecked Sendable {
         queue.setSpecific(key: key, value: true)
         let box = EventBox()
         var onQueue = true
-        let events = PlatformEvents(queue: queue, registrar: reg, apps: desk.apps, mouse: mouse) { e in
+        let sched = FakeDelayScheduler()
+        let events = PlatformEvents(queue: queue, registrar: reg, scheduler: sched, apps: desk.apps, mouse: mouse) { e in
             if DispatchQueue.getSpecific(key: key) != true { onQueue = false }
             box.add(e)
         }
         events.start()
+        #expect(events.hub.observedPids.isEmpty) // registration is off the caller's thread
+        sched.runAll()
         #expect(events.hub.observedPids == [100])
         #expect(mouse.isRunning)
         mouse.simulate(.userDragBegan(CGPoint(x: 1, y: 2)))

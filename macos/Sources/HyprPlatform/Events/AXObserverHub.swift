@@ -11,6 +11,8 @@ public protocol AXObserverRegistrar: AnyObject {
     /// `AXBackendError.cannotComplete`) when the app isn't ready yet.
     func register(pid: pid_t, sink: @escaping (PlatformEvent) -> Void) throws -> AnyObject
     func unregister(_ token: AnyObject)
+    /// Watch `AXUIElementDestroyed` on the app's current windows again (after a Space change).
+    func rewatch(_ token: AnyObject)
 }
 
 /// Delayed execution, injectable for tests.
@@ -29,6 +31,9 @@ public final class DispatchDelayScheduler: DelayScheduler {
 /// Keeps one AX observer registration per app, retrying failed registrations with
 /// `ObserverRetrySchedule.delays` (50, 150, 400, 1000 ms) before reporting
 /// `.observerRegistrationFailed`. Thread-safe.
+///
+/// Every registrar call (blocking AX IPC) runs on the scheduler's queue, never on the caller's
+/// thread: `observe` from the main thread returns immediately.
 public final class AXObserverHub: @unchecked Sendable {
     private let registrar: AXObserverRegistrar
     private let scheduler: DelayScheduler
@@ -57,7 +62,16 @@ public final class AXObserverHub: @unchecked Sendable {
         wanted[pid] = generation
         let gen = generation
         lock.unlock()
-        attempt(pid: pid, gen: gen, index: 0)
+        scheduler.schedule(after: 0) { [weak self] in self?.attempt(pid: pid, gen: gen, index: 0) }
+    }
+
+    /// Re-watch window-destroyed notifications for every observed app (call on Space changes:
+    /// windows on other Spaces aren't listed by AX at registration time).
+    public func rewatchAll() {
+        lock.lock()
+        let all = Array(tokens.values)
+        lock.unlock()
+        for t in all { scheduler.schedule(after: 0) { [registrar] in registrar.rewatch(t) } }
     }
 
     public func stopObserving(pid: pid_t) {
