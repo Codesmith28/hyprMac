@@ -149,7 +149,7 @@ The harness launches `hyprMac.app/Contents/MacOS/hyprMac --config <file> --event
 ```
 tile-1 tile-2 tile-3 tile-5 tile-8      exact layouts against the oracle
 close-reflow reopen                      closing / reopening reflows
-min-size non-resizable-floats float-small  size constraints
+min-size min-size-accommodate min-size-unsatisfiable non-resizable-floats float-small   size constraints
 sheet-ignored panel-ignored dialog-ignored tabs-dedupe
 minimize-restore hide-restore fullscreen-restore   windows return to their tile
 hung-app-isolation snap-back-no-loop late-window   misbehaving apps

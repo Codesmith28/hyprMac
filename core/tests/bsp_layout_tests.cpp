@@ -216,6 +216,64 @@ TEST_CASE("nested minimums across the axis use the max") {
     CHECK_RECT(frame(l, 3), 528, 454, 900, 434);
 }
 
+TEST_CASE("a minimum deep in the tree shrinks siblings at every ancestor level") {
+    LayoutTree t;
+    t.insert_root(1);
+    t.insert(1, 2, Orientation::Vertical, 0.5);
+    t.insert(2, 3, Orientation::Horizontal, 0.5);
+    t.insert(3, 4, Orientation::Vertical, 0.5); // 1 | (2 / (3 | 4))
+    const LayoutResult l = compute_layout(t, kScreen, Config{}, mins({{4, {700, 0}}}));
+    // Level 1: 3 shrinks to its 1 pt floor so 4 gets 700; level 2: window 1 gives up 5 pt.
+    CHECK_RECT(frame(l, 1), 12, 12, 699, 876);
+    CHECK_RECT(frame(l, 2), 719, 12, 709, 434);
+    CHECK_RECT(frame(l, 3), 719, 454, 1, 434);
+    CHECK_RECT(frame(l, 4), 728, 454, 700, 434);
+    CHECK_FALSE(l.degenerate);
+    CHECK(layout_problem(l, kScreen, 12) == "");
+}
+
+TEST_CASE("minimums on both axes are accommodated at once") {
+    LayoutTree t = pair();
+    t.insert(2, 3, Orientation::Horizontal, 0.5); // 1 | (2 / 3)
+    const LayoutResult both = compute_layout(t, kScreen, Config{}, mins({{3, {900, 500}}}));
+    CHECK_RECT(frame(both, 1), 12, 12, 508, 876);
+    CHECK_RECT(frame(both, 2), 528, 12, 900, 368);
+    CHECK_RECT(frame(both, 3), 528, 388, 900, 500);
+    CHECK(layout_problem(both, kScreen, 12) == "");
+
+    // Different windows constrain different axes.
+    const LayoutResult split = compute_layout(t, kScreen, Config{}, mins({{1, {900, 0}}, {3, {0, 700}}}));
+    CHECK_RECT(frame(split, 1), 12, 12, 900, 876);
+    CHECK_RECT(frame(split, 2), 920, 12, 508, 168);
+    CHECK_RECT(frame(split, 3), 920, 188, 508, 700);
+    CHECK(layout_problem(split, kScreen, 12) == "");
+}
+
+TEST_CASE("two 900 pt minimums on 1440: deterministic best effort inside the root") {
+    const MinSizeLookup lookup = mins({{1, {900, 0}}, {2, {900, 0}}});
+    const LayoutResult l = compute_layout(pair(), kScreen, Config{}, lookup);
+    CHECK_RECT(frame(l, 1), 12, 12, 704, 876);
+    CHECK_RECT(frame(l, 2), 724, 12, 704, 876);
+    CHECK(layout_problem(l, kScreen, 12) == "");
+    const LayoutResult again = compute_layout(pair(), kScreen, Config{}, lookup);
+    CHECK(frame(again, 1) == frame(l, 1));
+    CHECK(frame(again, 2) == frame(l, 2));
+}
+
+TEST_CASE("a minimum that stops being unsatisfiable is honoured") {
+    LayoutTree t;
+    t.insert_root(1);
+    t.insert(1, 2, Orientation::Vertical, 0.5);
+    t.insert(2, 3, Orientation::Vertical, 0.5);
+    const MinSizeLookup lookup = mins({{1, {600, 0}}, {2, {600, 0}}, {3, {600, 0}}});
+    const LayoutResult three = compute_layout(t, kScreen, Config{}, lookup);
+    CHECK(layout_problem(three, kScreen, 12) == "");
+    t.remove(3); // a close frees space
+    const LayoutResult two = compute_layout(t, kScreen, Config{}, lookup);
+    CHECK_RECT(frame(two, 1), 12, 12, 704, 876);
+    CHECK_RECT(frame(two, 2), 724, 12, 704, 876);
+}
+
 TEST_CASE("garbage minimums from the lookup are ignored") {
     const double nan = std::numeric_limits<double>::quiet_NaN();
     const LayoutResult l = compute_layout(pair(), kScreen, Config{}, mins({{1, {nan, -5}}, {2, {-100, nan}}}));
