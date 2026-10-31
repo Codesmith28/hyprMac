@@ -77,13 +77,13 @@ import Testing
         let h = Harness(); h.start()
         let a = h.open(1), b = h.open(2)
         h.send(.userDragBegan(CGPoint(x: 100, y: 45)))
-        h.desk.setFrame(a, rect(300, 300, 500, 400))
+        h.desk.setFrame(a, rect(300, 300, 704, 851))
         h.send(.window(.moved, pid: 100, window: a))
         let plans = h.c.testPlanCount()
         h.reconcile() // must not fight the user mid-drag
         h.open(3, focus: false)
         #expect(h.c.testPlanCount() == plans)
-        #expect(h.frame(a) == rect(300, 300, 500, 400))
+        #expect(h.frame(a) == rect(300, 300, 704, 851))
         h.send(.userDragEnded(CGPoint(x: 400, y: 345)))
         #expect(h.frame(a) == leftHalf)
         #expect(h.frame(b) == rect(724, 37, 704, 421.5))
@@ -96,7 +96,7 @@ import Testing
         h.send(.userDragBegan(.zero))
         h.send(.userDragEnded(.zero))
         for i in 0..<4 {
-            h.desk.setFrame(a, rect(CGFloat(300 + i), 300, 500, 400))
+            h.desk.setFrame(a, rect(CGFloat(300 + i), 300, 704, 851))
             h.send(.window(.moved, pid: 100, window: a))
         }
         #expect(h.c.testUncooperative().isEmpty)

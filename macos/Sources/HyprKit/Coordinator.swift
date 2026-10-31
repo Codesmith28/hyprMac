@@ -87,6 +87,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     var stageManagerPaused = false
     var running = false
     var dragging = false
+    /// Windows that got non-echo moved/resized events during the current drag (Coordinator+Resize.swift).
+    var dragTouched: Set<HyprPlatform.WindowRef> = []
     var throwInFlight = false
     /// A throw requested while another was in flight; runs when that one finishes.
     var pendingThrow: Int?
@@ -231,13 +233,14 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 scheduleReconcile(after: tuning.debounce)
             case .moved, .resized:
                 guard let window else { return }
-                if dragging { return } // the user is moving it; settle on mouse-up
+                if dragging { dragTouched.insert(window); return } // the user is moving it; settle on mouse-up
                 if let frame = try? deps.ax.frame(of: window),
                    executor.echo.isEcho(window, observedFrame: frame, now: deps.clock.now()) {
                     return // our own write
                 }
                 if let end = lastDragEnd, deps.clock.now() - end <= tuning.dragGrace {
-                    // Late notification from the user's drag: snap back, but it's no fight.
+                    // Late notification from the user's drag: adopt a resize, else snap back; no fight.
+                    adoptUserResizes([window])
                 } else {
                     noteFight(window)
                 }
@@ -261,6 +264,9 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         case .userDragEnded:
             dragging = false
             lastDragEnd = deps.clock.now()
+            let touched = dragTouched
+            dragTouched.removeAll()
+            adoptUserResizes(touched)
             scheduleReconcile(after: tuning.dragSettle)
         case .appLaunched, .appHidden, .appShown, .appActivated, .observerRegistrationFailed:
             scheduleReconcile(after: tuning.debounce)
@@ -403,7 +409,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         schedule(after: delay) { [weak self] in self?.reconcileNow() }
     }
 
-    private func apply(_ plan: Engine.Plan) {
+    func apply(_ plan: Engine.Plan) {
         activity += 1
         planCount += 1
         var placements: [(HyprPlatform.WindowRef, CGRect)] = []
