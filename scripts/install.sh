@@ -71,8 +71,8 @@ print("%s%s (%s)" % (m, key, state))
 # canon_from_defaults DOMAIN KEYPATH -> canonical JSON | absent
 canon_from_defaults() {
     local out
-    out="$("$DEFAULTS" export "$1" - | py "$PY_CANON" /dev/stdin "$2")" || return 1
-    printf '%s' "${out#*$'\t'}"
+    out="$("$DEFAULTS" export "$1" - | pt get /dev/stdin "$2")" || return 1
+    printf '%s' "$out"
 }
 
 json_type() {
@@ -95,7 +95,7 @@ preflight_installed() {
         pf "LaunchAgent service" "$AGENT_TARGET not loaded → would be bootstrapped"
     fi
     pf "other settings" "unchanged by an upgrade; recorded originals that uninstall restores:"
-    load_manifest
+    load_manifest || { manifest_problem; return 1; }
     for line in ${MANIFEST_LINES[@]+"${MANIFEST_LINES[@]}"}; do
         action="${line%% *}"; rest="${line#* }"
         case "$action" in
@@ -145,7 +145,7 @@ do_preflight() {
             if [ "$id" = 125 ]; then desc="$want125"; else desc="$want126"; fi
             pf "hotkey $id" "absent → would add $desc \"Switch to Desktop $((id - 117))\" (removed again on uninstall)"
         else
-            pf "hotkey $id" "already bound to $(py "$PY_HOTKEY_DESC" "$v") → left untouched"
+            pf "hotkey $id" "already bound to $("$PYTHON" -I -c "$PY_HOTKEY_DESC" "$v") → left untouched"
             pf "" "raw: $v"
         fi
     done
@@ -201,7 +201,7 @@ $(residue_paths)
 EOF
     [ "$any" = 1 ] || pf "existing app data" "none"
     local nc
-    nc="$("$DEFAULTS" export "$NC_DOMAIN" - | py "$PY_NC_HAS" /dev/stdin "$BUNDLE_ID")"
+    nc="$("$DEFAULTS" export "$NC_DOMAIN" - | pt nc_has /dev/stdin "$BUNDLE_ID")"
     if [ "$nc" = present ]; then
         pf "notification settings" "entry for $BUNDLE_ID exists → backed up, restored on uninstall"
     else
@@ -231,6 +231,8 @@ MODE="install"
 PENDING_DIRS=()
 
 fail() { err "$*"; return 1; }
+# Was this entry recorded during this run? (reads the manifest file)
+manifest_line_recorded() { /usr/bin/grep -qxF "$1 ;" "$MANIFEST" 2>/dev/null; }
 
 step() {
     CURRENT_STEP="$1"
@@ -256,12 +258,16 @@ on_error() {
     fi
     if [ -f "$MANIFEST" ]; then
         warn "rolling back the changes made so far"
+        trap on_interrupt INT TERM HUP
         do_uninstall rollback || err "rollback incomplete; fix the problem and run 'make uninstall'"
     else
-        # The state directory may have been created before the manifest existed.
+        # The state step may have created dirs and the snapshot before the
+        # manifest existed: remove exactly those.
+        rm -f "$BEFORE_SNAPSHOT" "$BEFORE_SNAPSHOT.tmp" 2>/dev/null
+        rmdir "$BACKUP_DIR" 2>/dev/null
         local i=$((${#PENDING_DIRS[@]} - 1))
         while [ "$i" -ge 0 ]; do
-            rm -rf "${PENDING_DIRS[$i]}" 2>/dev/null
+            rmdir "${PENDING_DIRS[$i]}" 2>/dev/null
             i=$((i - 1))
         done
     fi
@@ -284,31 +290,18 @@ missing_dirs() {
 
 # Create a directory (and missing parents), recording each one created.
 mkdir_recorded() {
-    local d
+    local d key
     while IFS= read -r d; do
         [ -n "$d" ] || continue
-        record "dir_created $d"
+        key="$(key_for_dir "$d")" || fail "refusing to create unexpected directory $d"
+        record "dir_created $key"
         run mkdir "$d"
     done <<EOF
 $(missing_dirs "$1")
 EOF
 }
 
-hotkey_xml() { # id -> plist XML of the binding (⌥8 for 125, ⌥9 for 126)
-    local params
-    case "$1" in
-        125) params="<integer>56</integer><integer>28</integer><integer>524288</integer>" ;;
-        126) params="<integer>57</integer><integer>25</integer><integer>524288</integer>" ;;
-        *) fail "no binding defined for hotkey $1"; return 1 ;;
-    esac
-    printf '%s' "<dict><key>enabled</key><true/><key>value</key><dict><key>parameters</key><array>$params</array><key>type</key><string>standard</string></dict></dict>"
-}
-
-xml_escape() {
-    local s="$1"
-    s="${s//&/&amp;}"; s="${s//</&lt;}"; s="${s//>/&gt;}"
-    printf '%s' "$s"
-}
+xml_escape() { printf '%s' "$1" | /usr/bin/sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
 
 agent_plist_xml() {
     cat <<PLIST
@@ -350,7 +343,7 @@ do_upgrade() {
     MODE="upgrade"
     title "existing install found: replacing the app bundle only"
     info "recorded original values in $(tilde "$STATE_DIR") are kept as they are"
-    load_manifest
+    load_manifest || { manifest_problem; exit 1; }
     step upgrade_app "replacing $(tilde "$APP_DEST")"
     quit_app
     if ! is_dry && "$LAUNCHCTL" print "$AGENT_TARGET" >/dev/null 2>&1; then
@@ -382,20 +375,23 @@ do_install() {
     done <<EOF
 $(missing_dirs "$STATE_DIR")
 EOF
+    for d in ${PENDING_DIRS[@]+"${PENDING_DIRS[@]}"}; do
+        key_for_dir "$d" >/dev/null || fail "refusing to create unexpected directory $d (is ~/Library/Application Support missing?)"
+    done
     if is_dry; then
         for d in ${PENDING_DIRS[@]+"${PENDING_DIRS[@]}"}; do run mkdir "$d"; done
+        run cp "$HYPR_TMP/before.snapshot" "$BEFORE_SNAPSHOT"
     else
         for d in ${PENDING_DIRS[@]+"${PENDING_DIRS[@]}"}; do mkdir "$d"; done
         mkdir -p "$BACKUP_DIR"
-        printf '# hyprMac install manifest v1: one action per line, undone in reverse by uninstall.sh\n' >"$MANIFEST"
+        # The snapshot lands before the manifest exists: a manifest therefore
+        # always has a snapshot to verify against.
+        cp "$HYPR_TMP/before.snapshot" "$BEFORE_SNAPSHOT.tmp"
+        mv "$BEFORE_SNAPSHOT.tmp" "$BEFORE_SNAPSHOT"
+        printf '%s ;\n' "$MANIFEST_HEADER" >"$MANIFEST"
     fi
-    for d in ${PENDING_DIRS[@]+"${PENDING_DIRS[@]}"}; do record "dir_created $d"; done
+    for d in ${PENDING_DIRS[@]+"${PENDING_DIRS[@]}"}; do record "dir_created $(key_for_dir "$d")"; done
     PENDING_DIRS=()
-    if is_dry; then
-        run cp "$HYPR_TMP/before.snapshot" "$BEFORE_SNAPSHOT"
-    else
-        cp "$HYPR_TMP/before.snapshot" "$BEFORE_SNAPSHOT"
-    fi
 
     step residue_scan "backing up app data that already exists"
     local p n=0 prefs="$HOME/Library/Preferences/$BUNDLE_ID.plist"
@@ -420,14 +416,14 @@ EOF
     local nc
     f="$HYPR_TMP/nc.plist"
     domain_export "$NC_DOMAIN" "$f"
-    nc="$(py "$PY_NC_HAS" "$f" "$BUNDLE_ID")"
+    nc="$(pt nc_has "$f" "$BUNDLE_ID")"
     if [ "$nc" = present ]; then
         warn "notification settings for $BUNDLE_ID already exist; backing them up (restored on uninstall)"
-        record "ncprefs_preexisting 1"
+        record "ncprefs_preexisting"
         if is_dry; then
-            run "$PYTHON" -I -c "<save ncprefs entry>" "$f" "$BACKUP_DIR/ncprefs-entry.plist"
+            run pt nc_save "$f" "$BACKUP_DIR/ncprefs-entry.plist" "$BUNDLE_ID"
         else
-            py "$PY_NC_SAVE" "$f" "$BACKUP_DIR/ncprefs-entry.plist" "$BUNDLE_ID"
+            pt nc_save "$f" "$BACKUP_DIR/ncprefs-entry.plist" "$BUNDLE_ID"
         fi
     fi
 
@@ -435,44 +431,56 @@ EOF
     mkdir_recorded "$HOME/Applications"
     if [ -e "$APP_DEST" ] || [ -L "$APP_DEST" ]; then
         warn "$(tilde "$APP_DEST") exists; moving it aside (restored on uninstall)"
-        record "backup app $APP_DEST"
+        record "backup app"
         run mv "$APP_DEST" "$BACKUP_DIR/app"
     fi
-    record "app_installed $APP_DEST"
+    record "app_installed"
     run /usr/bin/ditto "$APP_SRC" "$APP_DEST"
 
     step lsregister "registering with LaunchServices"
-    record "lsregister $APP_DEST"
+    record "lsregister"
     run "$LSREGISTER" -f "$APP_DEST"
 
     step hotkeys "adding ⌥8/⌥9 \"Switch to Desktop\" shortcuts (if unbound)"
+    # Single-key merges with `defaults write -dict-add`: no export/import
+    # window in which a concurrent change could be reverted.
     changed=0
+    f="$HYPR_TMP/hk.plist"
+    domain_export "$HOTKEY_DOMAIN" "$f"
+    local nk hkd st
+    nk="$(pt dict_len "$f")"
+    hkd="$(pt hk_dict "$f")"
+    if [ "$nk" = 0 ]; then record "hotkeys_domain_absent"; fi
+    if [ "$hkd" = absent ]; then record "hotkeys_dict_created"; fi
     for id in $HOTKEY_IDS; do
-        f="$HYPR_TMP/hk-$id.plist"
-        domain_export "$HOTKEY_DOMAIN" "$f"
-        if plist_has "$f" "AppleSymbolicHotKeys.$id"; then
-            info "symbolic hotkey $id is already defined; leaving it untouched"
+        st="$(pt hk_state "$f" "$id")"
+        if [ "$st" != absent ]; then
+            info "symbolic hotkey $id is already defined ($st); leaving it untouched"
             record "hotkey $id untouched"
             continue
-        fi
-        if ! plist_has "$f" AppleSymbolicHotKeys; then
-            record "hotkeys_dict_created"
-            "$PLUTIL" -insert AppleSymbolicHotKeys -dictionary "$f"
         fi
         record "hotkey $id absent"
         local xml
         xml="$(hotkey_xml "$id")"
-        "$PLUTIL" -insert "AppleSymbolicHotKeys.$id" -xml "$xml" "$f"
-        run "$DEFAULTS" import "$HOTKEY_DOMAIN" "$f"
+        run "$DEFAULTS" write "$HOTKEY_DOMAIN" AppleSymbolicHotKeys -dict-add "$id" "$xml"
         changed=1
     done
+    if [ "$changed" = 1 ] && ! is_dry; then
+        domain_export "$HOTKEY_DOMAIN" "$f"
+        for id in $HOTKEY_IDS; do
+            if manifest_line_recorded "hotkey $id absent"; then
+                [ "$(pt get "$f" "AppleSymbolicHotKeys.$id")" = "$(hotkey_json "$id")" ] ||
+                    fail "hotkey $id did not read back as written"
+            fi
+        done
+    fi
     if [ "$changed" = 1 ]; then activate_hotkeys; fi
 
     step wm "turning Stage Manager off"
     f="$HYPR_TMP/wm.plist"
     domain_export "$WM_DOMAIN" "$f"
     local nkeys
-    nkeys="$(py "$PY_DICT_LEN" "$f")"
+    nkeys="$(pt dict_len "$f")"
     if [ "$nkeys" = 0 ]; then record "wm_domain_absent"; fi
     if plist_has "$f" "$WM_KEY"; then
         local wtype wval
@@ -514,10 +522,11 @@ EOF
     else
         record "config_dir_preexisting 0"
         mkdir_recorded "$CONFIG_PARENT"
-        record "config_dir_created $CONFIG_DIR"
+        local example csum=empty
+        if example="$(find_config_example)"; then csum="$(sha_of_file "$example")"; fi
+        record "config_dir_created $csum"
         run mkdir "$CONFIG_DIR"
-        local example
-        if example="$(find_config_example)"; then
+        if [ "$csum" != empty ]; then
             run cp "$example" "$CONFIG_DIR/init.lua"
         else
             warn "init.lua.example not found; leaving $(tilde "$CONFIG_DIR") empty"
@@ -528,10 +537,10 @@ EOF
     mkdir_recorded "$(dirname "$AGENT_PLIST")"
     if [ -e "$AGENT_PLIST" ] || [ -L "$AGENT_PLIST" ]; then
         warn "$(tilde "$AGENT_PLIST") exists; moving it aside (restored on uninstall)"
-        record "backup launchagent $AGENT_PLIST"
+        record "backup launchagent"
         run mv "$AGENT_PLIST" "$BACKUP_DIR/launchagent"
     fi
-    record "file_created $AGENT_PLIST"
+    record "agent_plist_created"
     write_file "$AGENT_PLIST" "$(agent_plist_xml)"
     if ! is_dry; then "$PLUTIL" -lint -s "$AGENT_PLIST"; fi
 
@@ -551,6 +560,7 @@ EOF
     run "$OPEN" "$ACCESSIBILITY_URL" || warn "could not open System Settings"
 
     step done "finished"
+    record "install_complete"
     if is_dry; then
         info "dry run: nothing was changed"
     else
@@ -563,6 +573,12 @@ EOF
     done
 }
 
+if [ -f "$VERIFY_FAILED" ]; then
+    die "the last uninstall did not verify (state in $(tilde "$VERIFY_DIR")); fix it and run 'make verify-rollback' first"
+fi
+if [ -f "$JOURNAL" ]; then
+    die "an earlier uninstall did not finish; run 'make uninstall' to complete it first"
+fi
 if [ -f "$MANIFEST" ]; then
     do_upgrade
 else

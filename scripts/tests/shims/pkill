@@ -10,7 +10,9 @@ case "${1:-}" in
     -KILL | -9) sig=KILL; shift ;;
     -*) case "$1" in -x) ;; *) echo "fake pkill: unsupported $1" >&2; exit 64 ;; esac ;;
 esac
-[ "${1:-}" = -x ] && [ "${2:-}" = hyprMac ] || { echo "fake pkill: expected -x hyprMac" >&2; exit 64; }
+# -x hyprMac (any copy) or -f <installed binary regex>: one fake process.
+{ [ "${1:-}" = -x ] && [ "${2:-}" = hyprMac ]; } || [ "${1:-}" = -f ] ||
+    { echo "fake pkill: expected -x hyprMac or -f pattern" >&2; exit 64; }
 [ -e "$FAKE_STATE/running" ] || exit 1
 case "$sig" in
     0) exit 0 ;;
