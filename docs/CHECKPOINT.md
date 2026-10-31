@@ -64,6 +64,16 @@ Hyprland-style BSP tiler for macOS on **native** Spaces:
 - **Known gap:** re-tiling with ⌥⇧F inserts at the most recently inserted leaf, not exactly at the focused leaf. Fixing it needs an engine/C API change.
 - **Real system:** hyprMac is installed (the first `make install` was done). The new build still has to be reinstalled (upgrade), then Accessibility granted, then the supervised e2e pass run, then `make uninstall`.
 
+### E2E run 1 (2026-10-31, real Mac): 23 passed, 10 failed, 1 skipped
+`feat/lua-keys-rules` is merged: `config.keys`, `config.rules`, and the throw posts the native shortcut's modifiers. Hotkeys fire. The failures fall into five groups:
+- restore lands on the wrong side (toggle, minimize and fullscreen);
+- throw preconditions (another app's window on Desktop 1);
+- `throw-no-space` doesn't log `missing_space`;
+- `min-size-unsatisfiable` takes 6 plans;
+- `custom-keys` floats the wrong window.
+
+All of it is being fixed on `fix/e2e-run1` (worktree `hyprMac-e2e`, brief in `.agent-brief.md`, log in `<scratchpad>/reports/e2e-run1.log`). That agent is the ONLY one allowed to run the real e2e suite. The installed hyprMac is stopped (`launchctl kill`) while it runs.
+
 ### Next steps
 1. Merge the 3 feature branches (float-small, then min-size, then toggle), running `make test` after each. Then `make install` again (an upgrade: only the bundle is replaced).
 2. **Real run:** install is done (preflight and dry run were clean). Next are `make install`, a short e2e subset, a manual ⌥⇧2 on Ghostty, then `make uninstall` (it must print "rollback verified") and `make verify-rollback`.
