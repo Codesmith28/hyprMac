@@ -31,6 +31,10 @@ public:
                 need.min_h = sanitize_min(m.h);
             }
             need.floor_w = need.floor_h = kLeafFloor;
+            // A leaf always needs at least its floor, so subtree minimums (sums along an axis)
+            // account for every sibling's 1 pt and a satisfiable nest is never reported short.
+            need.min_w = std::max(need.min_w, kLeafFloor);
+            need.min_h = std::max(need.min_h, kLeafFloor);
         } else {
             const Need a = measure(n->child[0].get());
             const Need b = measure(n->child[1].get());
