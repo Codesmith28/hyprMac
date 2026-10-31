@@ -88,6 +88,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     var running = false
     var dragging = false
     var throwInFlight = false
+    /// A throw requested while another was in flight; runs when that one finishes.
+    var pendingThrow: Int?
     private var idsByPid: [pid_t: Set<UInt64>] = [:]
     var fights: [UInt64: [TimeInterval]] = [:]
     var uncooperative: Set<UInt64> = []
@@ -466,7 +468,9 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     /// ⌥⇧N: throw the focused window to Desktop N with the drag trick (focus follows).
     func throwFocusedWindow(toSpace n: Int, attempt: Int = 0) {
         queue.async { [self] in
-            guard !throwInFlight else { return }
+            // A press while another throw runs is queued (last one wins), never lost: real E2E
+            // (throw-rapid) showed a second ⌥⇧N 200 ms after the first vanished without any event.
+            guard !throwInFlight else { pendingThrow = n; return }
             guard let pid = try? deps.ax.focusedApplication(),
                   let window = try? deps.ax.focusedWindow(pid: pid) else {
                 EventLog.shared.emit("throw", ["n": n, "result": "noFocusedWindow"])
@@ -503,7 +507,10 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                             schedule(after: wait) { [weak self] in self?.throwFocusedWindow(toSpace: n, attempt: attempt + 1) }
                         }
                     case let .noSuchSpace(_, available):
-                        if let available { notify(.missingSpace(requested: n, count: available)) }
+                        if let available {
+                            EventLog.shared.emit("missing_space", ["n": n, "count": available])
+                            notify(.missingSpace(requested: n, count: available))
+                        }
                     case .refusedFullscreen:
                         notify(.throwFailed(requested: n, reason: "Fullscreen windows can't be moved."))
                     case .noGrabPoint:
@@ -514,6 +521,11 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                         notify(.throwFailed(requested: n, reason: "Accessibility error: \(e)"))
                     }
                     scheduleReconcile(after: tuning.debounce)
+                    if let next = pendingThrow { // the press that arrived mid-throw
+                        pendingThrow = nil
+                        let wait = max(0.05, transitions.remaining(now: deps.clock.now()))
+                        schedule(after: wait) { [weak self] in self?.throwFocusedWindow(toSpace: next) }
+                    }
                 }
             }
         }

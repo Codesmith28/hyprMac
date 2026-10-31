@@ -67,10 +67,16 @@ if !wms.isEmpty {
 }
 
 let session = Session()
-if let bundle = session.frontmost?.bundleIdentifier { HyprApp.ignoredBundleIDs = [bundle] }
+// Hermetic: hyprMac ignores EVERY running regular app (the terminal running the tests, and any other app
+// that happens to have a window on Desktop 1, which would otherwise be tiled next to the fixtures).
+// The fixture is unbundled, so it is never in this list.
+var ignored = Set(NSWorkspace.shared.runningApplications
+    .filter { $0.activationPolicy == .regular }.compactMap(\.bundleIdentifier))
+if let bundle = session.frontmost?.bundleIdentifier { ignored.insert(bundle) }
+HyprApp.ignoredBundleIDs = ignored.sorted()
 let spaces = Spaces.userSpaces
 print("# user Spaces: \(spaces.count) (ids \(spaces.map(String.init).joined(separator: ","))), current index \(session.originalSpaceIndex.map(String.init) ?? "?")")
-print("# frontmost: \(session.frontmost?.localizedName ?? "?") (hyprMac ignores it: rules.ignore = \(HyprApp.ignoredBundleIDs))")
+print("# frontmost: \(session.frontmost?.localizedName ?? "?"); hyprMac ignores all \(HyprApp.ignoredBundleIDs.count) running regular apps (rules.ignore)")
 
 // Ctrl-C / kill: stop children, give the desktop back.
 var signalSources: [DispatchSourceSignal] = []
