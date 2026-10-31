@@ -15,7 +15,7 @@ final class DialogWindow: NSWindow {
     override func accessibilitySubrole() -> NSAccessibility.Subrole? { .dialog }
 }
 
-final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate, NSToolbarDelegate {
     let options: FixtureOptions
     private var windows: [Int: NSWindow] = [:]          // command index -> window
     private var indexOf: [ObjectIdentifier: Int] = [:]
@@ -123,6 +123,7 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
         nextIndex += 1
         var style: NSWindow.StyleMask = [.titled, .closable, .miniaturizable]
         if options.isResizable(idx) { style.insert(.resizable) }
+        if options.titlebar == .transparent { style.insert(.fullSizeContentView) }
         var size = options.windowSize
         if let min = options.minSize(for: idx) {
             size = CGSize(width: max(size.width, min.width), height: max(size.height, min.height))
@@ -137,6 +138,7 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
         if options.isResizable(idx) { w.collectionBehavior.insert(.fullScreenPrimary) }
         if let min = options.minSize(for: idx) { w.contentMinSize = min }
         w.contentView = label("\(options.title) \(idx)")
+        applyTitlebar(w)
         windows[idx] = w
         indexOf[ObjectIdentifier(w)] = idx
         internalChange += 1
@@ -147,7 +149,7 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
         w.makeKeyAndOrderFront(nil)
         Out.emit(["event": "window", "index": idx, "windowNumber": w.windowNumber,
                   "pid": Int(getpid()), "title": w.title, "frame": topLeftArray(w.frame),
-                  "resizable": options.isResizable(idx)])
+                  "resizable": options.isResizable(idx), "titlebar": options.titlebar.rawValue])
         return idx
     }
 
@@ -160,6 +162,7 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
             tab.tabbingMode = .preferred
             tab.tabbingIdentifier = first.tabbingIdentifier
             tab.contentView = label(tab.title)
+            applyTitlebar(tab)
             first.addTabbedWindow(tab, ordered: .above)
             tabs.append(tab)
             Out.emit(["event": "tab", "group": 0, "tab": t, "windowNumber": tab.windowNumber,
@@ -168,11 +171,60 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
         first.makeKeyAndOrderFront(nil)   // select the first tab again
     }
 
+    /// A plain container with a centred label, so the titlebar band (which full-size content
+    /// extends under) is empty content, as in most real apps.
     private func label(_ text: String) -> NSView {
+        let container = NSView(frame: NSRect(origin: .zero, size: options.windowSize))
         let v = NSTextField(labelWithString: text)
         v.alignment = .center
         v.font = .systemFont(ofSize: 18, weight: .medium)
-        return v
+        v.sizeToFit()
+        v.frame.origin = NSPoint(x: (container.bounds.width - v.frame.width) / 2,
+                                 y: (container.bounds.height - v.frame.height) / 2)
+        v.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
+        container.addSubview(v)
+        return container
+    }
+
+    private func applyTitlebar(_ w: NSWindow) {
+        switch options.titlebar {
+        case .standard, .tabs:
+            break
+        case .transparent:
+            w.titlebarAppearsTransparent = true
+        case .toolbar:
+            let tb = NSToolbar(identifier: "hyprmac-fixture-toolbar")
+            tb.delegate = self
+            tb.displayMode = .iconOnly
+            tb.allowsUserCustomization = false
+            w.toolbar = tb
+            w.toolbarStyle = .unified
+        }
+    }
+
+    // MARK: NSToolbarDelegate (--titlebar toolbar)
+
+    private static let toolbarButtons = ["back", "share", "settings"].map { NSToolbarItem.Identifier("fixture.\($0)") }
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [Self.toolbarButtons[0], .flexibleSpace, Self.toolbarButtons[1], Self.toolbarButtons[2]]
+    }
+
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        Self.toolbarButtons + [.flexibleSpace]
+    }
+
+    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier,
+                 willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        let item = NSToolbarItem(itemIdentifier: id)
+        let name = id.rawValue.replacingOccurrences(of: "fixture.", with: "")
+        item.label = name
+        let symbol = ["back": "chevron.left", "share": "square.and.arrow.up", "settings": "gearshape"][name] ?? "circle"
+        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: name)
+        item.isBordered = true
+        item.target = nil
+        item.action = nil
+        return item
     }
 
     /// Cascade from the top-left of the usable area; slots wrap so nothing

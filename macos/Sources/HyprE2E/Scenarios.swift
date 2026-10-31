@@ -8,7 +8,8 @@ enum Catalog {
         auxIgnored("sheet"), auxIgnored("panel"), auxIgnored("dialog"),
         tabsDedupe, minimizeRestore, hideRestore, fullscreenRestore,
         hungAppIsolation, snapBackNoLoop, lateWindow,
-        throwToSpace2, missingSpaceNotice, configReload, badConfigSurvives,
+        throwToSpace2, throwHeldModifiers, throwTitlebarVariants, throwNoSpace, throwAlreadyThere,
+        throwRapid, missingSpaceNotice, displayCache, configReload, badConfigSurvives,
     ]
 
     static func named(_ name: String) -> Scenario? { all.first { $0.name == name } }
@@ -182,7 +183,9 @@ enum Catalog {
         let f = try ctx.launchFixture(3)
         let r = try (0..<3).map(f.ref)
         try ctx.expectOracle(r, "3 windows")
-        let home = Spaces.activeSpace()
+        let spaceHome = ctx.spaceHome()
+        defer { spaceHome.restore() }
+        let home = spaceHome.space
         var c = f.cursor
         try f.command("fullscreen 1")
         guard f.waitFor("fullscreen", after: c, timeout: 10, where: {
@@ -207,9 +210,9 @@ enum Catalog {
     // MARK: 11–13. misbehaving apps
 
     static let hungAppIsolation = Scenario(name: "hung-app-isolation",
-                                           summary: "a hung app does not delay tiling another app's window") { ctx in
+                                           summary: "a hung app delays neither another app's tiling (1 s) nor hyprMac (SIGHUP → config_loaded in 500 ms)") { ctx in
         try ctx.startHypr()
-        let a = try ctx.launchFixture(1, ["--hang", "3@2"], label: "A")
+        let a = try ctx.launchFixture(1, ["--hang", "5@2"], label: "A")
         let a0 = try a.ref(0)
         try ctx.expectOracle([a0], "A alone before it hangs")
         guard a.waitFor("hang", timeout: 5) != nil else { throw HarnessError("fixture A never started hanging") }
@@ -229,7 +232,28 @@ enum Catalog {
                                details: res.table(title: "B0 vs its 2-window tile"))
         }
         ctx.note("B0 tiled \(String(format: "%.0f", Date().timeIntervalSince(shown) * 1000)) ms after appearing")
-        guard a.waitFor("hang_end", timeout: 6) != nil else { throw HarnessError("fixture A never recovered") }
+
+        // hyprMac itself must stay responsive (its menu bar and signal handling run through the
+        // same coordinator): a SIGHUP must come back as config_loaded within 500 ms while A hangs.
+        let h = try ctx.hypr.unwrap("hyprMac")
+        let c = h.log.cursor
+        let sent = Date()
+        try h.reload()
+        let reply = h.log.waitFor(after: c, timeout: 3) { ["config_loaded", "config_error"].contains($0.name) }
+        let ms = reply.map { $0.at.timeIntervalSince(sent) * 1000 }
+        if let end = a.events.last(where: { $0.json["event"] as? String == "hang_end" })?.at, end < sent {
+            ctx.note("note: A had already recovered when SIGHUP was sent; responsiveness check is weaker")
+        }
+        guard let reply, reply.name == "config_loaded" else {
+            throw HarnessError("no config_loaded within 3 s of SIGHUP while another app hung: hyprMac is blocked",
+                               details: h.log.tail())
+        }
+        guard let ms, ms <= 500 else {
+            throw HarnessError(String(format: "config_loaded took %.0f ms after SIGHUP while A hung (limit 500 ms)", ms ?? -1))
+        }
+        ctx.note(String(format: "SIGHUP → config_loaded in %.0f ms while A hung", ms))
+
+        guard a.waitFor("hang_end", timeout: 8) != nil else { throw HarnessError("fixture A never recovered") }
         try ctx.expectOracle([a0, b0], "A0 and B0 after A recovers")
     }
 
@@ -260,61 +284,6 @@ enum Catalog {
         try ctx.startHypr()
         let f = try ctx.launchFixture(1, ["--late-window", "1.5"])
         try ctx.expectOracle([try f.ref(0)], "late window")
-    }
-
-    // MARK: 14–15. Spaces
-
-    static let throwToSpace2 = Scenario(name: "throw-to-space-2",
-                                        summary: "⌥⇧2 moves the focused window to Space 2 and both Spaces retile", spaces: 2) { ctx in
-        let spaces = Spaces.userSpaces
-        if Spaces.activeSpace() != spaces[0] {
-            guard Keys.switchToSpace(1) else { throw HarnessError("could not switch to Space 1 before the test") }
-        }
-        try ctx.startHypr()
-        let log = try ctx.log
-        let f = try ctx.launchFixture(2)
-        let r = try (0..<2).map(f.ref)
-        try ctx.expectOracle(r, "2 windows on Space 1")
-        try f.command("focus 1")
-        pump(0.3)
-        Spaces.waitSettled()
-        let c = log.cursor
-        Keys.option(2, shift: true)
-        guard let ev = log.waitFor("throw", after: c, timeout: 6) else {
-            throw HarnessError("no throw event after ⌥⇧2", details: log.tail())
-        }
-        guard ev.int("n") == 2, ev.string("result") == "moved" else {
-            throw HarnessError("throw reported n=\(ev.int("n").map(String.init) ?? "nil"), result=\(ev.string("result") ?? "nil"); expected n=2, moved")
-        }
-        guard Spaces.waitActive(spaces[1], timeout: 5) else {
-            throw HarnessError("the active Space did not become Space 2 (id \(spaces[1]))")
-        }
-        let one = ctx.oracle(1).map { [$0[0], $0[0]] }
-        try ctx.expect(r, variants: one, "both windows fill their Space (0 on Space 1, 1 on Space 2)")
-        guard Keys.switchToSpace(1) else { throw HarnessError("⌥1 did not return to Space 1") }
-    }
-
-    static let missingSpaceNotice = Scenario(name: "missing-space-notice",
-                                             summary: "⌥(count+1) logs missing_space", spaces: 1) { ctx in
-        let count = Spaces.userSpaces.count
-        guard count >= 1 else { throw SkipScenario(reason: "could not read the user Space count") }
-        guard count < 9 else { throw SkipScenario(reason: "\(count) user Spaces: no free ⌥N to test") }
-        try ctx.startHypr()
-        let log = try ctx.log
-        // The fixture is frontmost so the unbound keystroke lands somewhere harmless.
-        let f = try ctx.launchFixture(1)
-        try f.command("focus 0")
-        let before = Spaces.waitSettled()
-        let c = log.cursor
-        Keys.option(count + 1)
-        guard let ev = log.waitFor("missing_space", after: c, timeout: 3) else {
-            throw HarnessError("no missing_space event after ⌥\(count + 1)", details: log.tail())
-        }
-        guard ev.int("n") == count + 1, ev.int("count") == count else {
-            throw HarnessError("missing_space reported n=\(ev.int("n").map(String.init) ?? "nil"), count=\(ev.int("count").map(String.init) ?? "nil"); expected n=\(count + 1), count=\(count)")
-        }
-        pump(0.5)
-        if Spaces.activeSpace() != before { throw HarnessError("the active Space changed") }
     }
 
     // MARK: 16–17. config

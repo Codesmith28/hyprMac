@@ -23,6 +23,8 @@ struct FixtureOptions {
     /// Delay between initial windows (ms) so a tiler sees them one at a time.
     var staggerMS = 0
     var windowSize = CGSize(width: 480, height: 320)
+    /// Titlebar variant for every normal window (drag-trick grab-point tests).
+    var titlebar: TitlebarStyle = .standard
 
     static let usage = """
     usage: hyprmac-fixture [options]
@@ -42,6 +44,8 @@ struct FixtureOptions {
       --fullscreen-after S     toggle native fullscreen on window 0 after S seconds
       --stagger MS             delay between initial windows (default 0)
       --size WxH               initial content size (default 480x320)
+      --titlebar STYLE         standard | transparent (transparent titlebar + full-size content)
+                               | tabs (visible tab bar, 3 tabs) | toolbar (unified toolbar with buttons)
 
     stdin commands: open | close I | minimize I | unminimize I | fullscreen I |
                     hide | unhide | focus I | frames | quit       (EOF quits)
@@ -95,6 +99,12 @@ struct FixtureOptions {
             case "--fullscreen-after": o.fullscreenAfter = try double(a, try value(a))
             case "--stagger": o.staggerMS = try int(a)
             case "--size": o.windowSize = try parseSize(a, try value(a))
+            case "--titlebar":
+                let v = try value(a)
+                guard let t = TitlebarStyle(rawValue: v) else {
+                    throw OptionError("\(a) expects standard|transparent|tabs|toolbar, got '\(v)'")
+                }
+                o.titlebar = t
             case "-h", "--help":
                 print(usage)
                 exit(0)
@@ -103,6 +113,7 @@ struct FixtureOptions {
             }
             i += 1
         }
+        if o.titlebar == .tabs && o.tabs < 3 { o.tabs = 3 }
         return o
     }
 
@@ -115,6 +126,10 @@ struct FixtureOptions {
         if let only = minSizeIndex { return only == index ? s : nil }
         return s
     }
+}
+
+enum TitlebarStyle: String {
+    case standard, transparent, tabs, toolbar
 }
 
 struct OptionError: Error, CustomStringConvertible {

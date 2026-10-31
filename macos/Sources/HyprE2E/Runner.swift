@@ -129,6 +129,10 @@ final class Context {
 
     func note(_ s: String) { notes.append(s) }
 
+    /// Remember the active Space now; `restore()` returns to it (use with `defer`, so a
+    /// failing Space scenario never leaves the user on another Desktop).
+    func spaceHome() -> SpaceHome { SpaceHome(context: self) }
+
     // MARK: cleanup
 
     func cleanup() {
@@ -225,5 +229,26 @@ enum Runner {
         print(String(format: "# summary: %d passed, %d failed, %d skipped of %d (%.1fs)",
                      passed, failed, skipped, scenarios.count, Date().timeIntervalSince(t0)))
         return failed == 0 ? 0 : 1
+    }
+}
+
+/// The Space a scenario started on.
+struct SpaceHome {
+    let space: UInt64?
+    let index: Int?
+    unowned let context: Context
+
+    init(context: Context) {
+        self.context = context
+        space = Spaces.activeSpace()
+        index = space.flatMap { Spaces.index(of: $0) }
+    }
+
+    func restore() {
+        guard let space, let index, Spaces.activeSpace() != space else { return }
+        Spaces.waitSettled()
+        if Spaces.activeSpace() != space && !Keys.switchToSpace(index) {
+            context.note("warning: could not return to Space \(index) after the scenario")
+        }
     }
 }
