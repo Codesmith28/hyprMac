@@ -11,7 +11,7 @@ let options = Options.parse(Array(CommandLine.arguments.dropFirst()))
 if options.list {
     for s in Catalog.all {
         let req = s.spaces >= 2 ? " [needs >= 2 Spaces]" : ""
-        print("\(s.name.padding(toLength: 22, withPad: " ", startingAt: 0)) \(s.summary)\(req)")
+        print("\(s.name.padding(toLength: 24, withPad: " ", startingAt: 0)) \(s.summary)\(req)")
     }
     exit(0)
 }

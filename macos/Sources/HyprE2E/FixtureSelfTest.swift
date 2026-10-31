@@ -107,6 +107,31 @@ enum FixtureSelfTest {
             check(!h.process.isRunning, "fixture exits on stdin EOF alone")
             h.quit()
         }
+        // Titlebar variants used by throw-titlebar-variants: the fixture must build them, and
+        // we record (read-only) what the drag trick's grab candidates hit on each.
+        for variant in ["standard", "transparent", "tabs", "toolbar"] {
+            guard let v = try? Fixture(executable: fixture, args: ["--windows", "1", "--titlebar", variant,
+                                                                    "--title", "e2e titlebar \(variant)"],
+                                       label: variant, stderrTo: nil) else {
+                check(false, "--titlebar \(variant) launches"); continue
+            }
+            _ = try? v.waitReady(timeout: 10)
+            let ev = v.events.first { $0.json["event"] as? String == "window" }?.json
+            let tabs = v.events.filter { $0.json["event"] as? String == "tab" }.count
+            var ok = ev?["titlebar"] as? String == variant
+            if variant == "tabs" { ok = ok && tabs == 2 }
+            check(ok, "--titlebar \(variant) opens a window\(variant == "tabs" ? " with 3 tabs" : "")",
+                  ["window event: \(ev.map { "\($0)" } ?? "none"), tab events: \(tabs)"])
+            if trusted, let id = v.windowNumber(0) {
+                let m = Layout.settle([WindowRef(pid: v.pid, id: id, label: variant)], timeout: 2)
+                if let frame = m.first?.best {
+                    let hits = GrabProbe.hits(window: id, frame: frame)
+                    print("#   \(variant) titlebar grab candidates hit: "
+                          + hits.map(\.description).joined(separator: ", "))
+                }
+            }
+            v.quit()
+        }
         return finish(n, failures)
     }
 

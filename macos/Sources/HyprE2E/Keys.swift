@@ -21,6 +21,34 @@ enum Keys {
         post(k, flags: shift ? [.maskAlternate, .maskShift] : [.maskAlternate])
     }
 
+    /// A human-like ⌥⇧N: ⌥ then ⇧ go down as separate flagsChanged events, the digit is
+    /// pressed and released, and ⌥⇧ stay held `hold` seconds after the key-up before they are
+    /// released (also on early exit). This is what a person's hands do; the single-event
+    /// `option(_:shift:)` is not.
+    static func throwHeld(_ n: Int, hold: Double = 0.3) {
+        guard let k = digit[n] else { return }
+        let src = CGEventSource(stateID: .hidSystemState)
+        func modifier(_ key: CGKeyCode, _ flags: CGEventFlags) {
+            guard let e = CGEvent(keyboardEventSource: src, virtualKey: key, keyDown: true) else { return }
+            e.type = .flagsChanged
+            e.flags = flags
+            e.post(tap: .cghidEventTap)
+            pump(0.03)
+        }
+        let option: CGKeyCode = 58, shift: CGKeyCode = 56   // kVK_Option, kVK_Shift
+        modifier(option, .maskAlternate)
+        modifier(shift, [.maskAlternate, .maskShift])
+        defer {
+            modifier(shift, .maskAlternate)
+            modifier(option, [])
+        }
+        post(k, flags: [.maskAlternate, .maskShift])
+        pump(hold)
+    }
+
+    /// Current cursor position (top-left global points).
+    static var cursor: CGPoint { CGEvent(source: nil)?.location ?? .zero }
+
     /// Switch to user Space `n` and wait for the transition to finish.
     /// Waits for any running transition first: ⌥N during an animation is dropped.
     static func switchToSpace(_ n: Int) -> Bool {
