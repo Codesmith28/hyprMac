@@ -20,6 +20,10 @@ public enum TilingNotice: Equatable {
     case stageManagerEnabled
     case conflictingApp(name: String)
     case permissionLost
+    /// Some configured shortcuts could not be registered (another app owns them).
+    case hotkeysUnavailable(String)
+    /// `keys.switch` doesn't match any enabled native "Switch to Desktop N" shortcut.
+    case switchShortcutMismatch(configured: String, native: [String])
 }
 
 public protocol TilingControllerDelegate: AnyObject {

@@ -146,6 +146,8 @@ public final class FakeDesktop: @unchecked Sendable {
     public var spacesUnavailable = false
     /// Posted ⌥N switches Spaces (after `switchLatency`). Off = the switch never happens.
     public var nativeSwitchEnabled = true
+    /// The modifiers of the native "Switch to Desktop N" shortcut (⌥ by default; ⌃ = `.maskControl`).
+    public var nativeSwitchFlags: CGEventFlags = .maskAlternate
     public var switchLatency: TimeInterval = 0.35
     /// A ⌥N posted while a transition is animating is silently dropped (verified on 27.2).
     public var transitionDuration: TimeInterval = 0.5

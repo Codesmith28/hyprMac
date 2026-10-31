@@ -97,10 +97,20 @@ public final class FakeThrowHotkeys: ThrowHotkeys {
     public var failingDigits: [Int] = []
     public var onToggleFloat: (() -> Void)?
     public var toggleFloatFailed = false
+    /// The bindings of the last `start` (nil while stopped).
+    public private(set) var bindings: KeyBindings?
+    /// How many times `start` ran (a reload registers again).
+    public private(set) var startCount = 0
     public init() {}
+    /// What the real `HotkeyCenter` would have registered for the current bindings.
+    public var registrations: [(id: UInt32, keyCode: UInt32, modifiers: UInt32)] {
+        bindings.map { HotkeyCenter.registrations(for: $0) } ?? []
+    }
     @discardableResult
-    public func start(onThrow: @escaping (Int) -> Void) -> [Int] { self.onThrow = onThrow; return failingDigits }
-    public func stop() { onThrow = nil }
+    public func start(bindings: KeyBindings, onThrow: @escaping (Int) -> Void) -> [Int] {
+        self.bindings = bindings; startCount += 1; self.onThrow = onThrow; return failingDigits
+    }
+    public func stop() { onThrow = nil; bindings = nil }
     public func press(_ n: Int) { onThrow?(n) }
     /// Simulates ⌥⇧F.
     public func pressToggleFloat() { onToggleFloat?() }
@@ -109,17 +119,23 @@ public final class FakeThrowHotkeys: ThrowHotkeys {
 public final class FakeSpaceKeyObserver: SpaceKeyObserving {
     private var onSwitch: ((Int) -> Void)?
     public var permitted = true
+    /// The modifiers of the last `start` (what the tap filters for).
+    public private(set) var modifiers: CGEventFlags = .maskAlternate
+    public private(set) var startCount = 0
     public init() {}
     @discardableResult
-    public func start(onSwitch: @escaping (Int) -> Void) -> Bool {
+    public func start(modifiers: CGEventFlags, onSwitch: @escaping (Int) -> Void) -> Bool {
+        startCount += 1
         guard permitted else { return false }
+        self.modifiers = modifiers
         self.onSwitch = onSwitch
         return true
     }
     public func stop() { onSwitch = nil }
     /// Feeds a raw key through the real filter.
     public func key(_ code: CGKeyCode, flags: CGEventFlags, isAutorepeat: Bool = false, userData: Int64 = 0) {
-        if let n = SpaceKeyFilter.digit(keyCode: code, flags: flags, isAutorepeat: isAutorepeat, sourceUserData: userData) {
+        if let n = SpaceKeyFilter.digit(keyCode: code, flags: flags, modifiers: modifiers, isAutorepeat: isAutorepeat,
+                                       sourceUserData: userData) {
             onSwitch?(n)
         }
     }

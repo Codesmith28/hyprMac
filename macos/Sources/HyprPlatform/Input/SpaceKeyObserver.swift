@@ -1,12 +1,19 @@
 import CoreGraphics
 import Foundation
 
-/// Listens (never intercepts) for ⌥1–9 so the coordinator knows a native Space switch was requested.
+/// Listens (never intercepts) for `<switch modifiers>`+1–9 (⌥1–9 by default) so the coordinator
+/// knows a native Space switch was requested.
 public protocol SpaceKeyObserving: AnyObject {
-    /// Returns false when the tap couldn't be created (no Input Monitoring permission).
+    /// (Re-)starts listening for exactly `modifiers` + a digit. Returns false when the tap
+    /// couldn't be created (no Input Monitoring permission).
     @discardableResult
-    func start(onSwitch: @escaping (Int) -> Void) -> Bool
+    func start(modifiers: CGEventFlags, onSwitch: @escaping (Int) -> Void) -> Bool
     func stop()
+}
+
+public extension SpaceKeyObserving {
+    @discardableResult
+    func start(onSwitch: @escaping (Int) -> Void) -> Bool { start(modifiers: .maskAlternate, onSwitch: onSwitch) }
 }
 
 /// Pure filtering for the Space-key tap.
@@ -14,12 +21,12 @@ public enum SpaceKeyFilter {
     /// Modifiers that must match exactly (caps lock and device bits are ignored).
     public static let relevantModifiers: CGEventFlags = [.maskShift, .maskControl, .maskAlternate, .maskCommand, .maskSecondaryFn]
 
-    /// The digit for an ⌥+digit keyDown with no other modifier, else nil. Autorepeats and
-    /// hyprMac's own synthetic events are ignored.
-    public static func digit(keyCode: CGKeyCode, flags: CGEventFlags, isAutorepeat: Bool = false,
-                             sourceUserData: Int64 = 0) -> Int? {
+    /// The digit for a keyDown whose modifiers are exactly `modifiers` (⌥ by default), else nil.
+    /// Autorepeats and hyprMac's own synthetic events are ignored.
+    public static func digit(keyCode: CGKeyCode, flags: CGEventFlags, modifiers: CGEventFlags = .maskAlternate,
+                             isAutorepeat: Bool = false, sourceUserData: Int64 = 0) -> Int? {
         guard !isAutorepeat, !SyntheticEventMarker.isSynthetic(userData: sourceUserData) else { return nil }
-        guard flags.intersection(relevantModifiers) == .maskAlternate else { return nil }
+        guard flags.intersection(relevantModifiers) == modifiers else { return nil }
         return DigitKeys.digit(forKeyCode: keyCode)
     }
 
@@ -34,13 +41,15 @@ public final class SpaceKeyObserver: SpaceKeyObserving {
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
     fileprivate var onSwitch: ((Int) -> Void)?
+    fileprivate var modifiers: CGEventFlags = .maskAlternate
 
     public init() {}
 
     @discardableResult
-    public func start(onSwitch: @escaping (Int) -> Void) -> Bool {
+    public func start(modifiers: CGEventFlags, onSwitch: @escaping (Int) -> Void) -> Bool {
         stop()
         self.onSwitch = onSwitch
+        self.modifiers = modifiers
         let mask = CGEventMask(1 << CGEventType.keyDown.rawValue)
         let me = Unmanaged.passUnretained(self).toOpaque()
         guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly,
@@ -52,7 +61,7 @@ public final class SpaceKeyObserver: SpaceKeyObserving {
             } else if type == .keyDown,
                       let n = SpaceKeyFilter.digit(
                         keyCode: CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode)),
-                        flags: event.flags,
+                        flags: event.flags, modifiers: me.modifiers,
                         isAutorepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0,
                         sourceUserData: event.getIntegerValueField(.eventSourceUserData)) {
                 me.onSwitch?(n)

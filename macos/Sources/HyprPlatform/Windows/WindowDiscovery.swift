@@ -48,6 +48,8 @@ public final class WindowDiscovery {
         public var maxFailedWindowsPerApp = 2
         public var ownBundleID: String? = WindowEligibility.ownBundleID
         public var floatBundleIDs = WindowEligibility.defaultFloatBundleIDs
+        /// `rules.ignore`: apps that are never managed (never tiled, never moved).
+        public var ignoreBundleIDs: Set<String> = []
         public init() {}
     }
 
@@ -83,6 +85,7 @@ public final class WindowDiscovery {
 
         for app in apps.runningApplications() where app.activationPolicy == .regular {
             if let own = configuration.ownBundleID, app.bundleID == own { continue }
+            if let b = app.bundleID, configuration.ignoreBundleIDs.contains(b) { continue }
             ax.setMessagingTimeout(pid: app.pid, seconds: configuration.messagingTimeout)
             guard let refs = try? retrying({ try ax.windows(pid: app.pid) }) else {
                 unresponsive.append(app.pid)

@@ -21,6 +21,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         public var poster: EventPoster
         public var hotkeys: ThrowHotkeys
         public var spaceKeys: SpaceKeyObserving
+        /// Reads the native "Switch to Desktop N" shortcuts; nil = assume `keys.switch`.
+        public var nativeShortcuts: NativeSwitchShortcuts?
         public var clock: TimeSource
         /// Builds the platform event source; nil means "no live events" (tests drive `handle`).
         public var makeEvents: ((DispatchQueue, @escaping (PlatformEvent) -> Void) -> PlatformEvents)?
@@ -32,12 +34,13 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         public init(ax: AXBackend, windowServer: WindowServerQuery, spaces: SpaceProvider,
                     displays: DisplayProvider, apps: AppProvider, systemState: SystemStateQuery,
                     poster: EventPoster, hotkeys: ThrowHotkeys, spaceKeys: SpaceKeyObserving,
-                    clock: TimeSource,
+                    nativeShortcuts: NativeSwitchShortcuts? = nil, clock: TimeSource,
                     makeEvents: ((DispatchQueue, @escaping (PlatformEvent) -> Void) -> PlatformEvents)?,
                     onMain: @escaping (@escaping () -> Void) -> Void) {
             self.ax = ax; self.windowServer = windowServer; self.spaces = spaces
             self.displays = displays; self.apps = apps; self.systemState = systemState
             self.poster = poster; self.hotkeys = hotkeys; self.spaceKeys = spaceKeys
+            self.nativeShortcuts = nativeShortcuts
             self.clock = clock; self.makeEvents = makeEvents; self.onMain = onMain
         }
     }
@@ -69,14 +72,14 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     private let deliveryQueue = DispatchQueue(label: "dev.codesmith28.hyprmac.delivery")
     let deps: Dependencies
     private let tuning: Tuning
-    private let logger = Logger(subsystem: "dev.codesmith28.hyprmac", category: "coordinator")
+    let logger = Logger(subsystem: "dev.codesmith28.hyprmac", category: "coordinator")
 
     let engine: Engine
     private let configStore: ConfigStore
     private let identity = WindowIdentityMap()
-    private let discovery: WindowDiscovery
+    let discovery: WindowDiscovery
     let executor: GeometryExecutor
-    private let mover: SpaceMover
+    let mover: SpaceMover
     private let transitions = SpaceTransitionGuard(settle: 0.5)
     private var events: PlatformEvents?
 
@@ -136,7 +139,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         self.executor = GeometryExecutor(ax: deps.ax, clock: deps.clock)
         self.mover = SpaceMover(ax: deps.ax, spaces: deps.spaces, displays: deps.displays,
                                 poster: deps.poster, clock: deps.clock, transitions: transitions,
-                                windowServer: deps.windowServer)
+                                windowServer: deps.windowServer, nativeShortcuts: deps.nativeShortcuts)
         executor.delegate = self
     }
 
@@ -146,7 +149,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             ax: SystemAXBackend(), windowServer: SystemWindowServerQuery(),
             spaces: SkyLightSpaceProvider(), displays: SystemDisplayProvider(), apps: SystemAppProvider(),
             systemState: SystemStateReader(), poster: SystemEventPoster(), hotkeys: HotkeyCenter(),
-            spaceKeys: SpaceKeyObserver(), clock: SystemTimeSource(),
+            spaceKeys: SpaceKeyObserver(), nativeShortcuts: SystemNativeSwitchShortcuts(),
+            clock: SystemTimeSource(),
             makeEvents: { queue, handler in PlatformEvents(queue: queue, handler: handler) },
             onMain: { block in DispatchQueue.main.async(execute: block) })
         return Coordinator(deps: deps, configStore: ConfigStore(path: configPath))
@@ -166,15 +170,6 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             let ev = make(queue) { [weak self] e in self?.handle(e) }
             events = ev
             deps.onMain { ev.start() }
-        }
-        deps.onMain { [self] in
-            deps.hotkeys.onToggleFloat = { [weak self] in self?.toggleFocusedFloat() }
-            let failed = deps.hotkeys.start { [weak self] n in self?.throwFocusedWindow(toSpace: n) }
-            if !failed.isEmpty { logger.error("⌥⇧ hotkeys unavailable for digits \(failed)") }
-            if deps.hotkeys.toggleFloatFailed { logger.error("⌥⇧F hotkey unavailable") }
-            if !deps.spaceKeys.start(onSwitch: { [weak self] n in self?.spaceKeyPressed(n) }) {
-                logger.error("space key observer unavailable; missing-space notices disabled")
-            }
         }
         scheduleReconcile(after: 0)
     }
@@ -470,6 +465,10 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 EventLog.shared.emit("throw", ["n": n, "result": "noFocusedWindow"])
                 return
             }
+            guard !isIgnored(pid: pid) else { // rules.ignore: never moved
+                EventLog.shared.emit("throw", ["n": n, "result": "ignoredApp"])
+                return
+            }
             activity += 1
             throwInFlight = true
             let sourceSpace = idByRef[window].flatMap { engine.space(of: $0) }
@@ -503,7 +502,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                     case .noGrabPoint:
                         notify(.throwFailed(requested: n, reason: "This window has no titlebar area to grab."))
                     case .timedOut:
-                        notify(.throwFailed(requested: n, reason: "macOS didn't switch Desktops in time. Is ⌥\(n) bound to “Switch to Desktop \(n)”?"))
+                        notify(.throwFailed(requested: n, reason: "macOS didn't switch Desktops in time. Is \(currentConfig.keys.switchModifiers.symbols)\(n) bound to “Switch to Desktop \(n)”?"))
                     case let .failed(e):
                         notify(.throwFailed(requested: n, reason: "Accessibility error: \(e)"))
                     }
@@ -528,12 +527,16 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         case let .loaded(c), let .missingUsedDefaults(c):
             do {
                 try engine.setConfig(c)
+                applyRules(c.rules)
+                bindInput(c.keys)
                 EventLog.shared.emit("config_loaded", ["inner": c.innerGap, "outer": c.outerGap])
                 if reload { notify(.configLoaded) }
             } catch {
                 EventLog.shared.emit("config_error", ["message": "engine rejected config"])
             }
-        case let .failedKeptPrevious(message, _):
+        case let .failedKeptPrevious(message, kept):
+            // A failed first load still needs working shortcuts (the previous = default config).
+            if !reload { applyRules(kept.rules); bindInput(kept.keys) }
             logger.error("config error: \(message, privacy: .public)")
             EventLog.shared.emit("config_error", ["message": message])
             notify(.configError(message))
@@ -559,7 +562,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
 
     /// Never calls the delegate from `queue` (or from inside a `queue.sync`): the callback is
     /// handed to `deliveryQueue` and from there to `onMain`.
-    private func notify(_ notice: TilingNotice) {
+    func notify(_ notice: TilingNotice) {
         deliver { [weak self] in
             guard let self else { return }
             self.delegate?.tiling(self, didPost: notice)

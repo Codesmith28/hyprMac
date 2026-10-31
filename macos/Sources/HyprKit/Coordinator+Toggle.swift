@@ -21,7 +21,7 @@ extension Coordinator {
         dispatchPrecondition(condition: .onQueue(queue))
         guard running, !userPaused, !stageManagerPaused, !dragging, !throwInFlight else { return }
         guard let pid = try? deps.ax.focusedApplication(), let window = try? deps.ax.focusedWindow(pid: pid),
-              let id = idByRef[window], let state = lastStates[id] else { return }
+              !isIgnored(pid: pid), let id = idByRef[window], let state = lastStates[id] else { return }
         // Fullscreen / minimized / hidden windows are left alone (checked live too: the cached
         // state may predate the change).
         if (try? deps.ax.bool(.fullscreen, of: window)) == true || (try? deps.ax.bool(.minimized, of: window)) == true {

@@ -15,7 +15,7 @@ public enum SpaceMoveResult: Equatable, Sendable {
 }
 
 /// Throws a window to user Space N with the drag trick: hold the window by its titlebar,
-/// post the native ⌥N, wait for the Space change to land and settle, release.
+/// post the native "Switch to Desktop N" shortcut (⌥N by default), wait for the Space change to land and settle, release.
 ///
 /// `move` blocks for up to `switchTimeout + settle` (~1.5 s); call it on its own queue.
 public final class SpaceMover {
@@ -70,14 +70,19 @@ public final class SpaceMover {
     private let clock: TimeSource
     private let transitions: SpaceTransitionGuard?
     private let windowServer: WindowServerQuery?
+    private let nativeShortcuts: NativeSwitchShortcuts?
+    private let flagsLock = NSLock()
+    private var fallbackFlags: CGEventFlags = .maskAlternate
     public var configuration: Configuration
     /// Shift handling of the most recent throw that reached the key press.
     public private(set) var lastShiftOutcome: ShiftOutcome?
 
     public init(ax: AXBackend, spaces: SpaceProvider, displays: DisplayProvider, poster: EventPoster,
                 clock: TimeSource = SystemTimeSource(), transitions: SpaceTransitionGuard? = nil,
-                windowServer: WindowServerQuery? = nil, configuration: Configuration = Configuration()) {
+                windowServer: WindowServerQuery? = nil, nativeShortcuts: NativeSwitchShortcuts? = nil,
+                configuration: Configuration = Configuration()) {
         self.windowServer = windowServer
+        self.nativeShortcuts = nativeShortcuts
         self.ax = ax
         self.spaces = spaces
         self.displays = displays
@@ -85,6 +90,18 @@ public final class SpaceMover {
         self.clock = clock
         self.transitions = transitions
         self.configuration = configuration
+    }
+
+    /// Modifiers to post when the native shortcut can't be read (the configured `keys.switch`).
+    public var fallbackSwitchFlags: CGEventFlags {
+        get { flagsLock.lock(); defer { flagsLock.unlock() }; return fallbackFlags }
+        set { flagsLock.lock(); fallbackFlags = newValue; flagsLock.unlock() }
+    }
+
+    /// The modifiers of the ACTUAL native "Switch to Desktop N" shortcut (symbolichotkeys), or
+    /// `fallbackSwitchFlags` when it isn't readable / enabled.
+    public func switchFlags(forDesktop n: Int) -> CGEventFlags {
+        nativeShortcuts?.enabledModifiers()[n] ?? fallbackSwitchFlags
     }
 
     /// Candidate grab points: `titlebarOffset` below the top edge at 25 %, 50 %, 75 % of the
@@ -143,7 +160,8 @@ public final class SpaceMover {
 
     /// Physical Shift still down (the user is still on ⌥⇧N) may stop macOS from recognising
     /// the synthetic ⌥N as "Switch to Desktop N". Wait per `shiftRelease`, and log the outcome.
-    private func waitForShiftRelease() -> ShiftOutcome {
+    private func waitForShiftRelease(posting flags: CGEventFlags) -> ShiftOutcome {
+        guard !flags.contains(.maskShift) else { return .notHeld } // a ⇧ shortcut needs no release
         guard poster.physicalModifierFlags().contains(.maskShift) else { return .notHeld }
         let start = clock.now()
         if case .waitUpTo(let limit) = configuration.shiftRelease {
@@ -186,9 +204,10 @@ public final class SpaceMover {
             poster.post(.warpCursor(saved))
         }
         clock.sleep(configuration.pressDelay)
-        lastShiftOutcome = waitForShiftRelease()
-        poster.post(.keyDown(key, .maskAlternate))
-        poster.post(.keyUp(key, .maskAlternate))
+        let flags = switchFlags(forDesktop: n)
+        lastShiftOutcome = waitForShiftRelease(posting: flags)
+        poster.post(.keyDown(key, flags))
+        poster.post(.keyUp(key, flags))
         transitions?.noteTransition(at: clock.now())
 
         let deadline = clock.now() + configuration.switchTimeout
