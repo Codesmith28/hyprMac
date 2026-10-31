@@ -3,7 +3,9 @@
 #include <algorithm>
 #include <cinttypes>
 #include <cstdio>
+#include <cmath>
 #include <functional>
+#include <optional>
 
 namespace hypr {
 
@@ -211,6 +213,105 @@ hm_status Engine::swap(WindowId a, WindowId b, Plan &out) {
     if (sa != sb) return HM_ERR_INVALID_ARGUMENT;
     model_.swap(a, b);
     make_plan(*model_.find_space(sa), out);
+    return HM_OK;
+}
+
+namespace {
+
+Rect subtree_rect(const LayoutResult &l, const Node *n) {
+    std::vector<WindowId> ids;
+    LayoutTree::collect(n, ids);
+    double x0 = 1e18, y0 = 1e18, x1 = -1e18, y1 = -1e18;
+    for (WindowId id : ids) {
+        if (auto f = find_frame(l, id)) {
+            x0 = std::min(x0, f->x);
+            y0 = std::min(y0, f->y);
+            x1 = std::max(x1, f->right());
+            y1 = std::max(y1, f->bottom());
+        }
+    }
+    return {x0, y0, x1 - x0, y1 - y0};
+}
+
+} // namespace
+
+hm_status Engine::resize(WindowId w, const Rect &desired, Plan &out) {
+    if (w == 0 || !is_valid_rect(desired)) return HM_ERR_INVALID_ARGUMENT;
+    const SpaceId sid = model_.tree_space_of(w);
+    if (sid == 0) return HM_ERR_UNKNOWN_WINDOW;
+    Space *space = model_.find_space(sid);
+    if (!space) return HM_ERR_UNKNOWN_WINDOW;
+
+    constexpr double kEdgeEps = 0.5;
+    const std::optional<Rect> cur = find_frame(layout(*space), w);
+    if (!cur) return HM_ERR_UNKNOWN_WINDOW;
+
+    // 0 = left, 1 = right (vertical splits); 2 = top, 3 = bottom (horizontal splits).
+    struct Task {
+        const Node *split;
+        int edge;
+        int depth;
+    };
+    std::vector<Task> tasks;
+    for (int edge = 0; edge < 4; ++edge) {
+        const bool vertical = edge < 2;
+        const double now = edge == 0 ? cur->x : edge == 1 ? cur->right() : edge == 2 ? cur->y : cur->bottom();
+        const double want = edge == 0   ? desired.x
+                            : edge == 1 ? desired.right()
+                            : edge == 2 ? desired.y
+                                        : desired.bottom();
+        if (std::abs(want - now) <= kEdgeEps) continue;
+        const bool want_second = edge == 0 || edge == 2; // left/top edge: window in the SECOND child
+        const Orientation o = vertical ? Orientation::Vertical : Orientation::Horizontal;
+        const Node *child = space->tree.find(w);
+        for (const Node *p = child->parent; p; child = p, p = p->parent) {
+            if (p->orientation != o) continue;
+            if ((p->child[want_second ? 1 : 0].get()) == child) break;
+        }
+        const Node *split = child ? child->parent : nullptr;
+        if (!split) continue;
+        int depth = 0;
+        for (const Node *p = split; p->parent; p = p->parent) ++depth;
+        tasks.push_back({split, edge, depth});
+    }
+    std::sort(tasks.begin(), tasks.end(), [](const Task &a, const Task &b) { return a.depth < b.depth; });
+
+    const double g = cfg_.inner_gap;
+    std::function<MinSize(const Node *)> min_of = [&](const Node *n) -> MinSize {
+        if (n->is_leaf()) {
+            const MinSize m = min_size(n->window);
+            return {std::max(m.w, 1.0), std::max(m.h, 1.0)};
+        }
+        const MinSize a = min_of(n->child[0].get());
+        const MinSize b = min_of(n->child[1].get());
+        if (n->orientation == Orientation::Vertical) return {a.w + b.w + g, std::max(a.h, b.h)};
+        return {std::max(a.w, b.w), a.h + b.h + g};
+    };
+
+    for (const Task &t : tasks) {
+        const LayoutResult l = layout(*space); // earlier tasks may have moved this split's rect
+        const Rect r = subtree_rect(l, t.split);
+        const bool vertical = t.edge < 2;
+        const double start = vertical ? r.x : r.y;
+        const double length = vertical ? r.w : r.h;
+        const double avail = length - g;
+        if (!(avail > 0)) continue;
+        const double boundary = t.edge == 0   ? desired.x
+                                : t.edge == 1 ? desired.right()
+                                : t.edge == 2 ? desired.y
+                                              : desired.bottom();
+        // Right/bottom edge: the first child ends at the boundary; left/top: the second child starts there.
+        double l1 = (t.edge == 1 || t.edge == 3) ? boundary - start : boundary - g - start;
+        l1 = std::clamp(l1, avail * kMinRatio, avail * kMaxRatio);
+        const MinSize m1 = min_of(t.split->child[0].get());
+        const MinSize m2 = min_of(t.split->child[1].get());
+        const double lo = vertical ? m1.w : m1.h;
+        const double hi = avail - (vertical ? m2.w : m2.h);
+        if (lo <= hi) l1 = std::clamp(l1, lo, hi);
+        space->tree.set_ratio(t.split, l1 / avail);
+    }
+
+    make_plan(*space, out);
     return HM_OK;
 }
 

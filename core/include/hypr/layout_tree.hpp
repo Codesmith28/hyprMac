@@ -61,6 +61,10 @@ public:
     // [0.1, 0.9]; non-finite ratios, w == 0 and duplicate w are rejected.
     bool wrap(const Node *target, WindowId w, Orientation o, double ratio, bool new_is_first);
 
+    // Set the ratio of a split node of THIS tree (clamped to [0.1, 0.9]). False for leaves,
+    // foreign nodes or non-finite ratios.
+    bool set_ratio(const Node *split, double ratio);
+
     // Remove w's leaf; its sibling subtree takes the parent's place. False if absent.
     bool remove(WindowId w);
 

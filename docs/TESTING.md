@@ -153,6 +153,7 @@ min-size min-size-accommodate min-size-unsatisfiable non-resizable-floats float-
 sheet-ignored panel-ignored dialog-ignored tabs-dedupe
 minimize-restore hide-restore fullscreen-restore   windows return to their tile
 hung-app-isolation snap-back-no-loop late-window   misbehaving apps
+user-resize                              a real mouse drag on a window edge (+200 then -150) moves the split
 throw-to-space-2 throw-held-modifiers    throws (post ⌥⇧N; the second holds ⌥⇧ like a person)
 throw-titlebar-variants                  transparent / tabbed / toolbar titlebars: moved or noGrabPoint
 throw-no-space throw-already-there       noSuchSpace (+ missing_space), alreadyThere

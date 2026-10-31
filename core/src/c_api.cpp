@@ -146,6 +146,15 @@ hm_status hm_engine_swap(hm_engine *engine, hm_window_id a, hm_window_id b, hm_p
     });
 }
 
+hm_status hm_engine_resize(hm_engine *engine, hm_window_id window, hm_rect desired, hm_plan *out) {
+    if (!engine || !out) return HM_ERR_INVALID_ARGUMENT;
+    return guarded([&] {
+        hypr::Plan plan;
+        if (hm_status st = engine->impl.resize(window, hypr::Rect::from_c(desired), plan); st != HM_OK) return st;
+        return export_plan(plan, out);
+    });
+}
+
 void hm_engine_forget_window(hm_engine *engine, hm_window_id window) {
     if (!engine) return;
     try {

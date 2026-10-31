@@ -81,6 +81,12 @@ bool LayoutTree::wrap(const Node *target_c, WindowId w, Orientation o, double ra
     return true;
 }
 
+bool LayoutTree::set_ratio(const Node *split, double ratio) {
+    if (!split || split->is_leaf() || !std::isfinite(ratio) || !owns(split)) return false;
+    const_cast<Node *>(split)->ratio = std::clamp(ratio, kMinRatio, kMaxRatio); // we own it (checked above)
+    return true;
+}
+
 bool LayoutTree::remove(WindowId w) {
     auto it = index_.find(w);
     if (it == index_.end()) return false;

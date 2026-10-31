@@ -120,6 +120,16 @@ public final class Engine {
         return Plan(plan)
     }
 
+    /// The user resized `window` to `desired`: adopts the new edges by moving the adjacent split
+    /// ratios and returns the plan for the window's Space. Throws `.unknownWindow` unless the window
+    /// is tiled, `.invalidArgument` for a non-finite rect.
+    public func resize(window: UInt64, desired: CGRect) throws -> Plan {
+        var plan = hm_plan()
+        defer { hm_plan_free(&plan) }
+        try check(hm_engine_resize(handle, window, hm_rect(desired), &plan))
+        return Plan(plan)
+    }
+
     /// Records a minimum size discovered by read-back (0 on an axis = unknown, keeps the
     /// previous value). Throws `.unknownWindow` for windows the engine doesn't hold.
     public func reportMinSize(window: UInt64, size: CGSize) throws {
