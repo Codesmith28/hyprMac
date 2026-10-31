@@ -341,6 +341,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             var entries: [Engine.WindowEntry] = []
             entries.reserveCapacity(snap.windows.count)
             var seen = Set<UInt64>()
+            let ruleFloat = ruleFloatPids()
             for w in snap.windows {
                 let id = identity.engineID(for: w.ref)
                 idByRef[w.ref] = id
@@ -351,6 +352,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 var state = Self.tileState(w.state)
                 if state == .tiled, uncooperative.contains(id) { state = .floating }
                 if state == .tiled, floatsAsSmall(id: id, frame: w.frame) { state = .floating }
+                if state == .tiled, ruleFloat.contains(w.ref.pid) { state = .floating } // rules.float
                 // The ⌥⇧F override (Coordinator+Toggle) wins over size and fight floating.
                 state = resolveFloatOverride(id: id, platform: w.state, frame: w.frame, current: state)
                 lastStates[id] = state

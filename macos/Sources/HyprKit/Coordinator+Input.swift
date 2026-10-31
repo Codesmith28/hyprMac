@@ -45,10 +45,20 @@ extension Coordinator {
         notify(.switchShortcutMismatch(configured: configured.symbols, native: names))
     }
 
-    /// `rules.float` extends the built-in float list; `rules.ignore` hides apps from discovery.
+    /// `rules.ignore` hides apps from discovery (never tiled, never moved). `rules.float` is applied
+    /// in `reconcileNow` through `ruleFloatPids()`, as an automatic decision the ⌥⇧F override beats
+    /// (unlike the built-in float list, which ⌥⇧F never overrides).
     func applyRules(_ rules: AppRules) {
-        discovery.configuration.floatBundleIDs = WindowEligibility.defaultFloatBundleIDs.union(rules.float)
         discovery.configuration.ignoreBundleIDs = Set(rules.ignore)
+    }
+
+    /// Running apps whose bundle id is in `rules.float`.
+    func ruleFloatPids() -> Set<pid_t> {
+        let float = Set(currentConfig.rules.float)
+        guard !float.isEmpty else { return [] }
+        return Set(deps.apps.runningApplications().compactMap { app in
+            app.bundleID.flatMap { float.contains($0) ? app.pid : nil }
+        })
     }
 
     /// True when `pid` belongs to an app in `rules.ignore` (hotkeys never act on it).
