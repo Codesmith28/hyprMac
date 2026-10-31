@@ -3,7 +3,7 @@ import Testing
 @testable import HyprKit
 
 @Test func defaultsMatchCore() {
-    #expect(Config.defaults == Config(innerGap: 8, outerGap: 12, splitRatio: 0.5))
+    #expect(Config.defaults == Config(innerGap: 8, outerGap: 12, splitRatio: 0.5, floatMinWidth: 400, floatMinHeight: 300))
 }
 
 @Test func optionsParse() {

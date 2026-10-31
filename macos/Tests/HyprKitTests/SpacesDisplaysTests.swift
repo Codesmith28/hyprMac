@@ -8,7 +8,7 @@ import Testing
     @Test func perSpaceTreesSurviveSpaceSwitch() {
         let h = Harness(); h.start()
         let a = h.open(1), b = h.open(2)
-        let c = h.desk.addWindow(pid: 100, id: 3, frame: rect(50, 50, 300, 300), space: h.s2)
+        let c = h.desk.addWindow(pid: 100, id: 3, frame: rect(50, 50, 400, 300), space: h.s2)
         h.desk.setActiveSpace(h.s2, display: 1); h.settle()
         #expect(h.frame(c) == root)
         #expect(h.frame(a) == leftHalf && h.frame(b) == rightHalf) // untouched while invisible

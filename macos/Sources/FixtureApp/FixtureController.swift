@@ -124,7 +124,7 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
         var style: NSWindow.StyleMask = [.titled, .closable, .miniaturizable]
         if options.isResizable(idx) { style.insert(.resizable) }
         if options.titlebar == .transparent { style.insert(.fullSizeContentView) }
-        var size = options.windowSize
+        var size = options.size(for: idx)
         if let min = options.minSize(for: idx) {
             size = CGSize(width: max(size.width, min.width), height: max(size.height, min.height))
         }

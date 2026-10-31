@@ -140,6 +140,7 @@ The harness launches `hyprMac.app/Contents/MacOS/hyprMac --config <file> --event
 | `{"event":"missing_space","n":…,"count":…}` | ⌥N for a Desktop that doesn't exist (`throw-no-space` expects it for ⌥⇧N too) |
 | `{"event":"throw","n":…,"result":…}` | each ⌥⇧N attempt; `result` is `moved`, `alreadyThere`, `noSuchSpace`, `refusedFullscreen`, `noGrabPoint`, `timedOut`, `transitionInFlight`, `failed` or `noFocusedWindow` |
 | `{"event":"floated","window":…,"reason":"fights"}` | a window floated after fighting its tile |
+| `{"event":"floated","window":…,"reason":"small"}` | a window floated because it was smaller than `float.min_width/min_height` when first seen (once per window) |
 | `{"event":"stopped"}` | clean shutdown |
 
 `SIGHUP` reloads the config. A bad config logs `config_error` and the app keeps running. `SIGTERM` and `SIGINT` quit cleanly with status 0.
@@ -148,7 +149,7 @@ The harness launches `hyprMac.app/Contents/MacOS/hyprMac --config <file> --event
 ```
 tile-1 tile-2 tile-3 tile-5 tile-8      exact layouts against the oracle
 close-reflow reopen                      closing / reopening reflows
-min-size non-resizable-floats            size constraints
+min-size non-resizable-floats float-small  size constraints
 sheet-ignored panel-ignored dialog-ignored tabs-dedupe
 minimize-restore hide-restore fullscreen-restore   windows return to their tile
 hung-app-isolation snap-back-no-loop late-window   misbehaving apps

@@ -59,7 +59,8 @@ Go through these in order:
 2. **Is Stage Manager on?** If so, hyprMac pauses itself and says so. Turn it off in Control Center. Right after `make install` this is expected: install writes the setting, but macOS only applies it live once you toggle Stage Manager off in Control Center (or log out and back in).
 3. **Does hyprMac have Accessibility permission?** Check System Settings ▸ Privacy & Security ▸ Accessibility. After a rebuild or an upgrade install, the old grant no longer matches the new ad-hoc signature even if the switch shows on: remove hyprMac with "−" and add it again (`~/Applications/hyprMac.app`), or toggle it off and on. Tiling starts within a second of the grant.
 4. **Is it a window hyprMac deliberately leaves alone?** Dialogs, sheets, panels, palettes, non-resizable windows, windows without a close button, Archive Utility and Calculator float by design.
-5. **Did the window fight back?** A window that resized itself away from its tile 3 times within 10 seconds is floated (the log says `floating it`), so hyprMac and the app don't loop. **Retile All Windows** un-floats it and tries again.
+5. **Was it small?** A window smaller than `float.min_width` × `float.min_height` (default 400 × 300) when hyprMac first saw it floats (the log says `"reason":"small"`). The decision is made once per window and is sticky: resizing it later doesn't tile it. Changing the thresholds and reloading only affects windows seen afterwards. Set a threshold to 0 to turn that axis off.
+6. **Did the window fight back?** A window that resized itself away from its tile 3 times within 10 seconds is floated (the log says `floating it`), so hyprMac and the app don't loop. **Retile All Windows** un-floats it and tries again.
 6. **Is another window manager running?** Rectangle, yabai, Amethyst, AeroSpace and similar tools can undo hyprMac's work. Quit them.
 
 ### ⌥N doesn't switch Desktops

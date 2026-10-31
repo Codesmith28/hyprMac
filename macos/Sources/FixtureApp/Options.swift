@@ -23,6 +23,8 @@ struct FixtureOptions {
     /// Delay between initial windows (ms) so a tiler sees them one at a time.
     var staggerMS = 0
     var windowSize = CGSize(width: 480, height: 320)
+    /// Per-window content size from `--size WxH@I` (overrides `windowSize` for window I).
+    var windowSizes: [Int: CGSize] = [:]
     /// Titlebar variant for every normal window (drag-trick grab-point tests).
     var titlebar: TitlebarStyle = .standard
 
@@ -43,7 +45,7 @@ struct FixtureOptions {
       --hang SECONDS@AFTER     block the main thread SECONDS long, AFTER s after launch
       --fullscreen-after S     toggle native fullscreen on window 0 after S seconds
       --stagger MS             delay between initial windows (default 0)
-      --size WxH               initial content size (default 480x320)
+      --size WxH[@I]           initial content size (default 480x320; @I = only window I, repeatable)
       --titlebar STYLE         standard | transparent (transparent titlebar + full-size content)
                                | tabs (visible tab bar, 3 tabs) | toolbar (unified toolbar with buttons)
 
@@ -98,7 +100,16 @@ struct FixtureOptions {
                 o.hang = (try double(a, parts[0]), try double(a, parts[1]))
             case "--fullscreen-after": o.fullscreenAfter = try double(a, try value(a))
             case "--stagger": o.staggerMS = try int(a)
-            case "--size": o.windowSize = try parseSize(a, try value(a))
+            case "--size":
+                let v = try value(a)
+                let parts = v.split(separator: "@", maxSplits: 1).map(String.init)
+                let size = try parseSize(a, parts[0])
+                if parts.count == 2 {
+                    guard let idx = Int(parts[1]), idx >= 0 else { throw OptionError("\(a): bad index in '\(v)'") }
+                    o.windowSizes[idx] = size
+                } else {
+                    o.windowSize = size
+                }
             case "--titlebar":
                 let v = try value(a)
                 guard let t = TitlebarStyle(rawValue: v) else {
@@ -120,6 +131,8 @@ struct FixtureOptions {
     func isResizable(_ index: Int) -> Bool {
         !(nonResizableAll || nonResizableIndices.contains(index))
     }
+
+    func size(for index: Int) -> CGSize { windowSizes[index] ?? windowSize }
 
     func minSize(for index: Int) -> CGSize? {
         guard let s = minSize else { return nil }

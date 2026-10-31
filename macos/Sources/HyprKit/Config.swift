@@ -6,14 +6,25 @@ public struct Config: Equatable {
     public var innerGap: Double
     public var outerGap: Double
     public var splitRatio: Double
+    /// Windows first seen narrower / shorter than this float (0 disables that axis).
+    public var floatMinWidth: Double
+    public var floatMinHeight: Double
 
     public static var defaults: Config { var c = hm_config(); hm_config_default(&c); return Config(c) }
 
-    init(_ c: hm_config) { innerGap = c.inner_gap; outerGap = c.outer_gap; splitRatio = c.split_ratio }
-    public init(innerGap: Double, outerGap: Double, splitRatio: Double = 0.5) {
-        self.innerGap = innerGap; self.outerGap = outerGap; self.splitRatio = splitRatio
+    init(_ c: hm_config) {
+        innerGap = c.inner_gap; outerGap = c.outer_gap; splitRatio = c.split_ratio
+        floatMinWidth = c.float_min_w; floatMinHeight = c.float_min_h
     }
-    var c: hm_config { hm_config(inner_gap: innerGap, outer_gap: outerGap, split_ratio: splitRatio) }
+    public init(innerGap: Double, outerGap: Double, splitRatio: Double = 0.5,
+                floatMinWidth: Double = 400, floatMinHeight: Double = 300) {
+        self.innerGap = innerGap; self.outerGap = outerGap; self.splitRatio = splitRatio
+        self.floatMinWidth = floatMinWidth; self.floatMinHeight = floatMinHeight
+    }
+    var c: hm_config {
+        hm_config(inner_gap: innerGap, outer_gap: outerGap, split_ratio: splitRatio,
+                  float_min_w: floatMinWidth, float_min_h: floatMinHeight)
+    }
 }
 
 /// Loads `init.lua` through the core's sandboxed Lua loader and keeps the last valid config.
