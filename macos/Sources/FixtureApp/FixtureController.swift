@@ -28,7 +28,6 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
     private var slowTimers: [Int: DispatchWorkItem] = [:]
     private var appliedFrame: [Int: CGRect] = [:]        // --slow-resize: last frame we accepted
     private var pendingFrame: [Int: CGRect] = [:]
-    private var launched = Date()
     private var quitting = false
 
     init(options: FixtureOptions) { self.options = options }
@@ -36,7 +35,6 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
     // MARK: launch
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        launched = Date()
         (NSApp as LegacyActivation).activate(ignoringOtherApps: true)   // once, at launch
         startStdinReader()
 
@@ -125,7 +123,11 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
         nextIndex += 1
         var style: NSWindow.StyleMask = [.titled, .closable, .miniaturizable]
         if options.isResizable(idx) { style.insert(.resizable) }
-        let w = NSWindow(contentRect: NSRect(origin: .zero, size: options.windowSize),
+        var size = options.windowSize
+        if let min = options.minSize(for: idx) {
+            size = CGSize(width: max(size.width, min.width), height: max(size.height, min.height))
+        }
+        let w = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                          styleMask: style, backing: .buffered, defer: false)
         w.isReleasedWhenClosed = false
         w.title = "\(options.title) \(idx)"
@@ -302,7 +304,13 @@ final class FixtureController: NSObject, NSApplicationDelegate, NSWindowDelegate
         case "close":
             target()?.close()
         case "minimize":
-            target()?.miniaturize(nil)
+            if let w = target() {
+                w.miniaturize(nil)
+                // Some setups (seen with Stage Manager on) silently refuse; say so.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    if !w.isMiniaturized && w.isVisible { Out.emit(["event": "minimize_failed", "index": arg ?? -1]) }
+                }
+            }
         case "unminimize":
             target()?.deminiaturize(nil)
         case "fullscreen":
