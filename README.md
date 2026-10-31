@@ -1,72 +1,60 @@
 # hyprMac
 
-**Hyprland-style automatic tiling for macOS that keeps your native Spaces.**
+Hyprland-style tiling for macOS that keeps your native Spaces.
 
-hyprMac arranges your windows into a binary-space-partition layout as you open them. It works with the Desktops you already have in Mission Control: it doesn't replace them with virtual workspaces and doesn't need System Integrity Protection disabled.
+Windows tile as you open them. hyprMac works with the Desktops you already have in Mission Control. It doesn't replace them with virtual workspaces, and it doesn't need System Integrity Protection turned off.
 
-It is also a learning project. The layout engine is C++20 with a C API, the macOS layer is Swift, the configuration is sandboxed Lua, and the install is fully reversible. The [architecture](#architecture) and [testing](docs/TESTING.md) sections show how the pieces fit together.
+The layout engine is C++20 behind a C API, the macOS layer is Swift, and the config is sandboxed Lua.
 
 ## Features
-- **BSP tiling with dwindle insertion.** A new window splits the focused tile along its longer side (a square tile splits side by side) and takes the second half.
-- **Gaps.** The inner gap (default 8 pt) goes between tiles and the outer gap (default 12 pt) between tiles and the screen edges. Every split satisfies `L1 + L2 + inner = L`, and the outer gap is applied once, to the usable area of the screen (menu bar and Dock excluded).
-- **Native Spaces, native switching.** ⌥1–⌥9 stay the macOS "Switch to Desktop N" shortcuts. hyprMac only *listens* to them so it can tell you when Desktop N doesn't exist.
-- **⌥⇧1–⌥⇧9 throw the focused window to Desktop N.** macOS has no public API for this, so hyprMac uses a "drag trick": it holds the window by its titlebar, switches Desktop, and lets go. The window lands on the new Desktop and keeps focus, as in Hyprland's `movetoworkspace`. See [LIMITATIONS](docs/LIMITATIONS.md#moving-windows-between-spaces).
-- **Windows come back to the same spot.** A window that goes fullscreen, is minimized, or whose app is hidden (⌘H) leaves a placeholder in the layout. When it returns, it gets the same tile back.
-- **Per-display tiling.** Each display is tiled from its own active Space, and each Space has its own layout.
-- **Sensible floating.** Sheets, dialogs, panels, popovers and other non-standard windows are never tiled. Non-resizable windows, windows without a close button, Archive Utility and Calculator float. **Small windows float** (like Krohnkite): a window narrower than `float.min_width` or shorter than `float.min_height` when hyprMac first sees it keeps its own frame. A window that keeps resizing itself away from its tile (3 times within 10 s) is floated instead of fought; menu ▸ **Retile All Windows** gives it another chance.
+- **Tiling.** A new window splits the focused tile along its longer side and takes the second half.
+- **Gaps.** 8 pt between tiles, 12 pt at the screen edges (menu bar and Dock excluded).
+- **Native Spaces.** ⌥1–⌥9 are still macOS's own "Switch to Desktop N". hyprMac only listens, so it can tell you when a Desktop doesn't exist.
+- **Throwing windows.** ⌥⇧1–⌥⇧9 move the focused window to Desktop N. macOS has no public API for that, so hyprMac uses a drag trick. See [limitations](docs/LIMITATIONS.md#moving-windows-between-spaces).
+- **Same spot back.** Fullscreen, minimized or hidden windows return to their tile.
+- **Per display.** Each display tiles from its own active Space.
+- **Floating.** Dialogs, sheets, panels and popovers are never tiled. Small windows float, like in Krohnkite, and so do non-resizable windows, Archive Utility and Calculator. A window that keeps resizing itself away from its tile is floated instead of fought.
+- **Resize by hand.** Drag a tile's edge and the split follows. See [usage](docs/USAGE.md#resizing-by-hand).
 
 ## Requirements
-- **macOS 14 Sonoma or later.** Developed and tested on macOS 27.2, Apple silicon.
-- **Command Line Tools for Xcode** (`xcode-select --install`). Xcode itself is not needed.
-- **System Settings ▸ Desktop & Dock ▸ "Displays have separate Spaces": ON.** This is the macOS default.
-- **Stage Manager off.** `make install` writes the setting to off and `make uninstall` restores it. macOS only applies that write live after you **toggle Stage Manager off once in Control Center, or log out and back in**; the install output says so. While Stage Manager is on, hyprMac pauses itself.
-- **"Switch to Desktop N" shortcuts on ⌥N.** Set them under System Settings ▸ Keyboard ▸ Keyboard Shortcuts ▸ Mission Control. `make install` adds ⌥8 and ⌥9 if they are unbound; set ⌥1–⌥7 yourself if they aren't already.
+- macOS 14 or later. Tested on macOS 27.2, Apple silicon.
+- Command Line Tools (`xcode-select --install`). Full Xcode isn't needed.
+- **Displays have separate Spaces** is on (System Settings ▸ Desktop & Dock). It's the default.
+- **Stage Manager is off.** `make install` turns it off, but macOS only applies that after you toggle it in Control Center or log out. While it's on, hyprMac pauses.
+- **⌥1–⌥9 are bound** to "Switch to Desktop N" (Keyboard Shortcuts ▸ Mission Control). `make install` adds ⌥8 and ⌥9 if they're free. Set ⌥1–⌥7 yourself.
 
 ## Quick start
 ```sh
-git clone <this repo> hyprMac && cd hyprMac
-make            # build the C++ core and build/hyprMac.app
-make test       # every test that needs no permissions (C++ core, Swift, install scripts)
-make install    # install to ~/Applications and start at login; reversible
-make uninstall  # undo everything make install did, then prove it
+git clone https://github.com/Codesmith28/hyprMac.git && cd hyprMac
+make            # build the core and build/hyprMac.app
+make test       # tests that need no permissions
+make install    # install to ~/Applications and start at login
+make uninstall  # undo everything install did
 ```
 
-Before installing, `make preflight` prints a read-only report of what `make install` would change on this Mac. `make install DRY_RUN=1` (and `make uninstall DRY_RUN=1`) prints every command without running it.
+`make preflight` shows what install would change. `DRY_RUN=1` on install or uninstall prints the commands without running them.
 
-After `make install`, System Settings opens at **Privacy & Security ▸ Accessibility**. Turn hyprMac on there and tiling starts within a second; no restart needed.
+After install, System Settings opens to Privacy & Security ▸ Accessibility. Turn hyprMac on, and tiling starts within a second. To try it without installing, run `make run`.
 
-To try it without installing, run `make run`. The app runs from `build/` in the foreground. It needs Accessibility permission, which it asks for on first launch.
+## What install changes
+`make install` saves every change, and the original value, in a manifest under `~/Library/Application Support/hyprMac/install/`. `make uninstall` replays that in reverse. Then it takes a fresh snapshot and compares it with the one from before install. Any difference is printed, and uninstall exits with 1.
 
-## What `make install` changes, and how `make uninstall` reverts it
-`make install` builds the app, then runs `scripts/install.sh`. Every change is first written to a manifest at `~/Library/Application Support/hyprMac/install/manifest`, together with what was there before. `make uninstall` (`scripts/uninstall.sh`) replays that manifest in reverse.
-
-Before the first change, install takes a **snapshot** of everything it may touch (`before.snapshot`). After uninstalling, the current state is snapshotted again and compared; any difference is printed and uninstall exits with status 1.
-
-| Step | `make install` does | `make uninstall` does |
-|---|---|---|
-| Snapshot | Fingerprints the hotkeys, Stage Manager, notification settings, LaunchAgent, LaunchServices, the app bundle, the config dir and the app's preference/cache files | Compares a fresh snapshot with it (`verify-rollback`) |
-| State dir | Creates `~/Library/Application Support/hyprMac/install/` (manifest, backups, snapshot) | Deletes it, and only the parent directories install created |
-| Existing app data | Backs up any hyprMac preferences, caches, saved state or notification settings that already exist | Puts the backups back |
-| App | Copies `hyprMac.app` to `~/Applications/` (creating the folder if needed). An existing bundle there is moved aside first | Removes the bundle and restores the one moved aside |
-| LaunchServices | `lsregister -f ~/Applications/hyprMac.app` (that exact path; the snapshot counts LaunchServices records for that path only) | `lsregister -u ~/Applications/hyprMac.app` |
-| Shortcuts | Adds symbolic hotkeys **125 (⌥8)** and **126 (⌥9)**, "Switch to Desktop 8/9", **only if they are absent**, then applies them with `activateSettings -u`. Existing bindings are never touched | Deletes only the entries it added, then applies again |
-| Stage Manager | Records `com.apple.WindowManager GloballyEnabled` (value and type, or "absent"), writes `false` and reads it back (install fails and rolls back if it doesn't read back as off). If Stage Manager was on, it prints a note: **toggle it off once in Control Center, or log out**, for the change to apply live | Writes the recorded value back, or deletes the key if it was absent. If that turns Stage Manager back on, it says so: toggle it on in Control Center (or log out) to see it again |
-| Config | Creates `~/.config/hyprmac/init.lua` from `config/init.lua.example`, **only if the folder doesn't exist** | Deletes it (keep it with `KEEP_CONFIG=1 make uninstall`). A folder that existed before is never touched |
-| Login item | Writes `~/Library/LaunchAgents/dev.codesmith28.hyprmac.plist` (RunAtLoad on, KeepAlive off) | Boots out and deletes it, restoring any plist moved aside |
-| Accessibility | `tccutil reset Accessibility dev.codesmith28.hyprmac`, a clean slate for the new ad-hoc signature | Resets the entry again |
-| Start | `launchctl bootstrap gui/$UID` starts hyprMac, then opens the Accessibility settings pane | Stops the app first with signals only (no AppleScript): `launchctl kill SIGTERM` on the LaunchAgent, or `pkill -TERM -x hyprMac` when launchd isn't running it; `SIGKILL` if it hasn't exited after 3 s. Upgrades stop it the same way |
-| App residue | none | Removes hyprMac's preferences, caches, saved state, HTTP storage, `~/Library/Logs/hyprMac`, its crash reports (`~/Library/Logs/DiagnosticReports/hyprMac-*`) and its notification settings entry, unless they existed before install |
+- **Shortcuts.** Adds ⌥8 and ⌥9 ("Switch to Desktop 8/9") only if they're unbound. Existing bindings are never touched.
+- **Stage Manager.** Sets `GloballyEnabled` to false, reads it back, and restores the old value on uninstall.
+- **App.** Copies `hyprMac.app` to `~/Applications/`. An existing copy is moved aside and put back on uninstall.
+- **Config.** Creates `~/.config/hyprmac/init.lua` if that folder doesn't exist. Uninstall removes it only if install created it. Keep it with `KEEP_CONFIG=1 make uninstall`.
+- **Login item.** Writes `~/Library/LaunchAgents/dev.codesmith28.hyprmac.plist`.
+- **Accessibility.** Resets hyprMac's entry, so the new signature starts clean.
+- **App data.** Backs up existing preferences, caches and notification settings. Uninstall removes hyprMac's data and restores the backups.
 
 Notes:
-- **Failed installs roll back.** If any step fails, everything done so far is rolled back.
-- **Re-running install upgrades.** Running `make install` again when a manifest exists only replaces the app bundle and reloads the LaunchAgent; the recorded original values are kept.
-- **Preflight and dry runs.** `make preflight` (`scripts/install.sh --preflight`) reports what would change, including your current ⌥8/⌥9 bindings and Stage Manager value, and changes nothing. `make install DRY_RUN=1` and `make uninstall DRY_RUN=1` print every command without running it.
-- **Uninstalling without the repo.** The app bundle carries a copy of the scripts, so you can uninstall with `~/Applications/hyprMac.app/Contents/Resources/scripts/uninstall.sh`.
-- **Checking anytime.** `make verify-rollback` compares the live state with the pre-install snapshot.
-- **Blind spots.** Some things a snapshot can't see; they're listed in [LIMITATIONS](docs/LIMITATIONS.md#what-verify-rollback-cannot-see).
+- If any install step fails, everything done so far is rolled back.
+- Running `make install` again upgrades. It replaces the app and reloads the agent, and keeps the original values.
+- `make verify-rollback` compares the current state with the pre-install snapshot. Blind spots are listed in [limitations](docs/LIMITATIONS.md#what-verify-rollback-cannot-see).
+- You can uninstall without the repo: `~/Applications/hyprMac.app/Contents/Resources/scripts/uninstall.sh`.
 
 ## Configuration
-hyprMac reads `~/.config/hyprmac/init.lua`. Every key is optional, and a missing file means defaults.
+hyprMac reads `~/.config/hyprmac/init.lua`. Every key is optional, and with no file you get the defaults.
 
 ```lua
 config = {
@@ -81,76 +69,47 @@ config = {
 }
 ```
 
-The shortcut grammar (`"ctrl+alt+t"`) and the app rules are described in [USAGE](docs/USAGE.md#keys-and-app-rules).
+- Reload from the menu (**Reload Configuration**) or with `pkill -HUP -x hyprMac`.
+- A file with an error is rejected as a whole. hyprMac keeps the old settings and tells you the file, line and problem.
+- The schema is strict. Unknown keys and wrong types are errors. The Lua sandbox has no `io`, `os`, `require` or `load`, and it has memory and instruction limits.
 
-- **Applying changes.** Reload after editing with the menu bar item ▸ **Reload Configuration**, or `pkill -HUP -x hyprMac`.
-- **Errors.** A file with an error is rejected as a whole: hyprMac keeps the previous settings and shows a notification with the file, line and message.
-- **The Lua sandbox.** The schema is strict: unknown keys and wrong types are errors. The Lua runs with only the `base`, `string`, `math` and `table` libraries, with no `io`, `os`, `require` or `load`, an 8 MB memory cap and an instruction limit, so a typo can't hang or harm anything.
+The shortcut grammar and app rules are in [usage](docs/USAGE.md#keys-and-app-rules).
 
 ## Architecture
 ```
-                ┌───────────────────────────────────────────────────────────┐
-  menu bar  ◀──▶│ HyprApp (Swift)   status item · onboarding · notifications │
-                │                   SIGHUP = reload · SIGTERM = clean quit   │
-                └──────────────────────────────┬────────────────────────────┘
-                                               │ TilingController
-                ┌──────────────────────────────▼────────────────────────────┐
-                │ HyprKit (Swift)   Coordinator: one serial queue            │
-  AX events ───▶│   events ─▶ debounce ─▶ snapshot ─▶ engine ─▶ executor     │
-  ⌥N / ⌥⇧N  ───▶│   fight detection · Stage Manager / permission checks      │
-                └───────┬───────────────────────────────────────┬──────────┘
-                        │                                       │ C API (hypr_core.h)
-  ┌─────────────────────▼─────────────────────┐   ┌─────────────▼────────────────────┐
-  │ HyprPlatform (Swift)                      │   │ libhyprcore.a (C++20)            │
-  │  AX backend · observers · eligibility     │   │  BSP layout tree per Space       │
-  │  window discovery · per-app executor      │   │  dwindle insertion · ghost slots │
-  │  SkyLight Spaces (read-only, dlsym)       │   │  gap & min-size geometry         │
-  │  Carbon hotkeys ⌥⇧N · listen-only tap ⌥N  │   │  sandboxed Lua 5.4 config        │
-  │  SpaceMover (drag trick)                  │   │                                  │
-  │  FakeAX simulator for tests               │   │                                  │
-  └───────────────────────────────────────────┘   └──────────────────────────────────┘
+HyprApp (Swift)           menu bar, onboarding, notifications
+  └ HyprKit (Swift)       coordinator: one serial queue
+      ├ HyprPlatform      Accessibility, Spaces, hotkeys, window writes
+      └ hyprcore (C++20)  BSP layout, gaps, Lua config
+                          C API: core/include/hypr/hypr_core.h
 ```
 
-- **Data flow.** A window event, such as one opening, moving or minimizing, schedules a reconcile. Discovery snapshots each display's active Space, the C++ engine compares it with that Space's tree and returns a numbered plan of target frames, and the executor writes them through Accessibility on one queue per app, so a hung app can't stall the others.
-- **Coordinates.** Everything is in top-left-origin points, the Accessibility convention.
-- **Further reading.** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the design reference. [docs/QUIRKS.md](docs/QUIRKS.md) records the macOS behaviour that was verified on a real machine before it was relied on.
+A window event schedules a reconcile. The engine compares the Space's layout with the current windows and returns target frames. The frames are written through Accessibility, with one queue per app, so a hung app can't stall the others.
+
+Design details are in [architecture](docs/ARCHITECTURE.md). The macOS behaviour I checked on a real Mac is in [quirks](docs/QUIRKS.md).
 
 ## How it compares
-The central trade-off for a macOS tiler is what to do about Spaces, because Apple provides no public API to create Spaces or move windows between them.
+yabai gives full control of Spaces but needs SIP partly off. Amethyst keeps native Spaces with no SIP changes, but its layouts are fixed. AeroSpace uses its own workspaces, so Mission Control doesn't match them.
 
-| | Spaces model | Needs SIP changes? | Trade-off |
-|---|---|---|---|
-| **yabai** | Native Spaces, fully scripted: create, destroy, focus, move windows | Yes, for the Space features: partly disabling SIP to load its scripting addition into the Dock | The most control, but you weaken system security and depend on private internals that change between macOS releases |
-| **Amethyst** | Native Spaces | No | Several fixed layouts (tall, wide, BSP and more). Moving a window to another Space uses a mouse-drag trick |
-| **AeroSpace** | Its own virtual workspaces; macOS Spaces are not used | No | Fast, i3-like and very predictable. Hidden workspaces are emulated by parking windows off-screen, so Mission Control and swipe gestures don't match your workspaces |
-| **hyprMac** | Native Spaces | No | Hyprland-style dwindle tiling on the Spaces you already use. It can't create or delete Spaces, and throwing a window takes about half a second and needs a grabbable titlebar |
+hyprMac keeps native Spaces and needs no SIP changes. It can't create or delete Spaces, and a throw takes about half a second.
 
 ## Make targets
-`make help` lists them:
+`make help` lists them all. The main ones:
 
 | Target | What it does |
 |---|---|
-| `make` / `make build` | build everything (core + `hyprMac.app`) |
-| `make core` | build `libhyprcore.a` (C++ core + Lua) |
-| `make app` | assemble and ad-hoc sign `build/hyprMac.app` |
-| `make run` | run the app from `build/` (foreground, logs to terminal) |
-| `make swift-build` | build all Swift products |
-| `make test` | all tests that need no permissions (`core-test`, `swift-test`, `scripts-test`) |
-| `make core-test` | run the C++ core and config tests |
-| `make test-asan` | run the core tests under AddressSanitizer and UBSan |
-| `make swift-test` | run the Swift Testing suites (FakeAX, coordinator) |
-| `make scripts-test` | sandboxed tests for install/uninstall (fake HOME + command shims) |
-| `make preflight` | read-only: show what `make install` would change on this Mac |
-| `make install` | install to `~/Applications` with recorded, reversible system changes (`DRY_RUN=1`: print only) |
-| `make uninstall` | reverse every recorded install action, then verify the rollback (`DRY_RUN=1`: print only) |
-| `make verify-rollback` | diff the current state against the pre-install snapshot |
-| `make bench` | reconcile and layout latency benchmark of the C++ core (1/10/50/200 windows, 10k random steps) |
-| `make clean` | remove build products (never touches the system) |
-
-`make test-e2e` runs the real-macOS end-to-end suite. It needs Accessibility permission and a quiet desktop; see [docs/TESTING.md](docs/TESTING.md). It works, but `make help` doesn't list it because the help pattern skips target names that contain a digit.
+| `make` | build the core and `build/hyprMac.app` |
+| `make run` | run the app from `build/` in the foreground |
+| `make test` | tests that need no permissions |
+| `make test-e2e` | real-Mac end-to-end suite (needs Accessibility; see [testing](docs/TESTING.md)) |
+| `make preflight` | show what install would change, without changing anything |
+| `make install` / `make uninstall` | install or remove, reversibly (`DRY_RUN=1` to only print) |
+| `make verify-rollback` | compare the current state with the pre-install snapshot |
+| `make bench` | latency benchmark of the core |
+| `make clean` | remove build products |
 
 ## Documentation
-- [docs/USAGE.md](docs/USAGE.md): shortcuts, the menu, notifications, reloading, troubleshooting
-- [docs/LIMITATIONS.md](docs/LIMITATIONS.md): what macOS makes impossible or fragile, and how hyprMac copes
-- [docs/TESTING.md](docs/TESTING.md): the test pyramid and the end-to-end runbook
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/QUIRKS.md](docs/QUIRKS.md): design reference and verified macOS behaviour
+- [usage](docs/USAGE.md): shortcuts, the menu, notifications, troubleshooting
+- [limitations](docs/LIMITATIONS.md): what macOS makes impossible or fragile, and how hyprMac copes
+- [testing](docs/TESTING.md): the test layers and the end-to-end runbook
+- [architecture](docs/ARCHITECTURE.md) and [quirks](docs/QUIRKS.md): design notes and verified macOS behaviour
