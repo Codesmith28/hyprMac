@@ -1,7 +1,10 @@
 #!/bin/bash
 # Install hyprMac with recorded, exactly reversible system changes.
 #
-#   scripts/install.sh [--dry-run]
+#   scripts/install.sh [--dry-run | --preflight]
+#
+# --preflight is strictly read-only: it reports what an install would change
+# on this Mac using only defaults read/export, launchctl print and test -e.
 #
 # Every change is first appended to the manifest
 # (~/Library/Application Support/hyprMac/install/manifest); uninstall.sh
@@ -20,18 +23,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 usage() {
     cat <<USAGE
-usage: $(basename "$0") [--dry-run]
+usage: $(basename "$0") [--dry-run | --preflight]
 
 Installs $APP_NAME.app to ~/Applications, adds the ⌥8/⌥9 "Switch to Desktop"
 shortcuts (only if unbound), turns Stage Manager off, installs a LaunchAgent and
 asks for Accessibility access. Everything is recorded so 'make uninstall'
 restores the previous state exactly.
+
+  --dry-run    print every action without performing it
+  --preflight  read-only report of what would change on this Mac
 USAGE
 }
 
+PREFLIGHT=0
 for arg in "$@"; do
     case "$arg" in
         -n | --dry-run) DRY_RUN=1 ;;
+        --preflight) PREFLIGHT=1 ;;
         -h | --help) usage; exit 0 ;;
         *) usage >&2; die "unknown argument: $arg" ;;
     esac
@@ -40,6 +48,174 @@ done
 sandbox_guard
 
 : "${APP_SRC:=$SCRIPT_DIR/../build/$APP_NAME.app}"
+
+# ---------------------------------------------------------------- preflight --
+# Read-only. Allowed system reads: defaults export (piped, never to a file),
+# launchctl print, and test -e. The rest is local text parsing.
+
+# Human-readable symbolic hotkey from its canonical JSON (argv[1]).
+PY_HOTKEY_DESC='
+import json, sys
+v = json.loads(sys.argv[1])
+p = v.get("value", {}).get("parameters", [])
+if len(p) != 3:
+    print("unrecognised binding " + sys.argv[1]); sys.exit()
+ch, kc, mods = p
+names = [(262144, "⌃"), (524288, "⌥"), (131072, "⇧"), (1048576, "⌘")]
+m = "".join(sym for bit, sym in names if mods & bit)
+key = chr(ch) if 32 < ch < 127 else (" keycode %d" % kc if m else "keycode %d" % kc)
+state = "enabled" if v.get("enabled") else "disabled"
+print("%s%s (%s)" % (m, key, state))
+'
+
+# canon_from_defaults DOMAIN KEYPATH -> canonical JSON | absent
+canon_from_defaults() {
+    local out
+    out="$("$DEFAULTS" export "$1" - | py "$PY_CANON" /dev/stdin "$2")" || return 1
+    printf '%s' "${out#*$'\t'}"
+}
+
+json_type() {
+    case "$1" in
+        true | false) printf bool ;;
+        \"*) printf string ;;
+        *.* | *e*) printf float ;;
+        *) printf integer ;;
+    esac
+}
+
+# Already installed: an install only replaces the bundle; report that and
+# what uninstall would put back, from the manifest.
+preflight_installed() {
+    local line action rest
+    pf "$(tilde "$APP_DEST")" "$( [ -e "$APP_DEST" ] && echo "present (ours) → would be replaced" || echo "MISSING → would be installed again")"
+    if "$LAUNCHCTL" print "$AGENT_TARGET" >/dev/null 2>&1; then
+        pf "LaunchAgent service" "$AGENT_TARGET loaded → would be reloaded"
+    else
+        pf "LaunchAgent service" "$AGENT_TARGET not loaded → would be bootstrapped"
+    fi
+    pf "other settings" "unchanged by an upgrade; recorded originals that uninstall restores:"
+    load_manifest
+    for line in ${MANIFEST_LINES[@]+"${MANIFEST_LINES[@]}"}; do
+        action="${line%% *}"; rest="${line#* }"
+        case "$action" in
+            hotkey) case "$rest" in
+                    *absent) pf "" "hotkey ${rest%% *}: was absent → removed on uninstall" ;;
+                    *) pf "" "hotkey ${rest%% *}: was already bound → never touched" ;;
+                esac ;;
+            wm_globally_enabled) pf "" "Stage Manager: was ${rest} → restored on uninstall" ;;
+            config_dir_preexisting) if [ "$rest" = 1 ]; then pf "" "~/.config/hyprmac: pre-existing → kept"; fi ;;
+            config_dir_created) pf "" "~/.config/hyprmac: created by install → removed (unless KEEP_CONFIG=1)" ;;
+            residue_preexisting) pf "" "$(tilde "$rest"): pre-existing → restored from backup" ;;
+        esac
+    done
+}
+
+do_preflight() {
+    local v desc id t
+    pf() { printf '  %-24s %s\n' "$1" "$2"; }
+    title "hyprMac install preflight (read-only: nothing on this Mac is changed)"
+    pf "user / HOME" "uid $UID_VAL, $HOME"
+
+    if [ -e "$MANIFEST" ]; then
+        pf "install record" "present ($(tilde "$MANIFEST")) → install would only replace the app bundle and reload the agent"
+    else
+        pf "install record" "none → fresh install; a before-snapshot would be taken first"
+    fi
+    if [ -e "$APP_SRC/Contents/MacOS/$APP_NAME" ]; then
+        pf "app to install" "$APP_SRC"
+    else
+        pf "app to install" "MISSING at $APP_SRC (run 'make app' first)"
+    fi
+    if [ -e "$MANIFEST" ]; then
+        preflight_installed
+        info "preflight finished; no changes were made"
+        return 0
+    fi
+    if [ -e "$APP_DEST" ]; then
+        pf "$(tilde "$APP_DEST")" "present, not installed by us → would be moved aside and restored on uninstall"
+    else
+        pf "$(tilde "$APP_DEST")" "absent → would be installed"
+    fi
+
+    local want125="⌥8" want126="⌥9"
+    for id in $HOTKEY_IDS; do
+        v="$(canon_from_defaults "$HOTKEY_DOMAIN" "AppleSymbolicHotKeys.$id")"
+        if [ "$v" = absent ]; then
+            if [ "$id" = 125 ]; then desc="$want125"; else desc="$want126"; fi
+            pf "hotkey $id" "absent → would add $desc \"Switch to Desktop $((id - 117))\" (removed again on uninstall)"
+        else
+            pf "hotkey $id" "already bound to $(py "$PY_HOTKEY_DESC" "$v") → left untouched"
+            pf "" "raw: $v"
+        fi
+    done
+
+    v="$(canon_from_defaults "$WM_DOMAIN" "$WM_KEY")"
+    if [ "$v" = absent ]; then
+        pf "Stage Manager" "$WM_DOMAIN $WM_KEY is absent → would be set to false (deleted again on uninstall)"
+    else
+        t="$(json_type "$v")"
+        pf "Stage Manager" "$WM_DOMAIN $WM_KEY = $v ($t) → would be set to false (restored to $v on uninstall)"
+        case "$v" in
+            false | 0 | 0.0) ;;
+            *) pf "" "note: Stage Manager is on now. $WM_NOTE." ;;
+        esac
+    fi
+
+    if [ -e "$AGENT_PLIST" ]; then
+        pf "LaunchAgent plist" "present at $(tilde "$AGENT_PLIST") → would be moved aside, restored on uninstall"
+    else
+        pf "LaunchAgent plist" "absent → would be created at $(tilde "$AGENT_PLIST")"
+    fi
+    if "$LAUNCHCTL" print "$AGENT_TARGET" >/dev/null 2>&1; then
+        pf "LaunchAgent service" "$AGENT_TARGET is loaded → would be reloaded"
+    else
+        pf "LaunchAgent service" "$AGENT_TARGET not loaded → would be bootstrapped (starts $APP_NAME)"
+    fi
+    if [ -e "$HOME/Library/LaunchAgents" ]; then :; else
+        pf "" "~/Library/LaunchAgents is missing → would be created (removed on uninstall)"
+    fi
+
+    if [ -e "$CONFIG_DIR" ]; then
+        pf "$(tilde "$CONFIG_DIR")" "exists → left untouched (also on uninstall)"
+    else
+        pf "$(tilde "$CONFIG_DIR")" "absent → would be created with init.lua (removed on uninstall unless KEEP_CONFIG=1)"
+    fi
+
+    if [ -e "$ACTIVATE_SETTINGS" ]; then
+        pf "activateSettings" "present → shortcut changes apply without logging out"
+    else
+        pf "activateSettings" "MISSING → you would have to log out for ⌥8/⌥9 to work"
+    fi
+    pf "Accessibility" "would run: tccutil reset Accessibility $BUNDLE_ID, then open System Settings (TCC itself is not readable)"
+
+    local p any=0
+    while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        if [ -e "$p" ]; then
+            pf "existing app data" "$(tilde "$p") → backed up, restored exactly on uninstall"
+            any=1
+        fi
+    done <<EOF
+$(residue_paths)
+EOF
+    [ "$any" = 1 ] || pf "existing app data" "none"
+    local nc
+    nc="$("$DEFAULTS" export "$NC_DOMAIN" - | py "$PY_NC_HAS" /dev/stdin "$BUNDLE_ID")"
+    if [ "$nc" = present ]; then
+        pf "notification settings" "entry for $BUNDLE_ID exists → backed up, restored on uninstall"
+    else
+        pf "notification settings" "no entry for $BUNDLE_ID"
+    fi
+    pf "LaunchServices" "not inspected here (lsregister -dump is outside the preflight's read set)"
+    info "preflight finished; no changes were made"
+}
+
+if [ "$PREFLIGHT" = 1 ]; then
+    do_preflight
+    exit 0
+fi
+
 [ -x "$APP_SRC/Contents/MacOS/$APP_NAME" ] ||
     die "no app bundle at $APP_SRC (run 'make app' or set APP_SRC)"
 APP_SRC="$(cd "$APP_SRC" && pwd -P)"
