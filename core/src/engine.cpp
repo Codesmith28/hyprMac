@@ -10,7 +10,14 @@ namespace hypr {
 namespace {
 
 bool valid_min(double v) { return is_valid_scalar(v); }
-double clean_min(double v) { return v > 0 ? v : 0.0; }
+
+// Per axis: a positive value replaces the stored one, 0 (or negative) means
+// "unknown on this axis" and keeps it. The executor reports only the axis
+// that overflowed, so a later report must not erase the other axis.
+void merge_min(MinSize &into, double w, double h) {
+    if (w > 0) into.w = w;
+    if (h > 0) into.h = h;
+}
 
 } // namespace
 
@@ -121,7 +128,7 @@ hm_status Engine::reconcile(const Snapshot &s, Plan &out) {
     Space &space = model_.upsert_space(snap.space, snap.display, snap.usable);
 
     for (const WindowInfo &w : snap.windows) {
-        if (w.min_w > 0 || w.min_h > 0) mins_[w.id].hint = {clean_min(w.min_w), clean_min(w.min_h)};
+        if (w.min_w > 0 || w.min_h > 0) merge_min(mins_[w.id].hint, w.min_w, w.min_h);
     }
 
     // Tree windows absent from the snapshot are gone for good.
@@ -192,7 +199,7 @@ hm_status Engine::relayout(SpaceId id, Plan &out) {
 hm_status Engine::report_min_size(WindowId w, double min_w, double min_h) {
     if (w == 0 || !valid_min(min_w) || !valid_min(min_h) || min_w < 0 || min_h < 0) return HM_ERR_INVALID_ARGUMENT;
     if (model_.space_of(w) == 0) return HM_ERR_UNKNOWN_WINDOW;
-    mins_[w].reported = {min_w, min_h};
+    merge_min(mins_[w].reported, min_w, min_h);
     return HM_OK;
 }
 
