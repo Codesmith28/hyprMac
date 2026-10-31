@@ -1,0 +1,370 @@
+#!/bin/bash
+# Install hyprMac with recorded, exactly reversible system changes.
+#
+#   scripts/install.sh [--dry-run]
+#
+# Every change is first appended to the manifest
+# (~/Library/Application Support/hyprMac/install/manifest); uninstall.sh
+# replays it in reverse. A snapshot of everything we may touch is taken
+# before the first change so the rollback can be verified.
+#
+# Environment: APP_SRC (app bundle to install, default ../build/hyprMac.app),
+# HYPR_WM_APPLY_CMD, KEEP_CONFIG (uninstall), DRY_RUN=1, and the command
+# overrides listed in lib/common.sh. HYPR_FAIL_AT=<step> injects a failure
+# (used by the sandbox tests).
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# shellcheck source=lib/common.sh
+. "$SCRIPT_DIR/lib/common.sh"
+
+usage() {
+    cat <<USAGE
+usage: $(basename "$0") [--dry-run]
+
+Installs $APP_NAME.app to ~/Applications, adds the ⌥8/⌥9 "Switch to Desktop"
+shortcuts (only if unbound), turns Stage Manager off, installs a LaunchAgent and
+asks for Accessibility access. Everything is recorded so 'make uninstall'
+restores the previous state exactly.
+USAGE
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        -n | --dry-run) DRY_RUN=1 ;;
+        -h | --help) usage; exit 0 ;;
+        *) usage >&2; die "unknown argument: $arg" ;;
+    esac
+done
+
+sandbox_guard
+
+: "${APP_SRC:=$SCRIPT_DIR/../build/$APP_NAME.app}"
+[ -x "$APP_SRC/Contents/MacOS/$APP_NAME" ] ||
+    die "no app bundle at $APP_SRC (run 'make app' or set APP_SRC)"
+APP_SRC="$(cd "$APP_SRC" && pwd -P)"
+if [ -d "$APP_DEST" ] && [ "$(cd "$APP_DEST" && pwd -P)" = "$APP_SRC" ]; then
+    die "APP_SRC is the installed bundle itself ($APP_SRC)"
+fi
+
+# ------------------------------------------------------------ error handling --
+CURRENT_STEP="init"
+MODE="install"
+PENDING_DIRS=()
+
+fail() { err "$*"; return 1; }
+
+step() {
+    CURRENT_STEP="$1"
+    title "[$1] $2"
+    if [ "${HYPR_FAIL_AT:-}" = "$1" ]; then
+        err "injected failure at step '$1' (HYPR_FAIL_AT)"
+        return 1
+    fi
+}
+
+on_error() {
+    local rc=$?
+    # set -E makes command substitutions inherit this trap: let the failure
+    # propagate to the main shell instead of rolling back twice.
+    if [ "${BASH_SUBSHELL:-0}" -gt 0 ]; then exit "$rc"; fi
+    trap - ERR
+    set +e
+    err "install failed during step '$CURRENT_STEP' (exit $rc)"
+    if is_dry; then exit 1; fi
+    if [ "$MODE" = upgrade ]; then
+        err "upgrade failed; the original install record is untouched. Fix the problem and re-run 'make install', or run 'make uninstall'."
+        exit 1
+    fi
+    if [ -f "$MANIFEST" ]; then
+        warn "rolling back the changes made so far"
+        do_uninstall rollback || err "rollback incomplete; fix the problem and run 'make uninstall'"
+    else
+        # The state directory may have been created before the manifest existed.
+        local i=$((${#PENDING_DIRS[@]} - 1))
+        while [ "$i" -ge 0 ]; do
+            rm -rf "${PENDING_DIRS[$i]}" 2>/dev/null
+            i=$((i - 1))
+        done
+    fi
+    cleanup_tmp
+    exit 1
+}
+trap on_error ERR
+trap cleanup_tmp EXIT
+
+# ------------------------------------------------------------------ helpers --
+# Missing ancestors of $1 (inclusive), outermost first, one per line.
+missing_dirs() {
+    local p="$1" list=""
+    while [ ! -d "$p" ]; do
+        list="$p"$'\n'"$list"
+        p="$(dirname "$p")"
+    done
+    printf '%s' "$list"
+}
+
+# Create a directory (and missing parents), recording each one created.
+mkdir_recorded() {
+    local d
+    while IFS= read -r d; do
+        [ -n "$d" ] || continue
+        record "dir_created $d"
+        run mkdir "$d"
+    done <<EOF
+$(missing_dirs "$1")
+EOF
+}
+
+hotkey_xml() { # id -> plist XML of the binding (⌥8 for 125, ⌥9 for 126)
+    local params
+    case "$1" in
+        125) params="<integer>56</integer><integer>28</integer><integer>524288</integer>" ;;
+        126) params="<integer>57</integer><integer>25</integer><integer>524288</integer>" ;;
+        *) fail "no binding defined for hotkey $1"; return 1 ;;
+    esac
+    printf '%s' "<dict><key>enabled</key><true/><key>value</key><dict><key>parameters</key><array>$params</array><key>type</key><string>standard</string></dict></dict>"
+}
+
+xml_escape() {
+    local s="$1"
+    s="${s//&/&amp;}"; s="${s//</&lt;}"; s="${s//>/&gt;}"
+    printf '%s' "$s"
+}
+
+agent_plist_xml() {
+    cat <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>$BUNDLE_ID</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>$(xml_escape "$APP_BINARY")</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<false/>
+	<key>ProcessType</key>
+	<string>Interactive</string>
+	<key>LimitLoadToSessionType</key>
+	<string>Aqua</string>
+</dict>
+</plist>
+PLIST
+}
+
+find_config_example() {
+    local c
+    for c in "$APP_SRC/Contents/Resources/init.lua.example" \
+             "$SCRIPT_DIR/../init.lua.example" \
+             "$SCRIPT_DIR/../config/init.lua.example"; do
+        if [ -f "$c" ]; then printf '%s' "$c"; return 0; fi
+    done
+    return 1
+}
+
+# ------------------------------------------------------------------ upgrade --
+do_upgrade() {
+    MODE="upgrade"
+    title "existing install found: replacing the app bundle only"
+    info "recorded original values in $(tilde "$STATE_DIR") are kept as they are"
+    load_manifest
+    step upgrade_app "replacing $(tilde "$APP_DEST")"
+    quit_app
+    if ! is_dry && "$LAUNCHCTL" print "$AGENT_TARGET" >/dev/null 2>&1; then
+        run "$LAUNCHCTL" bootout "$AGENT_TARGET" || warn "launchctl bootout failed (continuing)"
+    fi
+    if [ -e "$APP_DEST" ]; then run rm -rf "$APP_DEST"; fi
+    run /usr/bin/ditto "$APP_SRC" "$APP_DEST"
+    run "$LSREGISTER" -f "$APP_DEST"
+    if manifest_has "launchagent_loaded" && [ -f "$AGENT_PLIST" ]; then
+        step upgrade_agent "reloading the LaunchAgent"
+        run "$LAUNCHCTL" bootstrap "gui/$UID_VAL" "$AGENT_PLIST"
+    fi
+    if is_dry; then info "dry run: nothing was changed"; else ok "hyprMac upgraded"; fi
+}
+
+# ------------------------------------------------------------- fresh install --
+do_install() {
+    local f id changed
+
+    step snapshot "recording the current system state"
+    make_tmp
+    take_snapshot >"$HYPR_TMP/before.snapshot"
+
+    step state_dir "creating $(tilde "$STATE_DIR")"
+    local d
+    while IFS= read -r d; do
+        [ -n "$d" ] || continue
+        PENDING_DIRS+=("$d")
+    done <<EOF
+$(missing_dirs "$STATE_DIR")
+EOF
+    if is_dry; then
+        for d in ${PENDING_DIRS[@]+"${PENDING_DIRS[@]}"}; do run mkdir "$d"; done
+    else
+        for d in ${PENDING_DIRS[@]+"${PENDING_DIRS[@]}"}; do mkdir "$d"; done
+        mkdir -p "$BACKUP_DIR"
+        printf '# hyprMac install manifest v1: one action per line, undone in reverse by uninstall.sh\n' >"$MANIFEST"
+    fi
+    for d in ${PENDING_DIRS[@]+"${PENDING_DIRS[@]}"}; do record "dir_created $d"; done
+    PENDING_DIRS=()
+    if is_dry; then
+        run cp "$HYPR_TMP/before.snapshot" "$BEFORE_SNAPSHOT"
+    else
+        cp "$HYPR_TMP/before.snapshot" "$BEFORE_SNAPSHOT"
+    fi
+
+    step residue_scan "backing up app data that already exists"
+    local p n=0 prefs="$HOME/Library/Preferences/$BUNDLE_ID.plist"
+    while IFS= read -r p; do
+        if [ -n "$p" ] && { [ -e "$p" ] || [ -L "$p" ]; }; then
+            warn "$(tilde "$p") already exists; backing it up (restored on uninstall)"
+            record "residue_preexisting $p"
+            if [ "$p" = "$prefs" ]; then
+                # Through cfprefsd, so its cache and the file stay coherent.
+                record "prefs_backup"
+                if is_dry; then run "$DEFAULTS" export "$BUNDLE_ID" "$BACKUP_DIR/prefs.plist"
+                else "$DEFAULTS" export "$BUNDLE_ID" "$BACKUP_DIR/prefs.plist"; fi
+            else
+                n=$((n + 1))
+                record "backup residue$n $p"
+                run /usr/bin/ditto "$p" "$BACKUP_DIR/residue$n"
+            fi
+        fi
+    done <<EOF
+$(residue_paths)
+EOF
+    local nc
+    f="$HYPR_TMP/nc.plist"
+    domain_export "$NC_DOMAIN" "$f"
+    nc="$(py "$PY_NC_HAS" "$f" "$BUNDLE_ID")"
+    if [ "$nc" = present ]; then
+        warn "notification settings for $BUNDLE_ID already exist; backing them up (restored on uninstall)"
+        record "ncprefs_preexisting 1"
+        if is_dry; then
+            run "$PYTHON" -I -c "<save ncprefs entry>" "$f" "$BACKUP_DIR/ncprefs-entry.plist"
+        else
+            py "$PY_NC_SAVE" "$f" "$BACKUP_DIR/ncprefs-entry.plist" "$BUNDLE_ID"
+        fi
+    fi
+
+    step app "installing $APP_NAME.app to $(tilde "$APP_DEST")"
+    mkdir_recorded "$HOME/Applications"
+    if [ -e "$APP_DEST" ] || [ -L "$APP_DEST" ]; then
+        warn "$(tilde "$APP_DEST") exists; moving it aside (restored on uninstall)"
+        record "backup app $APP_DEST"
+        run mv "$APP_DEST" "$BACKUP_DIR/app"
+    fi
+    record "app_installed $APP_DEST"
+    run /usr/bin/ditto "$APP_SRC" "$APP_DEST"
+
+    step lsregister "registering with LaunchServices"
+    record "lsregister $APP_DEST"
+    run "$LSREGISTER" -f "$APP_DEST"
+
+    step hotkeys "adding ⌥8/⌥9 \"Switch to Desktop\" shortcuts (if unbound)"
+    changed=0
+    for id in $HOTKEY_IDS; do
+        f="$HYPR_TMP/hk-$id.plist"
+        domain_export "$HOTKEY_DOMAIN" "$f"
+        if plist_has "$f" "AppleSymbolicHotKeys.$id"; then
+            info "symbolic hotkey $id is already defined; leaving it untouched"
+            record "hotkey $id untouched"
+            continue
+        fi
+        if ! plist_has "$f" AppleSymbolicHotKeys; then
+            record "hotkeys_dict_created"
+            "$PLUTIL" -insert AppleSymbolicHotKeys -dictionary "$f"
+        fi
+        record "hotkey $id absent"
+        local xml
+        xml="$(hotkey_xml "$id")"
+        "$PLUTIL" -insert "AppleSymbolicHotKeys.$id" -xml "$xml" "$f"
+        run "$DEFAULTS" import "$HOTKEY_DOMAIN" "$f"
+        changed=1
+    done
+    if [ "$changed" = 1 ]; then activate_hotkeys; fi
+
+    step wm "turning Stage Manager off"
+    f="$HYPR_TMP/wm.plist"
+    domain_export "$WM_DOMAIN" "$f"
+    local nkeys
+    nkeys="$(py "$PY_DICT_LEN" "$f")"
+    if [ "$nkeys" = 0 ]; then record "wm_domain_absent"; fi
+    if plist_has "$f" "$WM_KEY"; then
+        local wtype wval
+        wtype="$("$PLUTIL" -type "$WM_KEY" "$f")"
+        case "$wtype" in
+            bool | integer | float | string) ;;
+            *) fail "$WM_DOMAIN $WM_KEY has unsupported type '$wtype'; refusing to change it" ;;
+        esac
+        wval="$("$PLUTIL" -extract "$WM_KEY" raw "$f")"
+        record "wm_globally_enabled $wtype $wval"
+    else
+        record "wm_globally_enabled absent"
+    fi
+    run "$DEFAULTS" write "$WM_DOMAIN" "$WM_KEY" -bool false
+    wm_apply
+
+    step config "creating $(tilde "$CONFIG_DIR")"
+    if [ -e "$CONFIG_DIR" ] || [ -L "$CONFIG_DIR" ]; then
+        info "$(tilde "$CONFIG_DIR") already exists; leaving it untouched"
+        record "config_dir_preexisting 1"
+    else
+        record "config_dir_preexisting 0"
+        mkdir_recorded "$CONFIG_PARENT"
+        record "config_dir_created $CONFIG_DIR"
+        run mkdir "$CONFIG_DIR"
+        local example
+        if example="$(find_config_example)"; then
+            run cp "$example" "$CONFIG_DIR/init.lua"
+        else
+            warn "init.lua.example not found; leaving $(tilde "$CONFIG_DIR") empty"
+        fi
+    fi
+
+    step launchagent_plist "writing $(tilde "$AGENT_PLIST")"
+    mkdir_recorded "$(dirname "$AGENT_PLIST")"
+    if [ -e "$AGENT_PLIST" ] || [ -L "$AGENT_PLIST" ]; then
+        warn "$(tilde "$AGENT_PLIST") exists; moving it aside (restored on uninstall)"
+        record "backup launchagent $AGENT_PLIST"
+        run mv "$AGENT_PLIST" "$BACKUP_DIR/launchagent"
+    fi
+    record "file_created $AGENT_PLIST"
+    write_file "$AGENT_PLIST" "$(agent_plist_xml)"
+    if ! is_dry; then "$PLUTIL" -lint -s "$AGENT_PLIST"; fi
+
+    step accessibility "resetting Accessibility permission for $BUNDLE_ID"
+    record "tcc_reset"
+    run "$TCCUTIL" reset Accessibility "$BUNDLE_ID"
+
+    step launchagent_load "loading the LaunchAgent (starts $APP_NAME)"
+    if ! is_dry && "$LAUNCHCTL" print "$AGENT_TARGET" >/dev/null 2>&1; then
+        warn "$AGENT_TARGET was already loaded; reloading it"
+        run "$LAUNCHCTL" bootout "$AGENT_TARGET" || true
+    fi
+    record "launchagent_loaded"
+    run "$LAUNCHCTL" bootstrap "gui/$UID_VAL" "$AGENT_PLIST"
+
+    step open_settings "opening System Settings ▸ Privacy & Security ▸ Accessibility"
+    run "$OPEN" "$ACCESSIBILITY_URL" || warn "could not open System Settings"
+
+    step done "finished"
+    if is_dry; then
+        info "dry run: nothing was changed"
+    else
+        ok "hyprMac installed. Enable it under Accessibility, then use ⌥1–9 / ⌥⇧1–9."
+        info "undo everything with 'make uninstall' (record: $(tilde "$MANIFEST"))"
+    fi
+}
+
+if [ -f "$MANIFEST" ]; then
+    do_upgrade
+else
+    do_install
+fi

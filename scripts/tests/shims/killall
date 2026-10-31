@@ -1,0 +1,3 @@
+#!/bin/bash
+# Fake killall: only logs the call.
+. "$(dirname "$0")/_lib.sh"
