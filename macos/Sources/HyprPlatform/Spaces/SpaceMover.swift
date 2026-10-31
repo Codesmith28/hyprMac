@@ -31,7 +31,30 @@ public final class SpaceMover {
         public var switchTimeout: TimeInterval = 1.0
         /// Extra wait after the Space changed before releasing (animation still running).
         public var settle: TimeInterval = 0.4
+        /// When no candidate at `titlebarOffset` is usable (e.g. the titlebar is all tab buttons,
+        /// as in Ghostty with native tabs), also try the thin band at `thinBandOffset` below the
+        /// top edge, where the window itself is hit. Needs live validation: a mouse-down this
+        /// close to the edge could start a resize in some apps.
+        public var thinBandFallback = true
+        public var thinBandOffset: CGFloat = 3
+        /// What to do if physical Shift is still held (the user is still on ⌥⇧N) before ⌥N.
+        public var shiftRelease: ShiftReleasePolicy = .waitUpTo(0.3)
+        public var shiftPollInterval: TimeInterval = 0.01
         public init() {}
+    }
+
+    public enum ShiftReleasePolicy: Equatable, Sendable {
+        /// Wait (at most this long) for physical Shift to be released, then post anyway.
+        case waitUpTo(TimeInterval)
+        /// Post ⌥N right away.
+        case postImmediately
+    }
+
+    /// What happened with physical Shift before the last ⌥N (logged as well).
+    public enum ShiftOutcome: Equatable, Sendable {
+        case notHeld
+        case released(afterSeconds: TimeInterval)
+        case postedWhileHeld
     }
 
     /// Roles that are controls, never a grab point.
@@ -46,11 +69,15 @@ public final class SpaceMover {
     private let poster: EventPoster
     private let clock: TimeSource
     private let transitions: SpaceTransitionGuard?
+    private let windowServer: WindowServerQuery?
     public var configuration: Configuration
+    /// Shift handling of the most recent throw that reached the key press.
+    public private(set) var lastShiftOutcome: ShiftOutcome?
 
     public init(ax: AXBackend, spaces: SpaceProvider, displays: DisplayProvider, poster: EventPoster,
                 clock: TimeSource = SystemTimeSource(), transitions: SpaceTransitionGuard? = nil,
-                configuration: Configuration = Configuration()) {
+                windowServer: WindowServerQuery? = nil, configuration: Configuration = Configuration()) {
+        self.windowServer = windowServer
         self.ax = ax
         self.spaces = spaces
         self.displays = displays
@@ -78,12 +105,59 @@ public final class SpaceMover {
         return acceptedAreaRoles.contains(hit.role)
     }
 
+    /// All candidates in search order: the normal band, then (if enabled) the thin band.
+    public func candidates(for frame: CGRect) -> [CGPoint] {
+        var pts = Self.grabCandidates(for: frame, titlebarOffset: configuration.titlebarOffset,
+                                      trafficLightsOffset: configuration.trafficLightsOffset)
+        if configuration.thinBandFallback {
+            pts += Self.grabCandidates(for: frame, titlebarOffset: configuration.thinBandOffset,
+                                       trafficLightsOffset: configuration.trafficLightsOffset)
+        }
+        return pts
+    }
+
+    /// The topmost on-screen layer-0 window containing `point` (window-server truth).
+    public static func topmostWindow(at point: CGPoint, in onscreen: [OnscreenWindow]) -> CGWindowID? {
+        onscreen.first { $0.layer == 0 && $0.isOnscreen && $0.bounds.contains(point) }?.id
+    }
+
+    /// First candidate whose AX hit is an acceptable grab for `window` AND where the window
+    /// server agrees `window` is the topmost layer-0 window (guards against overlaps and AX
+    /// resolving to the wrong window).
     public func findGrabPoint(for window: WindowRef, frame: CGRect) -> CGPoint? {
-        for p in Self.grabCandidates(for: frame, titlebarOffset: configuration.titlebarOffset,
-                                     trafficLightsOffset: configuration.trafficLightsOffset) {
-            if Self.isAcceptableGrab(try? ax.element(at: p), for: window) { return p }
+        let onscreen = windowServer?.onscreenWindows()
+        for p in candidates(for: frame) {
+            let hit = try? ax.element(at: p)
+            guard Self.isAcceptableGrab(hit, for: window) else {
+                Log.mover.debug("grab candidate \(p.debugDescription) rejected: \(hit?.role ?? "nil")")
+                continue
+            }
+            if let list = onscreen, Self.topmostWindow(at: p, in: list) != window.windowID {
+                Log.mover.debug("grab candidate \(p.debugDescription) rejected: another window is on top")
+                continue
+            }
+            return p
         }
         return nil
+    }
+
+    /// Physical Shift still down (the user is still on ⌥⇧N) may stop macOS from recognising
+    /// the synthetic ⌥N as "Switch to Desktop N". Wait per `shiftRelease`, and log the outcome.
+    private func waitForShiftRelease() -> ShiftOutcome {
+        guard poster.physicalModifierFlags().contains(.maskShift) else { return .notHeld }
+        let start = clock.now()
+        if case .waitUpTo(let limit) = configuration.shiftRelease {
+            while clock.now() - start < limit {
+                clock.sleep(configuration.shiftPollInterval)
+                if !poster.physicalModifierFlags().contains(.maskShift) {
+                    let waited = clock.now() - start
+                    Log.mover.info("shift released after \(Int(waited * 1000)) ms; posting ⌥N")
+                    return .released(afterSeconds: waited)
+                }
+            }
+        }
+        Log.mover.notice("posting ⌥N while physical Shift is still held")
+        return .postedWhileHeld
     }
 
     public func move(_ window: WindowRef, toSpace n: Int) -> SpaceMoveResult {
@@ -112,6 +186,7 @@ public final class SpaceMover {
             poster.post(.warpCursor(saved))
         }
         clock.sleep(configuration.pressDelay)
+        lastShiftOutcome = waitForShiftRelease()
         poster.post(.keyDown(key, .maskAlternate))
         poster.post(.keyUp(key, .maskAlternate))
         transitions?.noteTransition(at: clock.now())

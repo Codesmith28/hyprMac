@@ -89,7 +89,8 @@ import Testing
         desk.updateQuirks(w) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, role: "AXRadioButton")] }
         #expect(mover.move(w, toSpace: 2) == .noGrabPoint)
         #expect(desk.posted.isEmpty)
-        #expect(desk.axCalls.filter { if case .elementAt = $0 { return true }; return false }.count == 4)
+        // 4 normal candidates + 4 thin-band candidates.
+        #expect(desk.axCalls.filter { if case .elementAt = $0 { return true }; return false }.count == 8)
     }
 
     /// Quirk 15: the first candidate hits a tab button, the next one hits the titlebar.

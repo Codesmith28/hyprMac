@@ -31,6 +31,13 @@ public final class FakeAXObserverRegistrar: AXObserverRegistrar, @unchecked Send
         lock.lock(); sinks[t.pid] = nil; unregistered.append(t.pid); lock.unlock()
     }
 
+    public private(set) var rewatched: [pid_t] = []
+
+    public func rewatch(_ token: AnyObject) {
+        guard let t = token as? Token else { return }
+        lock.lock(); rewatched.append(t.pid); lock.unlock()
+    }
+
     /// Deliver an event as if the observer for `pid` fired. Returns false if not registered.
     @discardableResult
     public func fire(_ event: PlatformEvent, pid: pid_t) -> Bool {
@@ -52,6 +59,17 @@ public final class FakeDelayScheduler: DelayScheduler, @unchecked Sendable {
     }
 
     public var pendingCount: Int { lock.lock(); defer { lock.unlock() }; return queue.count }
+
+    /// Runs only the oldest scheduled work item. Returns false if nothing was pending.
+    @discardableResult
+    public func runNext() -> Bool {
+        lock.lock()
+        guard !queue.isEmpty else { lock.unlock(); return false }
+        let (_, work) = queue.removeFirst()
+        lock.unlock()
+        work()
+        return true
+    }
 
     /// Runs scheduled work (including work scheduled while running) until none is left.
     public func runAll() {

@@ -66,6 +66,10 @@ public final class FakeAXBackend: AXBackend, @unchecked Sendable {
         }
     }
 
+    public func forget(pid: pid_t) {
+        desk.locked { desk.forgottenPidList.append(pid) }
+    }
+
     public func windows(pid: pid_t) throws -> [WindowRef] {
         try call(.windows(pid), pid: pid) { desk.zOrder.filter { $0.pid == pid } }
     }
@@ -195,8 +199,11 @@ extension FakeDesktop {
         }), let w = windowTable[ref] else { return nil }
         if point.y - w.frame.minY < 28 {
             let f = (point.x - w.frame.minX) / max(w.frame.width, 1)
-            if let region = w.quirks.titlebarRegions.first(where: { f >= $0.from && f < $0.to }) {
-                return AXHit(role: region.role, pid: ref.pid, window: ref)
+            let dy = point.y - w.frame.minY
+            if let region = w.quirks.titlebarRegions.first(where: {
+                f >= $0.from && f < $0.to && dy >= $0.top && dy < $0.bottom
+            }) {
+                return AXHit(role: region.role, pid: ref.pid, window: region.resolvesWindow ? ref : nil)
             }
             return AXHit(role: "AXWindow", subrole: w.subrole, pid: ref.pid, window: ref, isWindowItself: true)
         }

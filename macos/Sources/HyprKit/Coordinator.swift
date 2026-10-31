@@ -106,13 +106,15 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     /// Engine Space ids shown on some display as of the last reconcile.
     private var activeSpaces: Set<UInt64> = []
 
-    private let queueKey = DispatchSpecificKey<Bool>()
-
-    /// Safe from any thread, including the coordinator queue itself.
-    public var isPaused: Bool {
-        if DispatchQueue.getSpecific(key: queueKey) == true { return userPaused || stageManagerPaused }
-        return queue.sync { userPaused || stageManagerPaused }
+    /// Lock-protected mirror of `userPaused || stageManagerPaused`, so `isPaused` never waits for
+    /// the coordinator queue (which may be busy with slow AX work) and is safe from any thread.
+    private let mirrorLock = NSLock()
+    private var pausedMirror = false
+    private func updatePausedMirror() {
+        mirrorLock.lock(); pausedMirror = userPaused || stageManagerPaused; mirrorLock.unlock()
     }
+
+    public var isPaused: Bool { mirrorLock.lock(); defer { mirrorLock.unlock() }; return pausedMirror }
 
     public init(deps: Dependencies, configStore: ConfigStore, tuning: Tuning = Tuning()) {
         self.deps = deps
@@ -123,9 +125,9 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                                          displays: deps.displays, apps: deps.apps)
         self.executor = GeometryExecutor(ax: deps.ax, clock: deps.clock)
         self.mover = SpaceMover(ax: deps.ax, spaces: deps.spaces, displays: deps.displays,
-                                poster: deps.poster, clock: deps.clock, transitions: transitions)
+                                poster: deps.poster, clock: deps.clock, transitions: transitions,
+                                windowServer: deps.windowServer)
         executor.delegate = self
-        queue.setSpecific(key: queueKey, value: true)
     }
 
     /// Production wiring.
@@ -143,7 +145,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     // MARK: TilingController
 
     public func start() {
-        queue.sync {
+        // Never block the caller (main) on the coordinator queue: it may be busy with slow AX.
+        queue.async { [self] in
             guard !running else { return }
             running = true
             applyConfig(reload: false)
@@ -172,7 +175,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         }
         // At quit an async hop may never run; on the main thread tear down right away.
         if Thread.isMainThread { teardown() } else { deps.onMain(teardown) }
-        queue.sync {
+        queue.async { [self] in
             running = false
             reconcileGeneration += 1 // invalidates scheduled reconciles
         }
@@ -181,6 +184,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     public func setPaused(_ paused: Bool, reason: String?) {
         queue.async { [self] in
             userPaused = paused
+            updatePausedMirror()
             if paused { EventLog.shared.emit("paused", ["reason": reason ?? "user"]) }
             stateChanged()
             if !paused { scheduleReconcile(after: 0) }
@@ -524,6 +528,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         let sm = deps.systemState.isStageManagerEnabled
         if sm != stageManagerPaused {
             stageManagerPaused = sm
+            updatePausedMirror()
             if sm {
                 EventLog.shared.emit("paused", ["reason": "stage_manager"])
                 notify(.stageManagerEnabled)

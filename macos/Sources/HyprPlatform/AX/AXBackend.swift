@@ -66,8 +66,12 @@ public struct AXHit: Equatable, Sendable {
 public protocol AXBackend: AnyObject {
     /// `AXIsProcessTrustedWithOptions`; `prompt` shows the system dialog.
     func isTrusted(prompt: Bool) -> Bool
-    /// `AXUIElementSetMessagingTimeout` on the application element.
+    /// Per-app messaging timeout hint. `SystemAXBackend` ignores it: its timeout is process-wide
+    /// (set once on the system-wide element), because a timeout set on one element instance never
+    /// reaches the others. Fakes use it to model how long a hung app blocks.
     func setMessagingTimeout(pid: pid_t, seconds: Float)
+    /// Drop every cached element of a terminated app.
+    func forget(pid: pid_t)
     /// The app's windows (AX order, front to back). Windows without a resolvable id are omitted.
     func windows(pid: pid_t) throws -> [WindowRef]
     func facts(of window: WindowRef) throws -> WindowFacts
