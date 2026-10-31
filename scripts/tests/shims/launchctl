@@ -14,8 +14,19 @@ case "${1:-}" in
         echo "$label" >>"$db"
         if [ "$(/usr/bin/plutil -extract RunAtLoad raw "$plist" 2>/dev/null)" = true ]; then
             prog="$(/usr/bin/plutil -extract ProgramArguments.0 raw "$plist")"
-            [ -x "$prog" ] && "$prog"
+            [ -x "$prog" ] && FAKE_STARTED_BY=launchd "$prog"
         fi ;;
+    kill)
+        # launchctl kill <signal> gui/<uid>/<label>: only reaches a process
+        # that launchd itself started.
+        label="${3##*/}"
+        grep -qxF "$label" "$db" || { echo "Could not find service \"$label\" in domain" >&2; exit 113; }
+        [ "$(cat "$FAKE_STATE/running" 2>/dev/null)" = launchd ] || { echo "No process to signal" >&2; exit 3; }
+        case "$2" in
+            SIGTERM | TERM | 15) [ -e "$FAKE_STATE/ignore-term" ] || rm -f "$FAKE_STATE/running" ;;
+            SIGKILL | KILL | 9) rm -f "$FAKE_STATE/running" ;;
+            *) echo "fake launchctl: unsupported signal $2" >&2; exit 64 ;;
+        esac ;;
     bootout)
         label="${2##*/}"
         grep -qxF "$label" "$db" || { echo "Boot-out failed: 3: No such process" >&2; exit 3; }

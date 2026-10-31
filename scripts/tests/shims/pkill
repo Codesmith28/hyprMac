@@ -1,6 +1,19 @@
 #!/bin/bash
-# Fake pkill: the app "runs" while $FAKE_STATE/running exists.
+# Fake pkill. The app "runs" while $FAKE_STATE/running exists; its content is
+# who started it (launchd | manual). $FAKE_STATE/ignore-term makes it ignore
+# SIGTERM (only SIGKILL stops it).
 . "$(dirname "$0")/_lib.sh"
+sig=TERM
+case "${1:-}" in
+    -0) sig=0; shift ;;
+    -TERM | -15) sig=TERM; shift ;;
+    -KILL | -9) sig=KILL; shift ;;
+    -*) case "$1" in -x) ;; *) echo "fake pkill: unsupported $1" >&2; exit 64 ;; esac ;;
+esac
+[ "${1:-}" = -x ] && [ "${2:-}" = hyprMac ] || { echo "fake pkill: expected -x hyprMac" >&2; exit 64; }
 [ -e "$FAKE_STATE/running" ] || exit 1
-[ "${1:-}" = "-0" ] && exit 0
-rm -f "$FAKE_STATE/running"
+case "$sig" in
+    0) exit 0 ;;
+    TERM) [ -e "$FAKE_STATE/ignore-term" ] || rm -f "$FAKE_STATE/running" ;;
+    KILL) rm -f "$FAKE_STATE/running" ;;
+esac

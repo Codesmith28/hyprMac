@@ -37,6 +37,8 @@ if verb == "read":
     print(show(d[rest[1]]))
 elif verb == "write":
     dom, key = rest[0], rest[1]
+    if dom in os.environ.get("FAKE_DEFAULTS_IGNORE_WRITE", "").split():
+        sys.exit(0)  # simulate a write that silently does not stick
     if len(rest) == 3: val = rest[2]
     else:
         t, raw = rest[2], rest[3]

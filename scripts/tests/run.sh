@@ -51,12 +51,13 @@ setup_sandbox() { # name
     export UID_VAL=501 NO_COLOR=1
     export DEFAULTS="$S/bin/defaults" PLUTIL="$S/bin/plutil" LAUNCHCTL="$S/bin/launchctl"
     export TCCUTIL="$S/bin/tccutil" LSREGISTER="$S/bin/lsregister" ACTIVATE_SETTINGS="$S/bin/activateSettings"
-    export OPEN="$S/bin/open" OSASCRIPT="$S/bin/osascript" PKILL="$S/bin/pkill" KILLALL="$S/bin/killall"
+    export OPEN="$S/bin/open" PKILL="$S/bin/pkill" KILLALL="$S/bin/killall"
     export PYTHON="$S/bin/python3"
-    unset HYPR_FAIL_AT FAKE_FAIL KEEP_CONFIG HYPR_WM_APPLY_CMD DRY_RUN HYPR_VERIFY_DIR HYPR_UNINSTALL_REEXEC
+    unset HYPR_FAIL_AT FAKE_FAIL KEEP_CONFIG HYPR_WM_APPLY_CMD HYPR_WM_ACTIVE_CMD DRY_RUN HYPR_VERIFY_DIR \
+        HYPR_UNINSTALL_REEXEC FAKE_DEFAULTS_IGNORE_WRITE OSASCRIPT
     local d
     for d in Applications "Library/Preferences" "Library/Caches" "Library/HTTPStorages" \
-             "Library/Saved Application State" "Library/Application Support"; do
+             "Library/Saved Application State" "Library/Application Support" "Library/Logs/DiagnosticReports"; do
         mkdir -p "$HOME/$d"
     done
     seed_prefs
@@ -120,7 +121,9 @@ else:
     d["apps"].append({"bundle-id": bid, "flags": 41951246, "path": "/fake/hyprMac.app"})
 with open(p, "wb") as f: plistlib.dump(d, f, fmt=plistlib.FMT_BINARY, sort_keys=True)
 PY
-touch "$FAKE_STATE/running"
+mkdir -p "$HOME/Library/Logs/hyprMac" && echo started >>"$HOME/Library/Logs/hyprMac/hyprMac.log"
+echo crash >"$HOME/Library/Logs/DiagnosticReports/hyprMac-2026-10-31-120000.ips"
+printf '%s' "${FAKE_STARTED_BY:-manual}" >"$FAKE_STATE/running"
 APP
     chmod +x "$app/Contents/MacOS/hyprMac"
 }
@@ -199,7 +202,7 @@ expect_rc() { # description expected
     if [ "$RC" != "$2" ]; then bad "$1: exit $RC, expected $2"; show_out; fi
 }
 STATE_DIR_REL="Library/Application Support/hyprMac/install"
-MUTATING='^(defaults (write|delete|import)|launchctl (bootstrap|bootout)|tccutil|lsregister -[fu]|open|osascript|killall|activateSettings|pkill -x)'
+MUTATING='^(defaults (write|delete|import)|launchctl (bootstrap|bootout|kill)|tccutil|lsregister -[fu]|open|killall|activateSettings|pkill -(TERM|KILL))'
 
 # Clean install + uninstall with the zero-diff checks every scenario shares.
 roundtrip() { # label
@@ -239,13 +242,20 @@ t_clean_roundtrip() {
     check "activateSettings -u" grep -q "^activateSettings -u" "$FAKE_STATE/calls.log"
     check "config created" cmp -s "$HOME/.config/hyprmac/init.lua" "$ROOT/config/init.lua.example"
     check "residue: prefs" test -f "$HOME/Library/Preferences/$BID.plist"
+    check "residue: logs" test -f "$HOME/Library/Logs/hyprMac/hyprMac.log"
+    eq "lsregister counts only the installed path (not the plug-in)" \
+        "lsregister ~/Applications/hyprMac.app records=1" "$(HYPR_SANDBOX=1 "$SCRIPTS/snapshot.sh" | grep '^lsregister')"
     check "residue: ncprefs" grep -q "$BID" <<<"$(nc_ids)"
     check "app running" test -e "$FAKE_STATE/running"
 
     : >"$FAKE_STATE/calls.log"
     uninst; expect_rc "uninstall" 0
     contains "verification ran" "$OUT" "rollback verified"
-    check "osascript quit" grep -q "^osascript -e quit app id \"$BID\"" "$FAKE_STATE/calls.log"
+    check "SIGTERM through launchd" grep -q "^launchctl kill SIGTERM gui/501/$BID" "$FAKE_STATE/calls.log"
+    check "no pkill needed" test -z "$(grep -E '^pkill -(TERM|KILL)' "$FAKE_STATE/calls.log")"
+    check "app stopped" test ! -e "$FAKE_STATE/running"
+    check "logs removed" test ! -e "$HOME/Library/Logs/hyprMac"
+    check "new crash report removed" test ! -e "$HOME/Library/Logs/DiagnosticReports/hyprMac-2026-10-31-120000.ips"
     check "bootout" grep -q "^launchctl bootout gui/501/$BID" "$FAKE_STATE/calls.log"
     check "lsregister -u" grep -q "^lsregister -u" "$FAKE_STATE/calls.log"
     check "defaults delete own domain" grep -q "^defaults delete $BID\$" "$FAKE_STATE/calls.log"
@@ -330,7 +340,7 @@ t_stage_manager_values() {
 
 t_failure_at_each_step() {
     local s fp
-    for s in snapshot state_dir residue_scan app lsregister hotkeys wm config launchagent_plist \
+    for s in snapshot state_dir residue_scan app lsregister hotkeys wm wm_verify config launchagent_plist \
              accessibility launchagent_load open_settings done; do
         setup_sandbox "fail-$s"
         fp="$S/fp.before"
@@ -451,7 +461,7 @@ t_sandbox_guard() {
     # Decoys: /usr/bin/true is a "real system path" but harmless if the guard
     # were broken. Combined with --dry-run for extra safety.
     local v saved
-    for v in DEFAULTS PLUTIL LAUNCHCTL TCCUTIL LSREGISTER ACTIVATE_SETTINGS OPEN OSASCRIPT PKILL KILLALL PYTHON; do
+    for v in DEFAULTS PLUTIL LAUNCHCTL TCCUTIL LSREGISTER ACTIVATE_SETTINGS OPEN PKILL KILLALL PYTHON; do
         saved="${!v}"
         export "$v=/usr/bin/true"
         inst --dry-run
@@ -464,12 +474,12 @@ t_sandbox_guard() {
     done
     # Real HOME is refused too (all commands are inert no-op shims here).
     mkdir -p "$S/inert"
-    for v in defaults plutil launchctl tccutil lsregister activateSettings open osascript pkill killall python3; do
+    for v in defaults plutil launchctl tccutil lsregister activateSettings open pkill killall python3; do
         printf '#!/bin/sh\nexit 1\n' >"$S/inert/$v"; chmod +x "$S/inert/$v"
     done
     OUT="$(HOME="$(eval "printf '%s' ~$(id -un)")" DEFAULTS="$S/inert/defaults" PLUTIL="$S/inert/plutil" \
         LAUNCHCTL="$S/inert/launchctl" TCCUTIL="$S/inert/tccutil" LSREGISTER="$S/inert/lsregister" \
-        ACTIVATE_SETTINGS="$S/inert/activateSettings" OPEN="$S/inert/open" OSASCRIPT="$S/inert/osascript" \
+        ACTIVATE_SETTINGS="$S/inert/activateSettings" OPEN="$S/inert/open" \
         PKILL="$S/inert/pkill" KILLALL="$S/inert/killall" PYTHON="$S/inert/python3" \
         "$SCRIPTS/install.sh" --dry-run 2>&1)" && bad "guard accepted the real HOME"
     contains "guard names HOME" "$OUT" "HOME is the real home directory"
@@ -537,6 +547,165 @@ t_missing_app_src() {
     check "nothing created" test ! -e "$HOME/Library/Application Support/hyprMac"
 }
 
+t_quit_paths() {
+    # a) started by launchd: SIGTERM via launchctl kill, no pkill.
+    inst; expect_rc "install" 0
+    eq "started by launchd" launchd "$(cat "$FAKE_STATE/running")"
+    : >"$FAKE_STATE/calls.log"
+    uninst; expect_rc "uninstall (launchd)" 0
+    check "launchctl kill SIGTERM" grep -q "^launchctl kill SIGTERM gui/501/$BID" "$FAKE_STATE/calls.log"
+    check "no pkill -TERM/-KILL" test -z "$(grep -E '^pkill -(TERM|KILL)' "$FAKE_STATE/calls.log")"
+
+    # b) agent loaded but the running copy was started by hand: launchctl kill
+    #    has no process, so pkill -TERM.
+    setup_sandbox "quit-manual"
+    inst; expect_rc "install" 0
+    printf manual >"$FAKE_STATE/running"
+    : >"$FAKE_STATE/calls.log"
+    uninst; expect_rc "uninstall (manual)" 0
+    check "pkill -TERM used" grep -q "^pkill -TERM -x hyprMac" "$FAKE_STATE/calls.log"
+    check "no SIGKILL" test -z "$(grep -E '^pkill -KILL' "$FAKE_STATE/calls.log")"
+    check "stopped" test ! -e "$FAKE_STATE/running"
+
+    # c) app ignores SIGTERM: SIGKILL after ~3 s.
+    setup_sandbox "quit-stubborn"
+    local fp="$S/fp.before"
+    sys_fp >"$fp"
+    inst; expect_rc "install" 0
+    touch "$FAKE_STATE/ignore-term"
+    : >"$FAKE_STATE/calls.log"
+    local t0 t1
+    t0="$(date +%s)"
+    uninst; expect_rc "uninstall (stubborn)" 0
+    t1="$(date +%s)"
+    contains "warns before SIGKILL" "$OUT" "did not exit within 3 s; sending SIGKILL"
+    check "pkill -KILL used" grep -q "^pkill -KILL -x hyprMac" "$FAKE_STATE/calls.log"
+    check "waited about 3 s" test $((t1 - t0)) -ge 3
+    rm -f "$FAKE_STATE/ignore-term"
+    same_fp "stubborn app roundtrip" "$fp"
+
+    # d) nothing running: no signals at all. And no Apple Events anywhere.
+    setup_sandbox "quit-none"
+    inst; rm -f "$FAKE_STATE/running"; : >"$FAKE_STATE/calls.log"
+    uninst; expect_rc "uninstall (not running)" 0
+    check "no signals sent" test -z "$(grep -E '^(launchctl kill|pkill -(TERM|KILL))' "$FAKE_STATE/calls.log")"
+    check "no osascript in the scripts" test -z "$(grep -rl osascript "$SCRIPTS"/*.sh "$SCRIPTS"/lib)"
+}
+
+t_lsregister_build_copies() {
+    # Spotlight/Finder register build copies on their own, before and during
+    # the install. Only the installed path counts.
+    "$LSREGISTER" -f "$APP_SRC"
+    local fp="$S/fp.before"
+    sys_fp >"$fp"
+    inst; expect_rc "install" 0
+    check "before.snapshot counts 0 installed records" \
+        grep -qx "lsregister ~/Applications/hyprMac.app records=0" "$HOME/$STATE_DIR_REL/before.snapshot"
+    mkdir -p "$S/other/build" && make_fake_app "$S/other/build/hyprMac.app" 9
+    "$LSREGISTER" -f "$S/other/build/hyprMac.app"
+    uninst; expect_rc "uninstall with an extra build copy registered" 0
+    contains "verified" "$OUT" "rollback verified"
+    check "build copies untouched" grep -q "$S/other/build/hyprMac.app" "$FAKE_STATE/lsregister.db"
+    "$LSREGISTER" -u "$S/other/build/hyprMac.app"
+    same_fp "lsregister build copies" "$fp"
+}
+
+t_stage_manager_verify() {
+    # Previously on: install reads back 0 and prints the logout/toggle note,
+    # also in the final summary; uninstall notes the re-enable.
+    inst; expect_rc "install" 0
+    contains "readback ok" "$OUT" "GloballyEnabled reads back as off"
+    contains "note shown" "$OUT" "Stage Manager change applies after logout or toggle in Control Center"
+    contains "note in summary" "$OUT" "note: Stage Manager change applies"
+    check "WindowManager never restarted" test -z "$(grep -E '^killall' "$FAKE_STATE/calls.log")"
+    uninst; expect_rc "uninstall" 0
+    contains "uninstall note" "$OUT" "Stage Manager restored to enabled"
+
+    setup_sandbox "wm-was-off"
+    set_pref com.apple.WindowManager GloballyEnabled false
+    inst; expect_rc "install (was off)" 0
+    not_contains "no note when it was already off" "$OUT" "Stage Manager change applies"
+
+    setup_sandbox "wm-probe"
+    export HYPR_WM_ACTIVE_CMD="exit 1"
+    inst; expect_rc "install (probe says inactive)" 0
+    not_contains "probe overrides heuristic" "$OUT" "Stage Manager change applies"
+
+    setup_sandbox "wm-readback-fails"
+    local fp="$S/fp.before"
+    sys_fp >"$fp"
+    export FAKE_DEFAULTS_IGNORE_WRITE="com.apple.WindowManager"
+    inst
+    [ "$RC" != 0 ] || bad "install must fail when the value does not read back as off"
+    contains "explains" "$OUT" "reads back as '1' after writing false"
+    contains "rolled back" "$OUT" "rollback verified"
+    same_fp "readback failure" "$fp"
+}
+
+t_crash_reports() {
+    local old="$HOME/Library/Logs/DiagnosticReports/hyprMac-2026-10-01-090000.ips"
+    local other="$HOME/Library/Logs/DiagnosticReports/Finder-2026-10-01-090000.ips"
+    echo "dev build crash" >"$old"
+    echo "not ours" >"$other"
+    mkdir -p "$HOME/Library/Logs/hyprMac" && echo "dev log" >"$HOME/Library/Logs/hyprMac/hyprMac.log"
+    local fp="$S/fp.before"
+    sys_fp >"$fp"
+    inst; expect_rc "install" 0
+    contains "pre-existing crash report backed up" "$OUT" "hyprMac-2026-10-01-090000.ips already exists"
+    echo "rewritten" >"$old"
+    uninst; expect_rc "uninstall" 0
+    eq "old crash report restored" "dev build crash" "$(cat "$old")"
+    eq "old log restored" "dev log" "$(cat "$HOME/Library/Logs/hyprMac/hyprMac.log")"
+    check "new crash report removed" test ! -e "$HOME/Library/Logs/DiagnosticReports/hyprMac-2026-10-31-120000.ips"
+    eq "other apps' reports untouched" "not ours" "$(cat "$other")"
+    same_fp "crash reports" "$fp"
+}
+
+t_make_dry_run() {
+    local out
+    out="$(env -u DRY_RUN make -s -C "$ROOT" -n install DRY_RUN=1 2>/dev/null | grep 'scripts/install.sh')"
+    contains "make install DRY_RUN=1" "$out" "scripts/install.sh --dry-run"
+    out="$(env -u DRY_RUN make -s -C "$ROOT" -n install 2>/dev/null | grep 'scripts/install.sh')"
+    not_contains "make install" "$out" "--dry-run"
+    out="$(env -u DRY_RUN make -s -C "$ROOT" -n uninstall DRY_RUN=1)"
+    contains "make uninstall DRY_RUN=1" "$out" "scripts/uninstall.sh --dry-run"
+    out="$(env -u DRY_RUN make -s -C "$ROOT" -n uninstall)"
+    not_contains "make uninstall" "$out" "--dry-run"
+    out="$(env -u DRY_RUN make -s -C "$ROOT" -n preflight)"
+    contains "make preflight" "$out" "scripts/install.sh --preflight"
+}
+
+t_preflight() {
+    local custom='{"enabled":true,"value":{"parameters":[65535,100,1179648],"type":"standard"}}'
+    set_pref com.apple.symbolichotkeys AppleSymbolicHotKeys.125 "$custom"
+    echo crash >"$HOME/Library/Logs/DiagnosticReports/hyprMac-2026-10-01-090000.ips"
+    local fp="$S/fp.before"
+    sys_fp >"$fp"
+    : >"$FAKE_STATE/calls.log"
+    inst --preflight; expect_rc "preflight" 0
+    contains "header" "$OUT" "read-only"
+    contains "125 bound" "$OUT" "already bound to"
+    contains "126 absent" "$OUT" 'absent → would add ⌥9 "Switch to Desktop 9"'
+    contains "stage manager" "$OUT" "GloballyEnabled = true (bool)"
+    contains "agent" "$OUT" "not loaded → would be bootstrapped"
+    contains "config" "$OUT" "~/.config/hyprmac        absent"
+    contains "activateSettings" "$OUT" "present → shortcut changes apply"
+    contains "crash report" "$OUT" "hyprMac-2026-10-01-090000.ips → backed up"
+    local sys_calls
+    sys_calls="$(grep -E '^(defaults|launchctl|tccutil|lsregister|open|pkill|killall|activateSettings) ' "$FAKE_STATE/calls.log" |
+        grep -vE '^(defaults (export|read) |launchctl print )')"
+    [ -z "$sys_calls" ] || bad "non-read-only calls: $sys_calls"
+    check "defaults export only to stdout" test -z "$(grep -E '^defaults export [^ ]+ [^-]' "$FAKE_STATE/calls.log")"
+    check "no temp files" test -z "$(/bin/ls -A "$S/tmp")"
+    same_fp "preflight" "$fp"
+    # Installed: reports the upgrade path.
+    inst; inst --preflight
+    contains "upgrade path" "$OUT" "install would only replace the app bundle"
+    contains "agent loaded" "$OUT" "loaded → would be reloaded"
+    contains "recorded original" "$OUT" "Stage Manager: was bool true → restored on uninstall"
+    contains "recorded hotkey" "$OUT" "hotkey 126: was absent → removed on uninstall"
+}
+
 # ------------------------------------------------------------------ runner --
 tap() { # name function
     case "$1" in *"$FILTER"*) ;; *) return 0 ;; esac
@@ -579,6 +748,12 @@ tap "14 verify_rollback detects divergence" t_verify_detects_divergence
 tap "15 pre-existing app data and app bundle are left/restored" t_preexisting_residue_and_app
 tap "16 missing activateSettings warns about logout" t_no_activate_settings
 tap "17 missing APP_SRC fails before any change" t_missing_app_src
+tap "18 quit via SIGTERM (launchd or pkill), SIGKILL after 3 s, never Apple Events" t_quit_paths
+tap "19 lsregister counts only the installed path; build copies ignored" t_lsregister_build_copies
+tap "20 Stage Manager read-back, visibility note, no WindowManager restart" t_stage_manager_verify
+tap "21 logs and crash reports: new ones removed, pre-existing restored" t_crash_reports
+tap "22 make install/uninstall DRY_RUN=1 pass --dry-run; make preflight" t_make_dry_run
+tap "23 --preflight is read-only and reports the planned changes" t_preflight
 echo "1..$N"
 if [ "$FAILED" -gt 0 ]; then
     echo "# FAILED $FAILED of $N:$FAILED_NAMES"
