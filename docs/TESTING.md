@@ -84,6 +84,18 @@ The tests cover these areas:
 - the drag-trick mover;
 - configuration and app options.
 
+**Coordinator integration tests** (`macos/Tests/HyprKitTests/`) run the real `Coordinator` with the real C++ engine against the same fake desktop. Each test waits until the coordinator is idle, then asserts the actual fake window frames:
+- exact layouts, reflow, and dwindle following focus;
+- ghosts: minimize, hide and fullscreen return to the same rectangle;
+- per-Space trees, two displays, and negative coordinates;
+- min-size relayout;
+- snap-back windows floated after 3 fights without looping, and **Retile All Windows** forgiving them;
+- echo filtering and drag handling;
+- a hung app not blocking another app;
+- every throw result, including retrying `transitionInFlight`;
+- Stage Manager, Rectangle, permission loss and config reload;
+- delegate re-entrancy.
+
 ## 4. Install scripts in a sandbox
 `make scripts-test` runs `scripts/tests/run.sh`. Every scenario gets a fresh fake `HOME` and a fake `hyprMac.app`. Every system command the scripts use goes through a variable (`DEFAULTS`, `LAUNCHCTL`, `TCCUTIL`, `LSREGISTER`, …), and in the tests each one points at a shim in `scripts/tests/shims/`.
 
@@ -104,13 +116,16 @@ The scenarios cover:
 - changed notification settings;
 - dry runs;
 - uninstalling from the copy inside the bundle;
-- `verify-rollback` detecting a deliberate divergence.
-
-These scripts are developed on the `feat/install` branch; until it is merged, `scripts/tests/run.sh` on `main` is a placeholder.
+- `verify-rollback` detecting a deliberate divergence;
+- quitting the app with signals only (`launchctl kill` on the agent, else `pkill`, then `SIGKILL`);
+- LaunchServices records counted for the installed path only, so a registered build copy doesn't break verification;
+- Stage Manager read back as off after the write;
+- crash-report residue;
+- `make install DRY_RUN=1` and `make preflight` changing nothing.
 
 ## 5. End-to-end on the real Mac
 Two extra executables are built with the app:
-- **`hyprmac-fixture`** is a small, scriptable AppKit app. Flags control its windows: count, minimum size, non-resizable, native tabs, a sheet, panel or dialog, snapping back after a resize, slow resizes, opening late, hanging its main thread, going fullscreen. It takes commands on stdin (`open`, `close i`, `minimize i`, `fullscreen i`, `hide`, `focus i`, `quit`, …) and reports every window and action as JSON lines on stdout. Each window's `windowNumber` equals its `CGWindowID`.
+- **`hyprmac-fixture`** is a small, scriptable AppKit app. Flags control its windows: count, minimum size, non-resizable, native tabs, a sheet, panel or dialog, snapping back after a resize, slow resizes, opening late, hanging its main thread, going fullscreen, and the titlebar style (`--titlebar standard|transparent|tabs|toolbar`). It takes commands on stdin (`open`, `close i`, `minimize i`, `fullscreen i`, `hide`, `focus i`, `quit`, …) and reports every window and action as JSON lines on stdout. Each window's `windowNumber` equals its `CGWindowID`.
 - **`hyprmac-e2e`** launches the real `hyprMac.app` and the fixture for each scenario. It reads the actual window frames through Accessibility, cross-checks them against `CGWindowList`, and compares them with a **geometry oracle**: an independent Swift implementation of the dwindle layout that shares no code with the C++ engine. Frames must match within ±1 pt after they have been still for 300 ms.
 
 ### The app's test contract
@@ -122,8 +137,8 @@ The harness launches `hyprMac.app/Contents/MacOS/hyprMac --config <file> --event
 | `{"event":"config_loaded","inner":8,"outer":12}` / `{"event":"config_error","message":"…"}` | after every config load, including at startup and on reload |
 | `{"event":"paused","reason":"stage_manager"\|"accessibility"\|"user"}` | when tiling is paused |
 | `{"event":"plan_applied","space":…,"revision":…,"count":…}` | each layout written |
-| `{"event":"missing_space","n":…,"count":…}` | ⌥N for a Desktop that doesn't exist |
-| `{"event":"throw","n":…,"result":"moved"\|"noSuchSpace"\|…}` | each ⌥⇧N |
+| `{"event":"missing_space","n":…,"count":…}` | ⌥N for a Desktop that doesn't exist (`throw-no-space` expects it for ⌥⇧N too) |
+| `{"event":"throw","n":…,"result":…}` | each ⌥⇧N attempt; `result` is `moved`, `alreadyThere`, `noSuchSpace`, `refusedFullscreen`, `noGrabPoint`, `timedOut`, `transitionInFlight`, `failed` or `noFocusedWindow` |
 | `{"event":"floated","window":…,"reason":"fights"}` | a window floated after fighting its tile |
 | `{"event":"stopped"}` | clean shutdown |
 
@@ -137,9 +152,18 @@ min-size non-resizable-floats            size constraints
 sheet-ignored panel-ignored dialog-ignored tabs-dedupe
 minimize-restore hide-restore fullscreen-restore   windows return to their tile
 hung-app-isolation snap-back-no-loop late-window   misbehaving apps
-throw-to-space-2 missing-space-notice    Spaces (posts ⌥⇧2 / ⌥N)
+throw-to-space-2 throw-held-modifiers    throws (post ⌥⇧N; the second holds ⌥⇧ like a person)
+throw-titlebar-variants                  transparent / tabbed / toolbar titlebars: moved or noGrabPoint
+throw-no-space throw-already-there       noSuchSpace (+ missing_space), alreadyThere
+throw-rapid                              two throws 150 ms apart: second never lost, cursor restored
+missing-space-notice                     ⌥(count+1)
+display-cache                            skipped: needs 2+ displays (manual check)
 config-reload bad-config-survives        SIGHUP
 ```
+Details of the newer ones:
+- **`hung-app-isolation`:** while fixture A's main thread is blocked, fixture B's window must be tiled within 1 s, **and** a SIGHUP must come back as `config_loaded` within 500 ms. The second check proves hyprMac itself (menu bar, signal handling) isn't stuck behind the hung app.
+- **`throw-titlebar-variants`:** for each variant the result must be `moved` (and the window fills Space 2) or a clean `noGrabPoint` (no Space switch, window untouched). Which one each variant got is printed as a TAP note, together with the titlebar roles the grab candidates hit.
+- **Space restore:** every Space-switching scenario returns to the Desktop it started on in a `defer`, so a failure never strands you on another Desktop. The run as a whole also returns to the Desktop it started on.
 `hyprmac-e2e --list` prints them with one-line descriptions.
 
 ### Checks that need no permissions
@@ -147,16 +171,16 @@ config-reload bad-config-survives        SIGHUP
 make swift-build
 BIN=$(swift build --package-path macos -c release -Xlinker -L$PWD/build/release --show-bin-path)
 $BIN/hyprmac-e2e --oracle-selftest    # oracle vs hand-computed layouts: 47/47
-$BIN/hyprmac-e2e --fixture-selftest   # fixture opens, reports and closes windows: 17/17
+$BIN/hyprmac-e2e --fixture-selftest   # fixture windows, commands and titlebar variants: 21/21
 ```
 
 ### E2E runbook
-The full run moves real windows and posts real keystrokes (⌥⇧2, ⌥1, ⌥N). Run it when you can leave the Mac alone for a few minutes.
+The full run moves real windows and posts real keystrokes and modifier presses (⌥⇧N, ⌥N, held ⌥⇧). Run it when you can leave the Mac alone for a few minutes.
 
 1. **Check the preconditions:**
-   - **Stage Manager is off.** `defaults read com.apple.WindowManager GloballyEnabled` prints `0`. Otherwise the harness refuses to start (exit 2), and so would the app: it would log `paused`/`stage_manager`, which the harness also treats as a preflight failure. `make install` turns Stage Manager off.
+   - **Stage Manager is off, for real.** `defaults read com.apple.WindowManager GloballyEnabled` must print `0`; otherwise the harness refuses to start (exit 2), and so would the app: it would log `paused`/`stage_manager`, which the harness also treats as a preflight failure. `make install` writes that setting, **but macOS keeps Stage Manager running until you toggle it off once in Control Center (or log out)**. Neither the harness nor hyprMac can see the live state, so check Control Center yourself before running.
    - **⌥1–⌥9 are bound** to "Switch to Desktop N" (System Settings ▸ Keyboard ▸ Keyboard Shortcuts ▸ Mission Control).
-   - **At least 2 Desktops exist.** With fewer, `throw-to-space-2` is skipped.
+   - **At least 2 Desktops exist.** With fewer, the throw scenarios are skipped. With 3 or more, `throw-rapid` sends its second throw to Desktop 3.
    - **The terminal has Accessibility permission.** The app is launched as a child of the harness and inherits it. Without it, the harness prints instructions and exits 2.
 2. **Quit the installed hyprMac** (menu ▸ Quit hyprMac). The harness refuses to run (exit 2) while any other app with bundle id `dev.codesmith28.hyprmac` is running, because two tilers would fight.
 3. **Quit other window managers** such as Rectangle. The harness warns about them.
@@ -178,5 +202,9 @@ The full run moves real windows and posts real keystrokes (⌥⇧2, ⌥1, ⌥N).
 7. **Afterwards:** the harness returns to the Desktop you started on and re-activates the app that was in front. Start the installed hyprMac again if you want it back.
 
 Known caveats:
+- Some scenarios check behaviour that is still being fixed and fail until the fix is merged. The failure message names the gap:
+  - **`throw-rapid`:** a ⌥⇧N pressed while a throw is in flight is currently dropped without any event.
+  - **`throw-no-space`:** a throw to a missing Desktop posts the notice to Notification Center but logs no `missing_space` event.
+  - **`hung-app-isolation`:** hung apps only stop stalling discovery once the process-wide Accessibility timeout fix lands.
 - `minimize-restore` is skipped if macOS refuses to minimize the fixture window. That happened while Stage Manager was on.
 - `tile-8`'s smallest tile is about 85 × 50 pt on a 1512 × 982 screen. That is close to AppKit's minimum window size, and the scenario prints a note when that is a factor.
