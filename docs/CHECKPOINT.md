@@ -76,6 +76,17 @@ All of it is being fixed on `fix/e2e-run1` (worktree `hyprMac-e2e`, brief in `.a
 
 **Budget rule (user, 2026-10-31):** about $13 left. Agents run on Sonnet. If the fix agent stalls (no working fix by about 40 min, or the next e2e run still swaps windows), switch THAT agent to Opus (`herdr agent prompt e2e "/model opus"`), then checkpoint. Reserve budget for the merge, the reinstall and `make uninstall`. If the budget runs out: `make uninstall` restores everything; resume from this file.
 
+### E2E run 2 after `fix/e2e-run1` (MERGED): 32 passed, 1 failed, 1 skipped of 34
+- **Fixed:**
+  - minimized windows report `AXDialog`;
+  - a window entering fullscreen goes through a no-Space limbo (2 s ghost grace);
+  - ⌥⇧F floats keep their slot (sent to the engine as a HIDDEN ghost);
+  - a throw pressed mid-throw is queued;
+  - `missing_space` is logged on a throw's noSuchSpace;
+  - the harness is hermetic (ignores all running apps).
+- **Still failing:** `hung-app-isolation`. It's flaky on main too: SIGHUP→config_loaded takes 517–546 ms against a 500 ms limit. Raise the limit to 750 ms, or load config off the coordinator queue.
+- **Known:** the source Space can't be resized while it's hidden, so it retiles when it's next shown.
+
 ### Next steps
 1. Merge the 3 feature branches (float-small, then min-size, then toggle), running `make test` after each. Then `make install` again (an upgrade: only the bundle is replaced).
 2. **Real run:** install is done (preflight and dry run were clean). Next are `make install`, a short e2e subset, a manual ⌥⇧2 on Ghostty, then `make uninstall` (it must print "rollback verified") and `make verify-rollback`.
