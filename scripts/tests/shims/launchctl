@@ -1,0 +1,25 @@
+#!/bin/bash
+# Fake launchctl: loaded labels live in $FAKE_STATE/launchd.loaded.
+. "$(dirname "$0")/_lib.sh"
+db="$FAKE_STATE/launchd.loaded"; touch "$db"
+case "${1:-}" in
+    print)
+        label="${2##*/}"
+        grep -qxF "$label" "$db" || { echo "Could not find service \"$label\" in domain" >&2; exit 113; }
+        echo "$2 = { state = running }" ;;
+    bootstrap)
+        plist="$3"
+        label="$(/usr/bin/plutil -extract Label raw "$plist")"
+        if grep -qxF "$label" "$db"; then echo "Bootstrap failed: 5: Input/output error" >&2; exit 5; fi
+        echo "$label" >>"$db"
+        if [ "$(/usr/bin/plutil -extract RunAtLoad raw "$plist" 2>/dev/null)" = true ]; then
+            prog="$(/usr/bin/plutil -extract ProgramArguments.0 raw "$plist")"
+            [ -x "$prog" ] && "$prog"
+        fi ;;
+    bootout)
+        label="${2##*/}"
+        grep -qxF "$label" "$db" || { echo "Boot-out failed: 3: No such process" >&2; exit 3; }
+        grep -vxF "$label" "$db" >"$db.tmp" || true; mv "$db.tmp" "$db"
+        rm -f "$FAKE_STATE/running" ;;
+    *) echo "fake launchctl: unsupported $*" >&2; exit 64 ;;
+esac

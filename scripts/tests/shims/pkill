@@ -1,0 +1,6 @@
+#!/bin/bash
+# Fake pkill: the app "runs" while $FAKE_STATE/running exists.
+. "$(dirname "$0")/_lib.sh"
+[ -e "$FAKE_STATE/running" ] || exit 1
+[ "${1:-}" = "-0" ] && exit 0
+rm -f "$FAKE_STATE/running"
