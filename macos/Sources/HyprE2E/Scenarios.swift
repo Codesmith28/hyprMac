@@ -4,7 +4,7 @@ import AppKit
 /// relies on `Context.cleanup()` to quit them.
 enum Catalog {
     static let all: [Scenario] = tiles + [
-        closeReflow, reopen, minSize, nonResizableFloats,
+        closeReflow, reopen, minSize, nonResizableFloats, toggleFloat,
         auxIgnored("sheet"), auxIgnored("panel"), auxIgnored("dialog"),
         tabsDedupe, minimizeRestore, hideRestore, fullscreenRestore,
         hungAppIsolation, snapBackNoLoop, lateWindow,

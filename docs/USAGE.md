@@ -7,6 +7,7 @@ hyprMac runs in the menu bar (a 2×2 grid icon) and has no Dock icon. After `mak
 |---|---|
 | ⌥1 … ⌥9 | Switch to Desktop N. This is the **native** macOS shortcut; hyprMac only listens so it can warn you when Desktop N doesn't exist |
 | ⌥⇧1 … ⌥⇧9 | Move the focused window to Desktop N. You follow it, and it keeps focus |
+| ⌥⇧F | Toggle the focused window between floating and tiled. Floating restores the size the window had when hyprMac first saw it, centred on the display. Tiling it again inserts it back into the layout. The choice sticks until you toggle again or the window closes. It beats automatic floating (a window that fights its tile), but not windows macOS can't resize (dialogs, fixed-size windows). Fullscreen windows are ignored |
 
 New windows tile automatically. The window that has focus is split along its longer side, and the new window takes the second half. Close, minimize, hide or fullscreen a window and the others reflow. When it comes back, it gets its old tile.
 
