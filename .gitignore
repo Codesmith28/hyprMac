@@ -1,0 +1,8 @@
+/build/
+/macos/.build/
+/macos/.swiftpm/
+.DS_Store
+*.o
+*.a
+*.dSYM/
+/.worktrees/

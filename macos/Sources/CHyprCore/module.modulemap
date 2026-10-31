@@ -1,0 +1,6 @@
+module CHyprCore [system] {
+    header "shim.h"
+    link "hyprcore"
+    link "c++"
+    export *
+}
