@@ -45,7 +45,12 @@ struct Options {
             case "--app": o.app = URL(fileURLWithPath: value(a)).standardizedFileURL
             case "--fixture": o.fixture = URL(fileURLWithPath: value(a)).standardizedFileURL
             case "--scenario":
+                // `--scenario a b`, `--scenario a --scenario b` and `--scenario a,b` all work.
                 o.scenarios += value(a).split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                while i + 1 < args.count && !args[i + 1].hasPrefix("-") {
+                    i += 1
+                    o.scenarios += args[i].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                }
             case "--list": o.list = true
             case "--keep-going": o.keepGoing = true
             case "--timeout":
