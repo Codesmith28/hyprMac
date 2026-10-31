@@ -1,15 +1,24 @@
 import CoreGraphics
 import Foundation
 
-/// A titlebar area of a fake window that hit-tests as `role` (fractions of the width).
+/// A titlebar area of a fake window that hit-tests as `role`: `from`/`to` are fractions of the
+/// width, `top`/`bottom` points below the window's top edge (the titlebar is 28 pt).
+/// `resolvesWindow: false` models an element whose owning window AX can't resolve.
 public struct FakeTitlebarRegion: Equatable, Sendable {
     public var from: CGFloat
     public var to: CGFloat
+    public var top: CGFloat
+    public var bottom: CGFloat
     public var role: String
-    public init(from: CGFloat, to: CGFloat, role: String) {
+    public var resolvesWindow: Bool
+    public init(from: CGFloat, to: CGFloat, top: CGFloat = 0, bottom: CGFloat = 28, role: String,
+                resolvesWindow: Bool = true) {
         self.from = from
         self.to = to
+        self.top = top
+        self.bottom = bottom
         self.role = role
+        self.resolvesWindow = resolvesWindow
     }
 }
 
@@ -129,6 +138,9 @@ public final class FakeDesktop: @unchecked Sendable {
     var transitionEnd: TimeInterval = -.infinity
     var droppedSwitchCount = 0
     var forgottenPidList: [pid_t] = []
+    /// Physically held modifiers, released at `heldModifiersReleaseAt` (fake clock), if set.
+    var heldModifiers: CGEventFlags = []
+    var heldModifiersReleaseAt: TimeInterval?
 
     /// Simulate missing SkyLight symbols (synthetic Spaces, no window→Space info).
     public var spacesUnavailable = false
@@ -428,6 +440,11 @@ public final class FakeDesktop: @unchecked Sendable {
     public var droppedSwitches: Int { locked { droppedSwitchCount } }
     /// Pids passed to `ax.forget(pid:)`.
     public var forgottenPids: [pid_t] { locked { forgottenPidList } }
+
+    /// The user physically holds `flags` until the fake clock reaches `releaseAt` (forever if nil).
+    public func holdModifiers(_ flags: CGEventFlags, releaseAt: TimeInterval? = nil) {
+        locked { heldModifiers = flags; heldModifiersReleaseAt = releaseAt }
+    }
 
     // MARK: internals (call with lock held)
 

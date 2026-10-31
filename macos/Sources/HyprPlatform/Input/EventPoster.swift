@@ -15,16 +15,27 @@ public enum SyntheticEvent: Equatable, Sendable {
 /// Posts synthetic input. The real one is `SystemEventPoster`.
 public protocol EventPoster: AnyObject {
     func cursorLocation() -> CGPoint
+    /// Modifier keys physically held right now (`CGEventSource.flagsState(.hidSystemState)`).
+    func physicalModifierFlags() -> CGEventFlags
     func post(_ event: SyntheticEvent)
 }
 
 /// Posts at `.cghidEventTap` (verified to drive the native Space switch on macOS 27.2) and
 /// tags every event with `SyntheticEventMarker`.
+///
+/// Mouse events carry explicit empty flags: the throw starts while the user still holds ⌥⇧,
+/// and a `.hidSystemState` source would otherwise stamp them as ⌥⇧-clicks. The source's local
+/// events suppression interval is 0 so the cursor isn't "stuck" for 0.25 s after the warp.
 public final class SystemEventPoster: EventPoster {
     private let source = CGEventSource(stateID: .hidSystemState)
-    public init() {}
+
+    public init() {
+        source?.localEventsSuppressionInterval = 0
+    }
 
     public func cursorLocation() -> CGPoint { CGEvent(source: nil)?.location ?? .zero }
+
+    public func physicalModifierFlags() -> CGEventFlags { CGEventSource.flagsState(.hidSystemState) }
 
     public func post(_ event: SyntheticEvent) {
         let cg: CGEvent?
@@ -42,9 +53,14 @@ public final class SystemEventPoster: EventPoster {
             cg?.flags = f
         case .warpCursor(let p):
             CGWarpMouseCursorPosition(p)
+            source?.localEventsSuppressionInterval = 0
             return
         }
         guard let e = cg else { return }
+        switch event {
+        case .mouseMove, .leftMouseDown, .leftMouseUp: e.flags = [] // never inherit held ⌥⇧
+        default: break
+        }
         e.setIntegerValueField(.eventSourceUserData, value: SyntheticEventMarker.value)
         e.post(tap: .cghidEventTap)
     }

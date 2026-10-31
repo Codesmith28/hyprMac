@@ -79,6 +79,13 @@ public final class FakeEventPoster: EventPoster {
 
     public func cursorLocation() -> CGPoint { desk.locked { desk.cursor } }
 
+    public func physicalModifierFlags() -> CGEventFlags {
+        desk.locked {
+            if let at = desk.heldModifiersReleaseAt, desk.clock.now() >= at { return [] }
+            return desk.heldModifiers
+        }
+    }
+
     public func setCursor(_ p: CGPoint) { desk.locked { desk.cursor = p } }
 
     public func post(_ event: SyntheticEvent) {
