@@ -1,4 +1,4 @@
-# hyprMac
+# hyprMac (Prototype)
 
 Hyprland-style tiling for macOS that keeps your native Spaces.
 
