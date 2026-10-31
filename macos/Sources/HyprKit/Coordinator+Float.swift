@@ -9,7 +9,7 @@ extension Coordinator {
     /// it. `floatOverride[id]` wins over the size rule. A config reload with new thresholds applies
     /// only to windows first seen afterwards. Runs on the coordinator queue.
     func floatsAsSmall(id: UInt64, frame: CGRect) -> Bool {
-        if let override = floatOverride[id] { return override == .floating }
+        if let override = floatOverride[id] { return override } // true = floating (⌥⇧F)
         if let decided = floatDecided[id] { return decided }
         let f = Self.sanitized(frame)
         guard f.width > 0, f.height > 0 else { return false } // no real size yet; decide later

@@ -101,12 +101,12 @@ import Testing
         let a = h.open(1), f = h.open(2, frame: small)
         #expect(h.tiled(h.s1) == 1)
         let fid = h.id(f)!
-        h.c.queue.sync { h.c.floatOverride[fid] = .tiled }
+        h.c.queue.sync { h.c.floatOverride[fid] = false }
         h.reconcile()
         #expect(h.tiled(h.s1) == 2)
         #expect(h.frame(a) == leftHalf)
         #expect(h.frame(f) == rightHalf)
-        h.c.queue.sync { h.c.floatOverride[fid] = .floating }
+        h.c.queue.sync { h.c.floatOverride[fid] = true }
         h.reconcile()
         #expect(h.tiled(h.s1) == 1)
         #expect(h.frame(a) == root)

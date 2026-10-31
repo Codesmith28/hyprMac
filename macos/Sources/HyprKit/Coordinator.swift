@@ -67,46 +67,51 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     /// Delegate callbacks leave `queue` through here, so a delegate may synchronously call back
     /// into the coordinator (`isPaused` does `queue.sync`) without re-entering `queue`.
     private let deliveryQueue = DispatchQueue(label: "dev.codesmith28.hyprmac.delivery")
-    private let deps: Dependencies
+    let deps: Dependencies
     private let tuning: Tuning
     private let logger = Logger(subsystem: "dev.codesmith28.hyprmac", category: "coordinator")
 
-    private let engine: Engine
+    let engine: Engine
     private let configStore: ConfigStore
     private let identity = WindowIdentityMap()
     private let discovery: WindowDiscovery
-    private let executor: GeometryExecutor
+    let executor: GeometryExecutor
     private let mover: SpaceMover
     private let transitions = SpaceTransitionGuard(settle: 0.5)
     private var events: PlatformEvents?
 
-    private var userPaused = false
-    private var stageManagerPaused = false
-    private var running = false
-    private var dragging = false
-    private var throwInFlight = false
+    var userPaused = false
+    var stageManagerPaused = false
+    var running = false
+    var dragging = false
+    var throwInFlight = false
     private var idsByPid: [pid_t: Set<UInt64>] = [:]
-    private var fights: [UInt64: [TimeInterval]] = [:]
-    private var uncooperative: Set<UInt64> = []
+    var fights: [UInt64: [TimeInterval]] = [:]
+    var uncooperative: Set<UInt64> = []
     /// Small-window float decision per window id, made once from the first-seen size (sticky).
     var floatDecided: [UInt64: Bool] = [:]
-    /// Explicit per-window override of the size rule (internal API for a future "toggle float").
-    var floatOverride: [UInt64: FloatMode] = [:]
     var currentConfig: Config { configStore.current }
-    private var lastTargets: [UInt64: CGRect] = [:]
-    private var lastStates: [UInt64: Engine.TileState] = [:]
+    var lastTargets: [UInt64: CGRect] = [:]
+    var lastStates: [UInt64: Engine.TileState] = [:]
     private var unresolvedRetries = 0
     private var warnedRectangle = false
+    // Toggle floating ↔ tiling (logic in Coordinator+Toggle.swift).
+    /// Per-window explicit choice (true = floating, false = tiled); beats every automatic float decision.
+    var floatOverride: [UInt64: Bool] = [:]
+    /// The frame each window had when first reconciled, before any tiling.
+    var firstSeenFrame: [UInt64: CGRect] = [:]
+    /// Windows the platform's eligibility rules float (never overridden).
+    var platformFloating: Set<UInt64> = []
     /// Engine id per ref, as assigned during reconcile. Event handlers look ids up here instead
     /// of calling `identity.engineID(for:)`, which would re-assign generations for stale refs
     /// (a late report about a relaunched app's old window).
-    private var idByRef: [HyprPlatform.WindowRef: UInt64] = [:]
+    var idByRef: [HyprPlatform.WindowRef: UInt64] = [:]
     private var lastDragEnd: TimeInterval?
     private var reconcileGeneration = 0
     /// Timers scheduled on `queue` that haven't fired yet (for `testSettle`).
     private var outstandingTimers = 0
     /// Bumped by every state-changing step (for `testSettle`).
-    private var activity = 0
+    var activity = 0
     private var planCount = 0
     /// Engine Space ids shown on some display as of the last reconcile.
     private var activeSpaces: Set<UInt64> = []
@@ -163,8 +168,10 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             deps.onMain { ev.start() }
         }
         deps.onMain { [self] in
+            deps.hotkeys.onToggleFloat = { [weak self] in self?.toggleFocusedFloat() }
             let failed = deps.hotkeys.start { [weak self] n in self?.throwFocusedWindow(toSpace: n) }
             if !failed.isEmpty { logger.error("⌥⇧ hotkeys unavailable for digits \(failed)") }
+            if deps.hotkeys.toggleFloatFailed { logger.error("⌥⇧F hotkey unavailable") }
             if !deps.spaceKeys.start(onSwitch: { [weak self] n in self?.spaceKeyPressed(n) }) {
                 logger.error("space key observer unavailable; missing-space notices disabled")
             }
@@ -272,6 +279,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         engine.forget(window: id)
         identity.forget(engineID: id)
         uncooperative.remove(id)
+        forgetToggleState(id)
         fights[id] = nil
         lastTargets[id] = nil
         lastStates[id] = nil
@@ -348,6 +356,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 var state = Self.tileState(w.state)
                 if state == .tiled, uncooperative.contains(id) { state = .floating }
                 if state == .tiled, floatsAsSmall(id: id, frame: w.frame) { state = .floating }
+                // The ⌥⇧F override (Coordinator+Toggle) wins over size and fight floating.
+                state = resolveFloatOverride(id: id, platform: w.state, frame: w.frame, current: state)
                 lastStates[id] = state
                 seen.insert(id)
                 entries.append(Engine.WindowEntry(id: id, state: state, frame: Self.sanitized(w.frame),
@@ -619,6 +629,9 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     func testTrackedStateCount() -> (states: Int, targets: Int, ids: Int) {
         queue.sync { (lastStates.count, lastTargets.count, idByRef.count) }
     }
+    func testFightCount(_ id: UInt64) -> Int { queue.sync { fights[id]?.count ?? 0 } }
+    func testFloatOverride() -> [UInt64: Bool] { queue.sync { floatOverride } }
+    func testFirstSeenFrame(_ id: UInt64) -> CGRect? { queue.sync { firstSeenFrame[id] } }
     func testActiveSpaces() -> Set<UInt64> { queue.sync { activeSpaces } }
     func testDump(space: UInt64) -> String { queue.sync { engine.debugDump(space: space) } }
     func testWaitForExecutor() -> Bool { executor.waitUntilIdle(timeout: 5) }

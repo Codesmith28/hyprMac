@@ -42,6 +42,8 @@ public final class GeometryExecutor: @unchecked Sendable {
         var revision: UInt64
         var frame: CGRect
         var attempt: Int
+        /// An explicit write (not part of a tiling plan): never reported as a fight or a minimum size.
+        var explicit = false
     }
 
     public weak var delegate: GeometryExecutorDelegate?
@@ -91,6 +93,15 @@ public final class GeometryExecutor: @unchecked Sendable {
             pending[ref] = Target(revision: revision, frame: frame, attempt: 0)
             scheduleLocked(ref, after: 0)
         }
+    }
+
+    /// Explicit one-off write outside any plan (e.g. restoring a window's own frame when it is
+    /// floated). It keeps the window's revision, so later plans still supersede it, is recorded in
+    /// the echo filter like every write, and its result is never reported as a mismatch or minimum.
+    public func place(_ ref: WindowRef, frame: CGRect) {
+        lock.lock(); defer { lock.unlock() }
+        pending[ref] = Target(revision: newest[ref] ?? 0, frame: frame, attempt: 0, explicit: true)
+        scheduleLocked(ref, after: 0)
     }
 
     /// Drop all state for a window (closed) or app (terminated).
@@ -203,6 +214,7 @@ public final class GeometryExecutor: @unchecked Sendable {
         let actual = try ax.frame(of: ref)
         echo.record(ref, frame: actual, at: clock.now())
         let tol = configuration.landTolerance
+        if target.explicit { return .landed(ref, revision: target.revision, frame: actual, skipped: false) }
         if actual.width > goal.width + tol || actual.height > goal.height + tol {
             return .minSizeDiscovered(ref, CGSize(width: actual.width > goal.width + tol ? actual.width : 0,
                                                   height: actual.height > goal.height + tol ? actual.height : 0))
