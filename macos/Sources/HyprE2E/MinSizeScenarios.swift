@@ -46,7 +46,7 @@ extension Catalog {
 
     static let minSizeUnsatisfiable = Scenario(
         name: "min-size-unsatisfiable",
-        summary: "two min-width-900 windows can't both fit: at most 3 plans in 3 s, app stays responsive") { ctx in
+        summary: "two min-width-900 windows can't both fit: converges (≤ 6 plans in 3 s, none in the next 2 s), app stays responsive") { ctx in
         try ctx.startHypr()
         let log = try ctx.log
         let c = log.cursor
@@ -57,13 +57,20 @@ extension Catalog {
         let windowEnd = first.at + 3
         while Date() < windowEnd { pump(0.05); log.poll() }
         let plans = log.since(c).filter { $0.name == "plan_applied" && $0.at <= windowEnd }
-        if plans.count > 3 {
-            throw HarnessError("\(plans.count) plan_applied events within 3 s (limit 3): feedback loop",
+        // Real macOS: each min-size discovery (and the relayout it triggers) is a plan, so a handful is
+        // normal (run 1: 6). What must hold is convergence: a bounded burst, then silence.
+        if plans.count > 6 {
+            throw HarnessError("\(plans.count) plan_applied events within 3 s (limit 6): feedback loop",
                                details: plans.map(\.raw))
         }
         pump(2)
-        let later = log.since(c).filter { $0.name == "plan_applied" && $0.at > windowEnd }.count
-        ctx.note("\(plans.count) plan_applied in the first 3 s, \(later) in the next 2 s")
+        log.poll()
+        let late = log.since(c).filter { $0.name == "plan_applied" && $0.at > windowEnd }
+        if !late.isEmpty {
+            throw HarnessError("\(late.count) more plan_applied events in the 2 s after the burst: not converging",
+                               details: late.map(\.raw))
+        }
+        ctx.note("\(plans.count) plan_applied in the first 3 s, 0 in the next 2 s")
         guard ctx.hypr?.isRunning == true else { throw HarnessError("hyprMac exited") }
     }
 }

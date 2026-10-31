@@ -76,7 +76,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
 
     let engine: Engine
     private let configStore: ConfigStore
-    private let identity = WindowIdentityMap()
+    let identity = WindowIdentityMap()
     let discovery: WindowDiscovery
     let executor: GeometryExecutor
     let mover: SpaceMover
@@ -88,6 +88,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     var running = false
     var dragging = false
     var throwInFlight = false
+    /// A throw requested while another was in flight; runs when that one finishes.
+    var pendingThrow: Int?
     private var idsByPid: [pid_t: Set<UInt64>] = [:]
     var fights: [UInt64: [TimeInterval]] = [:]
     var uncooperative: Set<UInt64> = []
@@ -96,6 +98,9 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     var currentConfig: Config { configStore.current }
     var lastTargets: [UInt64: CGRect] = [:]
     var lastStates: [UInt64: Engine.TileState] = [:]
+    /// When each tracked window first went missing from its Space's snapshot with no Space of its own
+    /// (Coordinator+Fullscreen.swift).
+    var limboSince: [UInt64: TimeInterval] = [:]
     private var unresolvedRetries = 0
     private var warnedRectangle = false
     // Toggle floating ↔ tiling (logic in Coordinator+Toggle.swift).
@@ -270,7 +275,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         forgetEngineWindow(id)
     }
 
-    private func forgetEngineWindow(_ id: UInt64) {
+    func forgetEngineWindow(_ id: UInt64) {
         engine.forget(window: id)
         identity.forget(engineID: id)
         uncooperative.remove(id)
@@ -278,6 +283,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         fights[id] = nil
         lastTargets[id] = nil
         lastStates[id] = nil
+        limboSince[id] = nil
     }
 
     private func noteFight(_ window: HyprPlatform.WindowRef) {
@@ -357,8 +363,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 state = resolveFloatOverride(id: id, platform: w.state, frame: w.frame, current: state)
                 lastStates[id] = state
                 seen.insert(id)
-                entries.append(Engine.WindowEntry(id: id, state: state, frame: Self.sanitized(w.frame),
-                                                  minSize: w.minSize ?? .zero))
+                entries.append(Engine.WindowEntry(id: id, state: engineState(id: id, state: state, platform: w.state),
+                                                  frame: Self.sanitized(w.frame), minSize: w.minSize ?? .zero))
             }
             // Windows whose AX calls failed this round keep their last state instead of being
             // deleted from the tree; try again shortly.
@@ -376,6 +382,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                     entries.append(Engine.WindowEntry(id: id, state: state))
                 }
             }
+            keepLimboGhosts(space: snap.space, display: display.id, seen: &seen, entries: &entries)
             if snap.unresolved.isEmpty && snap.unresponsivePids.isEmpty { unresolvedRetries = 0 } else { retryUnresolved() }
             let focused = snap.focused.flatMap { idByRef[$0] }
             do {
@@ -461,7 +468,9 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     /// ⌥⇧N: throw the focused window to Desktop N with the drag trick (focus follows).
     func throwFocusedWindow(toSpace n: Int, attempt: Int = 0) {
         queue.async { [self] in
-            guard !throwInFlight else { return }
+            // A press while another throw runs is queued (last one wins), never lost: real E2E
+            // (throw-rapid) showed a second ⌥⇧N 200 ms after the first vanished without any event.
+            guard !throwInFlight else { pendingThrow = n; return }
             guard let pid = try? deps.ax.focusedApplication(),
                   let window = try? deps.ax.focusedWindow(pid: pid) else {
                 EventLog.shared.emit("throw", ["n": n, "result": "noFocusedWindow"])
@@ -498,7 +507,10 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                             schedule(after: wait) { [weak self] in self?.throwFocusedWindow(toSpace: n, attempt: attempt + 1) }
                         }
                     case let .noSuchSpace(_, available):
-                        if let available { notify(.missingSpace(requested: n, count: available)) }
+                        if let available {
+                            EventLog.shared.emit("missing_space", ["n": n, "count": available])
+                            notify(.missingSpace(requested: n, count: available))
+                        }
                     case .refusedFullscreen:
                         notify(.throwFailed(requested: n, reason: "Fullscreen windows can't be moved."))
                     case .noGrabPoint:
@@ -509,6 +521,11 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                         notify(.throwFailed(requested: n, reason: "Accessibility error: \(e)"))
                     }
                     scheduleReconcile(after: tuning.debounce)
+                    if let next = pendingThrow { // the press that arrived mid-throw
+                        pendingThrow = nil
+                        let wait = max(0.05, transitions.remaining(now: deps.clock.now()))
+                        schedule(after: wait) { [weak self] in self?.throwFocusedWindow(toSpace: next) }
+                    }
                 }
             }
         }

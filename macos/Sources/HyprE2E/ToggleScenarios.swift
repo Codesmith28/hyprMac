@@ -18,8 +18,7 @@ extension Catalog {
         try ctx.expectOracle(r, "3 windows tiled before the toggle")
 
         func toggle(_ expect: String) throws {
-            try f.command("focus 1")
-            pump(0.3)
+            try f.focusAndWait(1)
             let c = log.cursor
             Keys.post(keyF, flags: [.maskAlternate, .maskShift])
             guard let ev = log.waitFor("toggle_float", after: c, timeout: 5) else {

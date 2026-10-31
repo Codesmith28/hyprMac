@@ -50,6 +50,29 @@ import Testing
         #expect(h.tiled(h.s1) == 3)
     }
 
+    /// Real macOS (toggle-float E2E): B (top-right) floats and comes back top-right, not swapped with C.
+    @Test func toggleBackRestoresTheSameSlot() {
+        let h = started()
+        let a = h.open(1), b = h.open(2), c = h.open(3)
+        let before = [a, b, c].map { h.frame($0)! }
+        #expect(before[1].minY < before[2].minY)
+        h.desk.focus(b); toggle(h)
+        h.desk.focus(b); toggle(h)
+        #expect([a, b, c].map { h.frame($0)! } == before)
+    }
+
+    @Test func slotSurvivesChangesWhileFloating() {
+        let h = started()
+        let a = h.open(1), b = h.open(2), c = h.open(3)
+        h.desk.focus(b); toggle(h)
+        h.desk.closeWindow(c); h.settle() // sibling gone while B floats
+        #expect(h.frame(a) == root)
+        h.desk.focus(b); toggle(h)
+        #expect(h.tiled(h.s1) == 2)
+        #expect(h.frame(a) == leftHalf)
+        #expect(h.frame(b) == rightHalf)
+    }
+
     @Test func floatedChoiceIsStickyAcrossReconciles() {
         let h = started()
         _ = h.open(1); let b = h.open(2)

@@ -101,6 +101,23 @@ import Testing
         #expect(h.desk.posted.suffix(2).first == .leftMouseUp(CGPoint(x: 900, y: 45)))
     }
 
+    /// Real macOS (throw-rapid E2E): a second press during a throw used to vanish silently. Both calls
+    /// are queued on the coordinator queue before the first throw's completion can run, so the second
+    /// always sees `throwInFlight`.
+    @Test func throwPressedWhileAnotherIsInFlightIsQueuedNotLost() {
+        let (h, a, _, _) = setup()
+        h.c.throwFocusedWindow(toSpace: 2)
+        h.c.throwFocusedWindow(toSpace: 3)
+        // Let the animation of the first throw "finish" while the queued one waits to run.
+        for _ in 0..<100 where h.desk.space(of: a) != h.s3 {
+            h.desk.clock.advance(by: 1)
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        h.settle()
+        #expect(h.desk.space(of: a) == h.s3)
+        #expect(h.recorder.notices.isEmpty)
+    }
+
     @Test func throwDuringTransitionIsRetriedAfterSettling() {
         let (h, a, _, _) = setup()
         h.send(.activeSpaceChanged) // a transition just started

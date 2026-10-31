@@ -70,6 +70,15 @@ extension Coordinator {
         return .tiled
     }
 
+    /// The state the engine sees. A window the USER floated with ⌥⇧F is reported `.hidden`, which the
+    /// engine treats as a ghost: the tree closes over it but remembers its slot (sibling, orientation,
+    /// ratio), so toggling back restores the same position instead of dwindle-inserting it (which swapped
+    /// it with its sibling, verified by the toggle-float E2E). The coordinator keeps `.floating` in
+    /// `lastStates`; automatic floats (small, rules, fights) stay `.floating`, i.e. no slot is kept.
+    func engineState(id: UInt64, state: Engine.TileState, platform: WindowState) -> Engine.TileState {
+        state == .floating && floatOverride[id] == true && platform == .tiled ? .hidden : state
+    }
+
     func forgetToggleState(_ id: UInt64) {
         floatOverride[id] = nil
         firstSeenFrame[id] = nil

@@ -26,8 +26,7 @@ extension Catalog {
         let f = try ctx.launchFixture(2)
         let r = try (0..<2).map(f.ref)
         try ctx.expectOracle(r, "2 windows on Space 1")
-        try f.command("focus 1")
-        pump(0.3)
+        try f.focusAndWait(1)
         let ev = try ctx.throwAndWait(n: 2, post: post)
         guard ev.string("result") == "moved" else {
             throw HarnessError("throw reported result=\(ev.string("result") ?? "nil"); expected moved", details: [ev.raw])
@@ -36,8 +35,12 @@ extension Catalog {
             throw HarnessError("the active Space did not become Space 2 (id \(spaces[1]))")
         }
         let one = ctx.oracle(1).map { [$0[0], $0[0]] }
-        try ctx.expect(r, variants: one, "both windows fill their Space (0 on Space 1, 1 on Space 2)")
+        // Real macOS: AX cannot resize a window on a hidden Space (verified: the source Space's relayout
+        // is applied but has no effect), so window 0 only grows once Space 1 is shown again. That is the
+        // user-visible contract: check both windows after returning.
         guard Keys.switchToSpace(1) else { throw HarnessError("⌥1 did not return to Space 1") }
+        Spaces.waitSettled()
+        try ctx.expect(r, variants: one, "both windows fill their Space (0 on Space 1, 1 on Space 2)")
     }
 
     static let missingSpaceNotice = Scenario(name: "missing-space-notice",
@@ -170,8 +173,7 @@ extension Catalog {
         let f = try ctx.launchFixture(2)
         let r = try (0..<2).map(f.ref)
         try ctx.expectOracle(r, "2 windows on Space 1")
-        try f.command("focus 1")
-        pump(0.3)
+        try f.focusAndWait(1)
         Spaces.waitSettled()
         let cursorBefore = Keys.cursor
         let c = log.cursor
