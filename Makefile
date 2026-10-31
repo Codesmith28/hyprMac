@@ -63,6 +63,7 @@ test-asan:                                     ## run core tests under ASan/UBSa
 
 include mk/swift.mk
 include mk/install.mk
+include mk/bench.mk
 
 .PHONY: build test clean help
 build: core app                                ## build everything (core + hyprMac.app)
