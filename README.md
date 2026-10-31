@@ -6,6 +6,8 @@ Windows tile as you open them. hyprMac works with the Desktops you already have 
 
 The layout engine is C++20 behind a C API, the macOS layer is Swift, and the config is sandboxed Lua.
 
+![hyprMac tiling new windows across native Spaces](demo/demo.gif)
+
 ## Features
 - **Tiling.** A new window splits the focused tile along its longer side and takes the second half.
 - **Gaps.** 8 pt between tiles, 12 pt at the screen edges (menu bar and Dock excluded).
