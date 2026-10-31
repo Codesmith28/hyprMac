@@ -103,6 +103,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     /// Bumped by every state-changing step (for `testSettle`).
     private var activity = 0
     private var planCount = 0
+    /// Engine Space ids shown on some display as of the last reconcile.
+    private var activeSpaces: Set<UInt64> = []
 
     private let queueKey = DispatchSpecificKey<Bool>()
 
@@ -208,6 +210,9 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         switch event {
         case let .window(kind, _, window):
             switch kind {
+            case .destroyed:
+                if let window { purge(window) } // C7: a closed minimized/hidden window leaves no ghost
+                scheduleReconcile(after: tuning.debounce)
             case .moved, .resized:
                 guard let window else { return }
                 if dragging { return } // the user is moving it; settle on mouse-up
@@ -225,14 +230,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 scheduleReconcile(after: tuning.debounce)
             }
         case let .appTerminated(pid):
-            for id in idsByPid.removeValue(forKey: pid) ?? [] {
-                engine.forget(window: id)
-                identity.forget(engineID: id)
-                uncooperative.remove(id)
-                fights[id] = nil
-                lastTargets[id] = nil
-                lastStates[id] = nil
-            }
+            for id in idsByPid.removeValue(forKey: pid) ?? [] { forgetEngineWindow(id) }
             idByRef = idByRef.filter { $0.key.pid != pid }
             executor.forget(pid: pid)
             scheduleReconcile(after: tuning.debounce)
@@ -251,6 +249,23 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         case .appLaunched, .appHidden, .appShown, .appActivated, .observerRegistrationFailed:
             scheduleReconcile(after: tuning.debounce)
         }
+    }
+
+    /// Drops every trace of a window that is known to be destroyed (C4, C7).
+    private func purge(_ ref: HyprPlatform.WindowRef) {
+        executor.forget(ref)
+        guard let id = idByRef.removeValue(forKey: ref) else { return }
+        idsByPid[ref.pid]?.remove(id)
+        forgetEngineWindow(id)
+    }
+
+    private func forgetEngineWindow(_ id: UInt64) {
+        engine.forget(window: id)
+        identity.forget(engineID: id)
+        uncooperative.remove(id)
+        fights[id] = nil
+        lastTargets[id] = nil
+        lastStates[id] = nil
     }
 
     private func noteFight(_ window: HyprPlatform.WindowRef) {
@@ -299,8 +314,18 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         guard !userPaused, !stageManagerPaused, !dragging, !throwInFlight else { return }
         activity += 1
 
-        for display in deps.displays.displays() {
-            guard let snap = discovery.snapshot(display: display.id) else { continue }
+        // C3: with "Displays have separate Spaces" off, every display reports the same Space id.
+        // The engine keys trees by Space id, so give each display its own synthetic id then.
+        let displays = deps.displays.displays()
+        var activeCount: [UInt64: Int] = [:]
+        for d in displays { activeCount[deps.spaces.activeSpace(display: d.id), default: 0] += 1 }
+        activeSpaces.removeAll()
+        for display in displays {
+            guard var snap = discovery.snapshot(display: display.id) else { continue }
+            if activeCount[snap.space, default: 0] > 1 {
+                snap.space = Self.perDisplaySpaceID(space: snap.space, display: display.id)
+            }
+            activeSpaces.insert(snap.space)
             var entries: [Engine.WindowEntry] = []
             entries.reserveCapacity(snap.windows.count)
             var seen = Set<UInt64>()
@@ -376,12 +401,16 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             switch event {
             case let .minSizeDiscovered(ref, size):
                 guard let id = idByRef[ref] else { return }
-                try? engine.reportMinSize(window: id, size: size)
-                if let space = engine.space(of: id), let plan = try? engine.relayout(space: space) {
+                // C2: an unchanged (e.g. unsatisfiable) minimum yields the same plan; re-applying
+                // it would loop write → read-back → report forever.
+                guard (try? engine.reportMinSizeChanged(window: id, size: size)) == true else { return }
+                // C6: only re-plan a visible Space; others pick the minimum up on their next reconcile.
+                if let space = engine.space(of: id), activeSpaces.contains(space),
+                   let plan = try? engine.relayout(space: space) {
                     apply(plan)
                 }
             case let .windowGone(ref):
-                executor.forget(ref)
+                purge(ref) // C7
                 scheduleReconcile(after: tuning.debounce)
             case let .mismatch(ref, _, _):
                 // The app put itself somewhere else (snapped back, clamped). Count it as a fight
@@ -541,6 +570,15 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     }
 
     /// The engine rejects non-finite rects; AX occasionally reports garbage for closing windows.
+    /// Synthetic Space id for one display when several displays share a native Space id.
+    /// The top two bits are set, so it collides neither with native ids nor with
+    /// `SyntheticSpaces` (top bit only). Deterministic.
+    static func perDisplaySpaceID(space: UInt64, display: UInt32) -> UInt64 {
+        var x = space &* 0x9E37_79B9_7F4A_7C15 ^ (UInt64(display) &* 0xBF58_476D_1CE4_E5B9)
+        x ^= x >> 31
+        return 0xC000_0000_0000_0000 | (x & 0x3FFF_FFFF_FFFF_FFFF)
+    }
+
     static func sanitized(_ r: CGRect) -> CGRect {
         let vals = [r.origin.x, r.origin.y, r.width, r.height]
         return vals.allSatisfy({ $0.isFinite }) ? r : .zero
@@ -567,6 +605,10 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     func testTiledCount(space: UInt64) -> Int { queue.sync { engine.tiledCount(space: space) } }
     func testSpaceOf(_ id: UInt64) -> UInt64? { queue.sync { engine.space(of: id) } }
     func testPlanCount() -> Int { queue.sync { planCount } }
+    func testTrackedStateCount() -> (states: Int, targets: Int, ids: Int) {
+        queue.sync { (lastStates.count, lastTargets.count, idByRef.count) }
+    }
+    func testActiveSpaces() -> Set<UInt64> { queue.sync { activeSpaces } }
     func testDump(space: UInt64) -> String { queue.sync { engine.debugDump(space: space) } }
     func testWaitForExecutor() -> Bool { executor.waitUntilIdle(timeout: 5) }
 
