@@ -47,6 +47,21 @@ final class ReentrantDelegate: TilingControllerDelegate, @unchecked Sendable {
         #expect(!paused)
     }
 
+    /// Live review: isPaused/start/stop must not wait for a coordinator queue stuck in slow AX.
+    @Test func isPausedStartStopNeverWaitForBusyQueue() {
+        let h = Harness(); h.start()
+        h.c.setPaused(true, reason: nil); h.settle()
+        let release = DispatchSemaphore(value: 0)
+        h.c.queue.async { release.wait() } // simulate a reconcile stuck on a hung app
+        let t0 = Date()
+        #expect(h.c.isPaused)
+        h.c.stop()
+        h.c.start()
+        #expect(Date().timeIntervalSince(t0) < 0.1)
+        release.signal()
+        h.settle()
+    }
+
     @Test func stageManagerPausesAndResumes() {
         let h = Harness(); h.start()
         let a = h.open(1)
