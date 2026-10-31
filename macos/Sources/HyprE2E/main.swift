@@ -55,7 +55,11 @@ if !Spaces.available {
 }
 
 if Session.stageManagerEnabled {
-    print("# warning: Stage Manager is on; it regroups windows and can refuse minimize. Turn it off for reliable results.")
+    if options.skipStageManagerCheck {
+        print("# warning: Stage Manager is on (check skipped); hyprMac is expected to pause and the run to bail out")
+    } else {
+        preflightError("Stage Manager is on, so hyprMac pauses tiling: run make install first or turn off Stage Manager")
+    }
 }
 let wms = Session.otherWindowManagers()
 if !wms.isEmpty {

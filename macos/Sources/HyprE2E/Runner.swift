@@ -189,6 +189,12 @@ enum Runner {
             do {
                 try s.body(ctx)
                 outcome = .pass
+            } catch let e as PreflightAbort {
+                ctx.cleanup()
+                print("not ok \(n) - \(s.name)")
+                print("Bail out! preflight: \(e.description)")
+                print("#   logs: \(dir.path)")
+                return 2
             } catch let e as SkipScenario {
                 outcome = .skip(e.reason)
             } catch let e as HarnessError {

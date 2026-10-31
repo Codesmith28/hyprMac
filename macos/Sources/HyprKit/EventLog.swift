@@ -9,7 +9,11 @@ public final class EventLog {
 
     public func open(path: String) {
         lock.lock(); defer { lock.unlock() }
-        FileManager.default.createFile(atPath: path, contents: nil)
+        // Append, never truncate: the harness may pre-create the file or keep
+        // one log across restarts.
+        if !FileManager.default.fileExists(atPath: path) {
+            FileManager.default.createFile(atPath: path, contents: nil)
+        }
         handle = FileHandle(forWritingAtPath: path)
         handle?.seekToEndOfFile()
     }
