@@ -64,6 +64,14 @@ Hyprland-style BSP tiler for macOS on **native** Spaces:
 - **Known gap:** re-tiling with ⌥⇧F inserts at the most recently inserted leaf, not exactly at the focused leaf. Fixing it needs an engine/C API change.
 - **Real system:** hyprMac is installed (the first `make install` was done). The new build still has to be reinstalled (upgrade), then Accessibility granted, then the supervised e2e pass run, then `make uninstall`.
 
+### Real E2E run 1 → fixes (branch `fix/e2e-run1`, 2026-10-31; full run: 32 passed, 1 failed, 1 skipped)
+- **Minimized windows report subrole `AXDialog`** on real macOS. Eligibility excluded them, so the engine forgot their slot (no ghost) and unminimize dwindle-inserted them swapped with their sibling. Fixed in `WindowEligibility`.
+- **Entering fullscreen:** the window leaves AX's list and has no Space for a moment. `Coordinator+Fullscreen.swift` keeps such a window as a ghost (2 s grace, then forgotten).
+- **⌥⇧F floats keep their slot:** reported to the engine as `.hidden` (ghost) instead of `.floating`.
+- **A throw pressed mid-throw is queued** (`pendingThrow`), not dropped. `missing_space` is also logged on throw `noSuchSpace`.
+- **Harness:** `rules.ignore` = all running regular apps; `focusAndWait` checks the system-wide AX focus before posting keys; min-size-unsatisfiable asserts convergence; throw scenarios check the source Space after returning (AX can't resize a window on a hidden Space).
+- **Open:** `hung-app-isolation` is timing-flaky (SIGHUP→config_loaded 540 ms vs 500 ms limit, or A0 mismatch after recovery). It also fails on unmodified main, so it is not a regression.
+
 ### Next steps
 1. Merge the 3 feature branches (float-small, then min-size, then toggle), running `make test` after each. Then `make install` again (an upgrade: only the bundle is replaced).
 2. **Real run:** install is done (preflight and dry run were clean). Next are `make install`, a short e2e subset, a manual ⌥⇧2 on Ghostty, then `make uninstall` (it must print "rollback verified") and `make verify-rollback`.
