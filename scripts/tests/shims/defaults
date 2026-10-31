@@ -39,6 +39,21 @@ elif verb == "write":
     dom, key = rest[0], rest[1]
     if dom in os.environ.get("FAKE_DEFAULTS_IGNORE_WRITE", "").split():
         sys.exit(0)  # simulate a write that silently does not stick
+    def parse_value(raw):
+        if raw.lstrip().startswith("<"):
+            return plistlib.loads(('<?xml version="1.0" encoding="UTF-8"?><plist version="1.0">'
+                                   + raw + '</plist>').encode())
+        return raw
+    if len(rest) >= 3 and rest[2] == "-dict-add":
+        # Like the real tool: merge key/value pairs into a (new) dictionary.
+        d = load(dom) or {}
+        cur = d.get(key) if isinstance(d.get(key), dict) else {}
+        pairs = rest[3:]
+        if len(pairs) % 2: die("-dict-add needs key/value pairs")
+        for k, v in zip(pairs[0::2], pairs[1::2]): cur[k] = parse_value(v)
+        d[key] = cur
+        save(dom, d)
+        sys.exit(0)
     if len(rest) == 3: val = rest[2]
     else:
         t, raw = rest[2], rest[3]
@@ -67,6 +82,10 @@ elif verb == "import":
     src = sys.stdin.buffer.read() if rest[1] == "-" else open(rest[1], "rb").read()
     d = plistlib.loads(src)
     if not isinstance(d, dict): die("not a dictionary")
-    save(rest[0], d)
+    # Like the real tool: top-level keys are MERGED (absent keys survive),
+    # each imported value replaces the old one wholesale.
+    cur = load(rest[0]) or {}
+    cur.update(d)
+    save(rest[0], cur)
 else:
     die("fake defaults: unsupported verb " + verb)

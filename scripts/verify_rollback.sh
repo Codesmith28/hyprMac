@@ -22,17 +22,16 @@ trap cleanup_tmp EXIT
 
 before="${1:-}"
 after="${2:-}"
+from_verify_dir=0
 if [ -z "$before" ]; then
     if [ -f "$BEFORE_SNAPSHOT" ]; then
         before="$BEFORE_SNAPSHOT"
         info "hyprMac is still installed; comparing the live state with the pre-install snapshot"
-    elif [ -f "$VERIFY_DIR/before.snapshot" ]; then
-        before="$VERIFY_DIR/before.snapshot"
-        if [ -z "$after" ] && [ -f "$VERIFY_DIR/after.snapshot" ]; then
-            after="$VERIFY_DIR/after.snapshot"
-        fi
+    elif [ -f "$VERIFY_DIR/state/before.snapshot" ]; then
+        before="$VERIFY_DIR/state/before.snapshot"
+        from_verify_dir=1
     else
-        die "no pre-install snapshot found (looked in $(tilde "$STATE_DIR") and $VERIFY_DIR)"
+        die "no pre-install snapshot found (looked in $(tilde "$STATE_DIR") and $(tilde "$VERIFY_DIR"))"
     fi
 fi
 if [ -z "$after" ]; then
@@ -44,3 +43,7 @@ fi
 info "before: $before"
 info "after:  $after"
 verify_snapshots "$before" "$after"
+if [ "$from_verify_dir" = 1 ]; then
+    rm -rf "$VERIFY_DIR"
+    ok "the earlier failed uninstall now verifies; removed $(tilde "$VERIFY_DIR")"
+fi

@@ -51,5 +51,8 @@ on_exit() {
     fi
 }
 trap on_exit EXIT
+trap on_interrupt INT TERM HUP
 
-do_uninstall
+rc=0
+do_uninstall || rc=$?
+exit "$rc"

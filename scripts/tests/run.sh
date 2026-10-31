@@ -47,7 +47,7 @@ setup_sandbox() { # name
     mkdir -p "$S/home" "$S/bin" "$S/state" "$S/tmp" "$S/src"
     cp "$HERE"/shims/* "$S/bin/"
     : >"$S/state/calls.log"
-    export HOME="$S/home" TMPDIR="$S/tmp/" HYPR_SANDBOX=1 FAKE_STATE="$S/state" FAKE_ROOT="$S"
+    export HOME="$S/home" TMPDIR="$S/tmp/" HYPR_SANDBOX=1 FAKE_STATE="$S/state" FAKE_ROOT="$S" HYPR_SANDBOX_ROOT="$S"
     export UID_VAL=501 NO_COLOR=1
     export DEFAULTS="$S/bin/defaults" PLUTIL="$S/bin/plutil" LAUNCHCTL="$S/bin/launchctl"
     export TCCUTIL="$S/bin/tccutil" LSREGISTER="$S/bin/lsregister" ACTIVATE_SETTINGS="$S/bin/activateSettings"
@@ -262,9 +262,8 @@ t_clean_roundtrip() {
     check "killall usernoted" grep -q "^killall usernoted" "$FAKE_STATE/calls.log"
     check "tcc reset again" grep -q "^tccutil reset Accessibility $BID" "$FAKE_STATE/calls.log"
     check "state dir gone" test ! -e "$HOME/Library/Application Support/hyprMac"
-    check "after.snapshot kept" test -s "$S/tmp/hyprmac-verify-501/after.snapshot"
-    check "snapshots identical" cmp -s "$S/tmp/hyprmac-verify-501/before.snapshot" "$S/tmp/hyprmac-verify-501/after.snapshot"
-    check "no temp dirs left" test -z "$(/bin/ls "$S/tmp" | grep -v '^hyprmac-verify-501$')"
+    check "verify dir removed after success" test ! -e "$HOME/Library/Application Support/hyprMac-verify"
+    check "no temp dirs left" test -z "$(/bin/ls "$S/tmp")"
     same_fp "clean roundtrip" "$fp"
 }
 
@@ -305,7 +304,7 @@ t_hotkey_preexisting() {
     eq "125 untouched" "$custom" "$(pref com.apple.symbolichotkeys AppleSymbolicHotKeys.125)"
     eq "126 added" '{"enabled":true,"value":{"parameters":[57,25,524288],"type":"standard"}}' \
         "$(pref com.apple.symbolichotkeys AppleSymbolicHotKeys.126)"
-    check "manifest says untouched" grep -qx "hotkey 125 untouched" "$HOME/$STATE_DIR_REL/manifest"
+    check "manifest says untouched" grep -qx "hotkey 125 untouched ;" "$HOME/$STATE_DIR_REL/manifest"
     uninst; expect_rc "uninstall" 0
     eq "125 still custom" "$custom" "$(pref com.apple.symbolichotkeys AppleSymbolicHotKeys.125)"
     eq "126 removed" absent "$(pref com.apple.symbolichotkeys AppleSymbolicHotKeys.126)"
@@ -353,7 +352,7 @@ t_failure_at_each_step() {
         check "[$s] no state dir left" test ! -e "$HOME/Library/Application Support/hyprMac"
         same_fp "failure at $s" "$fp"
     done
-    for s in "launchctl bootstrap" "lsregister -f" "defaults import com.apple.symbolichotkeys" \
+    for s in "launchctl bootstrap" "lsregister -f" "defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add" \
              "defaults write com.apple.WindowManager GloballyEnabled -bool false" "tccutil reset" "plutil -lint"; do
         setup_sandbox "fail-shim-$(printf '%s' "$s" | tr ' .' '__')"
         fp="$S/fp.before"
@@ -488,23 +487,22 @@ t_sandbox_guard() {
 
 t_verify_detects_divergence() {
     inst; expect_rc "install" 0
-    uninst; expect_rc "uninstall" 0
     OUT="$("$SCRIPTS/verify_rollback.sh" 2>&1)"; RC=$?
-    expect_rc "verify on clean state" 0
-    mkdir -p "$HOME/Library/Caches/$BID"
-    rm "$S/tmp/hyprmac-verify-501/after.snapshot"
-    OUT="$("$SCRIPTS/verify_rollback.sh" 2>&1)"; RC=$?
-    expect_rc "verify with stray residue (fresh capture)" 1
-    contains "diff printed" "$OUT" "+path ~/Library/Caches/$BID dir"
-    contains "fresh capture used" "$OUT" "capturing a fresh snapshot"
-    OUT="$("$SCRIPTS/verify_rollback.sh" "$S/tmp/hyprmac-verify-501/before.snapshot" "$S/tmp/hyprmac-verify-501/before.snapshot" 2>&1)"; RC=$?
-    expect_rc "explicit identical files" 0
-    # A divergence right after uninstall makes uninstall itself fail.
-    rm -rf "$HOME/Library/Caches/$BID"
-    inst; expect_rc "reinstall" 0
-    printf 'x' >"$HOME/Library/Application Support/hyprMac/install/../user-data"
+    expect_rc "verify while installed reports differences" 1
+    contains "diff printed" "$OUT" "+hotkey 125 {"
+    # Leftover user data in the support dir makes uninstall fail verification;
+    # everything is kept and install refuses until verify-rollback passes.
+    printf 'x' >"$HOME/Library/Application Support/hyprMac/user-data"
     uninst; expect_rc "uninstall with leftover user data in support dir" 1
     contains "uninstall reports divergence" "$OUT" "rollback verification FAILED"
+    check "state kept for inspection" test -f "$HOME/Library/Application Support/hyprMac-verify/state/manifest"
+    inst; expect_rc "install refuses after a failed verification" 1
+    contains "explains" "$OUT" "did not verify"
+    rm "$HOME/Library/Application Support/hyprMac/user-data"
+    rmdir "$HOME/Library/Application Support/hyprMac"
+    OUT="$("$SCRIPTS/verify_rollback.sh" 2>&1)"; RC=$?
+    expect_rc "verify passes after the fix" 0
+    check "verify dir cleaned" test ! -e "$HOME/Library/Application Support/hyprMac-verify"
 }
 
 t_preexisting_residue_and_app() {
@@ -563,7 +561,7 @@ t_quit_paths() {
     printf manual >"$FAKE_STATE/running"
     : >"$FAKE_STATE/calls.log"
     uninst; expect_rc "uninstall (manual)" 0
-    check "pkill -TERM used" grep -q "^pkill -TERM -x hyprMac" "$FAKE_STATE/calls.log"
+    check "pkill -TERM used" grep -q "^pkill -TERM -f " "$FAKE_STATE/calls.log"
     check "no SIGKILL" test -z "$(grep -E '^pkill -KILL' "$FAKE_STATE/calls.log")"
     check "stopped" test ! -e "$FAKE_STATE/running"
 
@@ -579,7 +577,7 @@ t_quit_paths() {
     uninst; expect_rc "uninstall (stubborn)" 0
     t1="$(date +%s)"
     contains "warns before SIGKILL" "$OUT" "did not exit within 3 s; sending SIGKILL"
-    check "pkill -KILL used" grep -q "^pkill -KILL -x hyprMac" "$FAKE_STATE/calls.log"
+    check "pkill -KILL used" grep -q "^pkill -KILL -f " "$FAKE_STATE/calls.log"
     check "waited about 3 s" test $((t1 - t0)) -ge 3
     rm -f "$FAKE_STATE/ignore-term"
     same_fp "stubborn app roundtrip" "$fp"
@@ -706,6 +704,103 @@ t_preflight() {
     contains "recorded hotkey" "$OUT" "hotkey 126: was absent → removed on uninstall"
 }
 
+MANIFEST_PATH() { printf '%s' "$HOME/$STATE_DIR_REL/manifest"; }
+
+t_c1_manifest_paths_not_trusted() {
+    inst; expect_rc "install" 0
+    echo precious >"$HOME/Library/precious.txt"
+    local fp="$S/fp.tampered"
+    printf 'backup residue9 %s ;\n' "$HOME/Library" >>"$(MANIFEST_PATH)"
+    sys_fp >"$fp"
+    uninst; expect_rc "uninstall refuses a non-allowlisted path" 1
+    contains "explains" "$OUT" "not a recognised action"
+    same_fp "nothing touched" "$fp"
+    # A torn (unterminated) line is refused too.
+    /usr/bin/sed -i '' '$d' "$(MANIFEST_PATH)"
+    printf 'agent_plist_cre' >>"$(MANIFEST_PATH)"
+    uninst; expect_rc "uninstall refuses a torn line" 1
+    contains "torn" "$OUT" "incomplete (torn write?)"
+    check "~/Library intact" test -f "$HOME/Library/precious.txt"
+    check "state kept" test -d "$HOME/$STATE_DIR_REL/backups"
+}
+
+t_h1_failed_undo_keeps_state() {
+    set_pref "$BID" Old '"user value"'
+    local fp="$S/fp.before"
+    sys_fp >"$fp"
+    inst; expect_rc "install" 0
+    FAKE_FAIL="defaults import $BID" uninst
+    expect_rc "uninstall with a failing prefs restore" 1
+    check "manifest kept" test -f "$(MANIFEST_PATH)"
+    check "prefs backup kept" test -f "$HOME/$STATE_DIR_REL/backups/prefs.plist"
+    eq "user prefs not lost" '"user value"' "$(pref "$BID" Old)"
+    inst; expect_rc "install refuses while an uninstall is unfinished" 1
+    uninst; expect_rc "retry" 0
+    contains "resumes" "$OUT" "resuming an earlier uninstall"
+    eq "prefs restored exactly" '"user value"' "$(pref "$BID" Old)"
+    eq "app-added key gone" absent "$(pref "$BID" LaunchCount)"
+    same_fp "after retry" "$fp"
+}
+
+t_h2_interrupted_uninstall_resumes() {
+    mkdir -p "$HOME/Applications/hyprMac.app/Contents" && echo "user's own build" >"$HOME/Applications/hyprMac.app/Contents/marker"
+    local fp="$S/fp.before"
+    sys_fp >"$fp"
+    inst; expect_rc "install" 0
+    mkdir -p "$S/pathbin"
+    cat >"$S/pathbin/mv" <<'MV'
+#!/bin/bash
+/bin/mv "$@"; rc=$?
+for last in "$@"; do :; done
+if [ -n "${KILL_AFTER_MV_TO:-}" ] && [ "$last" = "$KILL_AFTER_MV_TO" ]; then kill -TERM "$PPID"; fi
+exit $rc
+MV
+    chmod +x "$S/pathbin/mv"
+    PATH="$S/pathbin:$PATH" KILL_AFTER_MV_TO="$HOME/Applications/hyprMac.app" uninst
+    expect_rc "interrupted uninstall" 130
+    contains "says how to continue" "$OUT" "re-run 'make uninstall'"
+    check "journal written" test -s "$HOME/$STATE_DIR_REL/undone"
+    uninst; expect_rc "re-run" 0
+    eq "user app survives the re-run" "user's own build" "$(cat "$HOME/Applications/hyprMac.app/Contents/marker" 2>/dev/null)"
+    same_fp "after resume" "$fp"
+}
+
+t_m4_dict_add_and_merge_import() {
+    # Domain exists, AppleSymbolicHotKeys absent; the shim merges on import
+    # like the real tool, so top-level removals must use defaults delete.
+    set_pref com.apple.symbolichotkeys AppleSymbolicHotKeys null
+    set_pref com.apple.symbolichotkeys Other '1'
+    roundtrip "merge-import hotkeys"
+    check "added with -dict-add" grep -q "^defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 125 " "$FAKE_STATE/calls.log"
+    check "dict removed with defaults delete" grep -q "^defaults delete com.apple.symbolichotkeys AppleSymbolicHotKeys" "$FAKE_STATE/calls.log"
+    eq "no empty dict left" absent "$(pref com.apple.symbolichotkeys AppleSymbolicHotKeys)"
+    # Domain absent before install: removed again.
+    setup_sandbox "m4-no-domain"
+    rm -f "$HOME/Library/Preferences/com.apple.symbolichotkeys.plist"
+    roundtrip "no hotkeys domain"
+    check "domain removed" test ! -e "$HOME/Library/Preferences/com.apple.symbolichotkeys.plist"
+}
+
+t_m9_unverified_exit_3() {
+    inst; expect_rc "install" 0
+    check "snapshot written" test -s "$HOME/$STATE_DIR_REL/before.snapshot"
+    rm -f "$HOME/$STATE_DIR_REL/before.snapshot"
+    uninst; expect_rc "uninstall without a snapshot" 3
+    contains "says UNVERIFIED" "$OUT" "UNVERIFIED"
+    not_contains "no false success" "$OUT" "hyprMac uninstalled"
+}
+
+t_m8_refuse_root_and_bad_home() {
+    UID_VAL=0 inst --dry-run; expect_rc "UID 0" 1
+    contains "root" "$OUT" "do not run hyprMac's installer as root"
+    HOME="" inst --dry-run; expect_rc "empty HOME" 1
+    contains "empty" "$OUT" "HOME is empty"
+    HOME=/ inst --dry-run; expect_rc "HOME=/" 1
+    contains "slash" "$OUT" "HOME=/"
+    HOME="$S/nope" uninst; expect_rc "missing HOME" 1
+    contains "missing" "$OUT" "HOME does not exist"
+}
+
 # ------------------------------------------------------------------ runner --
 tap() { # name function
     case "$1" in *"$FILTER"*) ;; *) return 0 ;; esac
@@ -754,6 +849,12 @@ tap "20 Stage Manager read-back, visibility note, no WindowManager restart" t_st
 tap "21 logs and crash reports: new ones removed, pre-existing restored" t_crash_reports
 tap "22 make install/uninstall DRY_RUN=1 pass --dry-run; make preflight" t_make_dry_run
 tap "23 --preflight is read-only and reports the planned changes" t_preflight
+tap "24 C1 manifest paths are allowlisted; tampered/torn manifests are refused" t_c1_manifest_paths_not_trusted
+tap "25 H1 a failed undo keeps manifest, journal and backups; retry finishes" t_h1_failed_undo_keeps_state
+tap "26 H2 interrupted uninstall is journaled and resumes safely" t_h2_interrupted_uninstall_resumes
+tap "27 M4 -dict-add / defaults delete with merging import" t_m4_dict_add_and_merge_import
+tap "28 M9 no snapshot means exit 3 UNVERIFIED" t_m9_unverified_exit_3
+tap "29 M8 refuses root, empty HOME, HOME=/, missing HOME" t_m8_refuse_root_and_bad_home
 echo "1..$N"
 if [ "$FAILED" -gt 0 ]; then
     echo "# FAILED $FAILED of $N:$FAILED_NAMES"
