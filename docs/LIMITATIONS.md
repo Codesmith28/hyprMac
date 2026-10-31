@@ -15,7 +15,7 @@ The window travels with the "drag" and stays focused on the new Desktop. It work
 
 | Result | When | What you see |
 |---|---|---|
-| `noGrabPoint` | The window has no titlebar area that is safe to grab: custom-drawn chrome, a full-width toolbar, or no titlebar at all | Notification: "This window has no titlebar area to grab." |
+| `noGrabPoint` | The window has no titlebar area that is safe to grab: the titlebar is entirely tabs (as in terminals that put their tabs in the titlebar), a unified toolbar whose candidates all land on the title or toolbar items, custom-drawn chrome, or no titlebar at all | Notification: "This window has no titlebar area to grab." Nothing is clicked and nothing moves |
 | `timedOut` | The Space didn't change within 1 s, usually because ⌥N is not bound to "Switch to Desktop N" | Notification asking whether ⌥N is bound |
 | `noSuchSpace` | Desktop N doesn't exist on that display | "Desktop N doesn't exist" notification |
 | `refusedFullscreen` | The window is fullscreen (it already has its own Space) | Notification |
@@ -27,6 +27,8 @@ The window travels with the "drag" and stays focused on the new Desktop. It work
 **One throw at a time.** A ⌥⇧N pressed while a throw is in progress is ignored.
 
 **Spaces themselves are fixed.** hyprMac can't create or delete Spaces; use Mission Control for that.
+
+**Tabs and toolbars are never pressed.** A mouse-down on a tab would drag the tab out into a new window, and one on a button would press it. So when every candidate point lands on a tab, a button, a toolbar or the title text, hyprMac refuses with `noGrabPoint` instead of guessing. Native AppKit tab bars sit *below* the titlebar and leave it grabbable. Apps that draw their tabs *in* the titlebar can't be thrown; move those windows with Mission Control.
 
 ## Private SkyLight symbols (read-only)
 To know which Space is active, how many Desktops exist and which Space a window is on, hyprMac resolves a few private SkyLight functions at runtime with `dlsym`:
@@ -45,7 +47,7 @@ They are only ever used to **read**. hyprMac never calls a private function that
 ## Stage Manager is incompatible
 Stage Manager groups, shrinks and moves windows on its own, which conflicts with tiling. Whenever hyprMac sees `com.apple.WindowManager GloballyEnabled` is on, it **pauses** and shows "Tiling paused: Stage Manager is on". It checks again on every window event and Space change, and resumes by itself once Stage Manager is off.
 
-`make install` writes `GloballyEnabled = false` and `make uninstall` restores the previous value. If Control Center still shows Stage Manager on after installing, switch it off there.
+`make install` writes `GloballyEnabled = false`, reads it back and records the old value, and `make uninstall` restores it. **macOS does not apply that write live.** Stage Manager stays visible, and hyprMac stays paused, until you toggle Stage Manager off once in Control Center or log out and back in. The install output ends with a note saying so. The same applies in reverse: if Stage Manager was on before install, uninstall restores the setting and tells you to toggle it on in Control Center (or log out) to see it again.
 
 ## "Displays have separate Spaces" is required
 With the setting on, which is the macOS default, every display has its own Spaces and hyprMac tiles each display from its own active Space. With it off, macOS reports a single shared set of Spaces for all displays. hyprMac then uses that shared set for every display, so per-display Space numbering and throws become unreliable.
@@ -64,7 +66,7 @@ Such windows are tiled, or float if they are borderless or non-resizable, instea
 Some apps clamp sizes, enforce a minimum size, or snap back to their own size after any resize.
 - **Minimum sizes.** When a window refuses to become smaller than its tile, hyprMac learns the minimum and lays the Space out again around it, giving the window more room where geometrically possible.
 - **Windows that fight.** A tiled window that changes its own frame away from its tile **3 times within 10 seconds** is treated as floating from then on, so hyprMac and the app don't loop forever. It is logged as `floated` with reason `fights`. Menu bar ▸ **Retile All Windows** forgets these decisions and tries again.
-- **Hung apps.** Accessibility calls to a hung app time out. Frames are written on one queue per app, so a hung app delays only its own windows.
+- **Unresponsive apps.** Every Accessibility request waits for the target app to answer. hyprMac caps that wait at about a quarter of a second per request and gives up on an app that doesn't answer (a "beach-balling" app) for that round. Its windows keep their tiles and it is retried shortly after; other apps' windows keep tiling and hyprMac itself stays responsive. Frames are written on one queue per app, so a hung app delays only its own windows. Each pass over a hung app still costs a fraction of a second, so tiling can feel slightly slower while an app is hung.
 
 ## Accessibility permission resets on reinstall
 hyprMac is **ad-hoc signed** (no Apple Developer ID). macOS ties the Accessibility grant to the exact code signature, and an ad-hoc signature changes with every build, so a rebuilt app no longer matches the old grant.
@@ -72,17 +74,20 @@ hyprMac is **ad-hoc signed** (no Apple Developer ID). macOS ties the Accessibili
 - **Upgrading** (running `make install` again over an existing install) replaces the app but does *not* reset the entry. If tiling doesn't start afterwards, remove hyprMac from the Accessibility list with "−", add it again, or toggle it off and on.
 - **Input Monitoring.** The ⌥N listener behind the "Desktop N doesn't exist" notice is a listen-only keyboard event tap, which needs Input Monitoring permission. Install doesn't ask for it. Without it, Space switching and throws still work; only the missing-Desktop notice is disabled. hyprMac logs "space key observer unavailable" in that case.
 
+## Hotkeys already taken by another app
+⌥⇧1–9 are registered with the Carbon hotkey API. macOS only rejects a duplicate registration **within the same app**: if another app, or a macOS keyboard shortcut, already uses ⌥⇧N, hyprMac's registration still "succeeds" and whichever app macOS picks gets the key. hyprMac therefore can't detect or report that clash. If a throw shortcut does nothing, look for another app or a System Settings shortcut using ⌥⇧1–9.
+
 ## What verify-rollback cannot see
 `make verify-rollback` and the check at the end of `make uninstall` compare fingerprints of everything install changes:
 - hotkeys 125/126 and the Stage Manager key;
 - hyprMac's notification settings entry;
 - whether the LaunchAgent is loaded;
-- the LaunchServices registration count;
+- the number of LaunchServices records for `~/Applications/hyprMac.app` (that exact path, so a registered build copy doesn't count);
 - the app bundle and LaunchAgent contents;
-- the config, state and residue paths.
+- the config, state and residue paths (preferences, caches, saved state, HTTP storage, `~/Library/Logs/hyprMac` and crash reports).
 
 Some system records are outside its reach:
 - **Background Task Management.** Adding the LaunchAgent makes macOS record a login item ("background item added", visible with `sfltool dumpbtm`). That database is not readable by a user script, so it isn't compared, and macOS may keep a stale entry after uninstall.
 - **Unified logs.** hyprMac logs under the subsystem `dev.codesmith28.hyprmac`, and macOS logs installs, launches and permission prompts. These entries stay until macOS rotates them out.
 - **The Accessibility (TCC) database.** It can't be read without Full Disk Access. Uninstall resets hyprMac's entry, but the snapshot can't confirm it.
-- **Live state versus stored state.** The snapshot compares preferences, not what the system is currently showing. For example, the hotkeys are re-applied with `activateSettings`, but if that tool is missing a logout is needed for the change to take effect.
+- **Live state versus stored state.** The snapshot compares preferences, not what the system is currently showing. For example, the hotkeys are re-applied with `activateSettings`, but if that tool is missing a logout is needed for the change to take effect. Likewise, Stage Manager's preference can match the snapshot while Control Center still shows the other state until you toggle it or log out.
