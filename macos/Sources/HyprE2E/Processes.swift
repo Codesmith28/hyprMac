@@ -33,6 +33,12 @@ struct HarnessError: Error, CustomStringConvertible {
 
 struct SkipScenario: Error { let reason: String }
 
+/// Abort the whole run with exit status 2 (environment cannot be tested).
+struct PreflightAbort: Error, CustomStringConvertible {
+    let description: String
+    init(_ d: String) { description = d }
+}
+
 // MARK: - fixture
 
 /// A running `hyprmac-fixture` driven over stdin/stdout.
@@ -237,26 +243,45 @@ final class HyprApp {
             pump(0.1)   // let its last stderr lines land
             throw HarnessError(why, details: outputTail())
         }
-        let c = 0
-        let got = log.waitFor(after: c, timeout: 5, abortIf: dead) {
+        // The app logs config_loaded/config_error and then, synchronously in
+        // the same start-up step, paused when it refuses to tile.
+        let got = log.waitFor(after: 0, timeout: 5, abortIf: dead) {
             ["config_loaded", "config_error", "paused"].contains($0.name)
         }
         guard let got else {
             throw HarnessError("hyprMac started but reported neither config_loaded nor config_error within 5 s"
                                + " (is --config implemented?)", details: log.tail())
         }
+        let paused = got.name == "paused" ? got
+            : log.waitFor(after: got.seq + 1, timeout: HyprApp.pauseGrace, abortIf: dead, { $0.name == "paused" })
+        if let paused { throw HyprApp.pausedAtStartup(paused.string("reason") ?? "?") }
         switch got.name {
         case "config_error":
             throw HarnessError("hyprMac rejected the harness config: \(got.string("message") ?? "?")")
-        case "paused":
-            throw HarnessError("hyprMac paused at startup: \(got.string("reason") ?? "?")"
-                               + " (does the terminal's Accessibility grant reach it?)")
         default:
             let inner = got.double("inner"), outer = got.double("outer")
             if inner != gaps.inner || outer != gaps.outer {
                 throw HarnessError("config_loaded reported inner \(inner.map(fmt) ?? "nil"), outer \(outer.map(fmt) ?? "nil");"
                                    + " expected \(gaps)")
             }
+        }
+    }
+
+    /// How long after the config result a startup `paused` still counts.
+    static let pauseGrace = 0.75
+
+    /// `paused` right after start means the run cannot work at all.
+    static func pausedAtStartup(_ reason: String) -> PreflightAbort {
+        switch reason {
+        case "stage_manager":
+            return PreflightAbort("hyprMac paused at startup because Stage Manager is on: "
+                                  + "run make install first or turn off Stage Manager, then re-run")
+        case "accessibility":
+            return PreflightAbort("hyprMac paused at startup: it is not Accessibility-trusted. "
+                                  + "Grant \(Session.terminalName) Accessibility (it passes to child processes), "
+                                  + "or run make install, then re-run")
+        default:
+            return PreflightAbort("hyprMac paused at startup (reason: \(reason)); it will not tile, so nothing can be tested")
         }
     }
 

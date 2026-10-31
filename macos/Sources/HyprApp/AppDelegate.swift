@@ -10,7 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
     private var statusItem: NSStatusItem!
     private var controller: TilingController?
     private let notifier = Notifier()
-    private var sighup: DispatchSourceSignal?
+    private var signalSources: [DispatchSourceSignal] = []
     private var permissionTimer: Timer?
     private var pauseItem: NSMenuItem!
 
@@ -24,12 +24,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
         if AXIsProcessTrusted() {
             startTiling()
         } else {
-            Onboarding.showAccessibilityPrompt()
+            EventLog.shared.emit("paused", ["reason": "accessibility"])
+            // Under the E2E harness (--event-log) a modal alert would block the
+            // run; the event above is the report.
+            if options.eventLogPath == nil { Onboarding.showAccessibilityPrompt() }
             waitForPermission()
         }
     }
 
-    func applicationWillTerminate(_ notification: Notification) { controller?.stop() }
+    func applicationWillTerminate(_ notification: Notification) {
+        controller?.stop()
+        EventLog.shared.emit("stopped")
+    }
 
     // MARK: - lifecycle
 
@@ -52,12 +58,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
         refreshMenu()
     }
 
+    /// SIGHUP reloads the config; SIGTERM/SIGINT quit cleanly (tiling stopped,
+    /// observers and hotkeys released) instead of dying mid-write.
     private func installSignalHandlers() {
-        signal(SIGHUP, SIG_IGN)
-        let src = DispatchSource.makeSignalSource(signal: SIGHUP, queue: .main)
-        src.setEventHandler { [weak self] in self?.controller?.reloadConfig() }
-        src.resume()
-        sighup = src
+        func on(_ sig: Int32, _ handler: @escaping () -> Void) {
+            signal(sig, SIG_IGN)
+            let src = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            src.setEventHandler(handler: handler)
+            src.resume()
+            signalSources.append(src)
+        }
+        on(SIGHUP) { [weak self] in self?.controller?.reloadConfig() }
+        on(SIGTERM) { NSApp.terminate(nil) }
+        on(SIGINT) { NSApp.terminate(nil) }
     }
 
     // MARK: - menu
@@ -114,9 +127,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
 
     // MARK: - TilingControllerDelegate
 
-    func tilingStateChanged(_ controller: TilingController) { refreshMenu() }
+    // The coordinator may call these synchronously from inside its own serial
+    // queue (start() runs queue.sync on main and its onMain runs inline there).
+    // Calling back into it (isPaused, stop()) from that stack is a re-entrant
+    // dispatch_sync and traps, so always handle them on the next main-loop turn.
+
+    func tilingStateChanged(_ controller: TilingController) {
+        DispatchQueue.main.async { [weak self] in self?.refreshMenu() }
+    }
 
     func tiling(_ controller: TilingController, didPost notice: TilingNotice) {
+        DispatchQueue.main.async { [weak self] in self?.handle(notice, from: controller) }
+    }
+
+    private func handle(_ notice: TilingNotice, from controller: TilingController) {
         switch notice {
         case let .missingSpace(n, count):
             notifier.post(title: "Desktop \(n) doesn't exist",
