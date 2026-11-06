@@ -39,7 +39,15 @@ extension Coordinator {
 
         _ = try? deps.ax.raise(targetRef)
         if let app = NSRunningApplication(processIdentifier: targetRef.pid) {
-            app.activate(options: .activateIgnoringOtherApps)
+            if #available(macOS 14.0, *) {
+                app.activate()
+            } else {
+                app.activate(options: .activateIgnoringOtherApps)
+            }
+        }
+        if let targetFrame = lastTargets[targetId] ?? (try? deps.ax.frame(of: targetRef)) {
+            let center = CGPoint(x: targetFrame.midX, y: targetFrame.midY)
+            deps.poster.post(.warpCursor(center))
         }
         EventLog.shared.emit("focus_direction", ["window": Int(targetRef.windowID), "direction": direction.rawValue])
     }
@@ -64,7 +72,11 @@ extension Coordinator {
         // Keep focus on the moved window
         _ = try? deps.ax.raise(window)
         if let app = NSRunningApplication(processIdentifier: window.pid) {
-            app.activate(options: .activateIgnoringOtherApps)
+            if #available(macOS 14.0, *) {
+                app.activate()
+            } else {
+                app.activate(options: .activateIgnoringOtherApps)
+            }
         }
         EventLog.shared.emit("move_direction", ["window": Int(window.windowID), "target": Int(targetId), "direction": direction.rawValue])
     }
@@ -88,12 +100,18 @@ extension Coordinator {
             if let frame {
                 firstSeenFrame[id] = frame
                 executor.place(window, frame: frame)
+                if let bundle = bundleID(for: window) {
+                    appStateStore.save(bundleID: bundle, state: SavedAppState(state: .floating, frame: frame))
+                }
             }
             EventLog.shared.emit("center_window", ["window": Int(window.windowID), "state": "floating"])
         case .floating:
             guard let frame = calculateCenteredFrame(for: window, id: id) else { return }
             firstSeenFrame[id] = frame
             executor.place(window, frame: frame)
+            if let bundle = bundleID(for: window) {
+                appStateStore.save(bundleID: bundle, state: SavedAppState(state: .floating, frame: frame))
+            }
             EventLog.shared.emit("center_window", ["window": Int(window.windowID), "state": "floating"])
         case .minimized, .fullscreen, .hidden:
             return

@@ -26,36 +26,44 @@ extension Coordinator {
         stateRestored.insert(id)
 
         guard let windowRef = ref ?? identity.ref(forEngineID: id),
-              let bundle = bundleID(for: windowRef),
-              let saved = appStateStore.savedState(for: bundle) else { return }
+              let bundle = bundleID(for: windowRef) else { return }
 
-        switch saved.state {
-        case .floating:
-            floatOverride[id] = true
-            if let savedFrame = saved.frame, savedFrame.width > 0, savedFrame.height > 0 {
-                firstSeenFrame[id] = savedFrame
-                executor.place(windowRef, frame: savedFrame)
+        if let saved = appStateStore.savedState(for: bundle) {
+            switch saved.state {
+            case .floating:
+                floatOverride[id] = true
+                if let savedFrame = saved.frame, savedFrame.width > 0, savedFrame.height > 0 {
+                    firstSeenFrame[id] = savedFrame
+                    executor.place(windowRef, frame: savedFrame)
+                }
+            case .tiled:
+                floatOverride[id] = false
+                if let savedFrame = saved.frame, savedFrame.width > 0, savedFrame.height > 0 {
+                    firstSeenFrame[id] = savedFrame
+                }
+            case .fullscreen:
+                break
             }
-        case .tiled:
-            floatOverride[id] = false
-        case .fullscreen:
-            break
+        } else if platform == .floating, frame.width > 0, frame.height > 0 {
+            // Natively floating window without prior saved state: save initial dimensions
+            firstSeenFrame[id] = frame
+            appStateStore.save(bundleID: bundle, state: SavedAppState(state: .floating, frame: frame))
         }
     }
 
     /// Tracks fullscreen transitions and updates `appStateStore` accordingly.
     func noteWindowStateChanged(id: UInt64, oldState: Engine.TileState?, newState: Engine.TileState, frame: CGRect?) {
         guard let bundle = bundleID(for: id) else { return }
+        let currentFrame = firstSeenFrame[id] ?? frame
         if newState == .fullscreen {
             if oldState != .fullscreen {
-                appStateStore.save(bundleID: bundle, state: SavedAppState(state: .fullscreen))
+                appStateStore.save(bundleID: bundle, state: SavedAppState(state: .fullscreen, frame: currentFrame))
             }
         } else if oldState == .fullscreen {
             if newState == .floating {
-                let f = firstSeenFrame[id] ?? frame
-                appStateStore.save(bundleID: bundle, state: SavedAppState(state: .floating, frame: f))
+                appStateStore.save(bundleID: bundle, state: SavedAppState(state: .floating, frame: currentFrame))
             } else if newState == .tiled {
-                appStateStore.save(bundleID: bundle, state: SavedAppState(state: .tiled))
+                appStateStore.save(bundleID: bundle, state: SavedAppState(state: .tiled, frame: currentFrame))
             }
         }
     }

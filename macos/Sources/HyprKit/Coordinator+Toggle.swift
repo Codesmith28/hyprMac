@@ -44,8 +44,9 @@ extension Coordinator {
             floatOverride[id] = false
             uncooperative.remove(id)
             fights[id] = nil
+            let lastFrame = firstSeenFrame[id] ?? (try? deps.ax.frame(of: window))
             if let bundle = bundleID(for: window) {
-                appStateStore.save(bundleID: bundle, state: SavedAppState(state: .tiled, frame: nil))
+                appStateStore.save(bundleID: bundle, state: SavedAppState(state: .tiled, frame: lastFrame))
             }
             reconcileNow() // dwindle insertion
             EventLog.shared.emit("toggle_float", ["window": Int(window.windowID), "state": "tiled"])

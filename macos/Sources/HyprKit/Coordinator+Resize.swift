@@ -24,6 +24,9 @@ extension Coordinator {
             guard let id = idByRef[window], let frame = try? deps.ax.frame(of: window) else { continue }
             if floatOverride[id] == true || lastStates[id] == .floating {
                 firstSeenFrame[id] = frame
+                if let bundle = bundleID(for: window) {
+                    appStateStore.save(bundleID: bundle, state: SavedAppState(state: .floating, frame: frame))
+                }
                 continue
             }
             guard lastStates[id] == .tiled, let target = lastTargets[id] else { continue }
@@ -34,6 +37,9 @@ extension Coordinator {
                 activity += 1
                 apply(plan)
                 adopted = true
+                if let bundle = bundleID(for: window) {
+                    appStateStore.save(bundleID: bundle, state: SavedAppState(state: .tiled, frame: frame))
+                }
                 EventLog.shared.emit("user_resize", ["window": Int(window.windowID),
                                                      "w": Int(frame.width.rounded()), "h": Int(frame.height.rounded())])
             } else if hypot(frame.midX - target.midX, frame.midY - target.midY) > 20 {

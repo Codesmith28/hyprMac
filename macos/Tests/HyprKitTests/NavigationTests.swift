@@ -24,10 +24,14 @@ import Testing
         h.hotkeys.pressFocus(.right)
         h.settle()
         #expect((try? h.desk.ax.bool(.focused, of: b)) == true)
+        let bFrame = h.frame(b)!
+        #expect(h.desk.cursorPosition == CGPoint(x: bFrame.midX, y: bFrame.midY))
 
         h.hotkeys.pressFocus(.left)
         h.settle()
         #expect((try? h.desk.ax.bool(.focused, of: a)) == true)
+        let aFrame = h.frame(a)!
+        #expect(h.desk.cursorPosition == CGPoint(x: aFrame.midX, y: aFrame.midY))
     }
 
     @Test func moveDirectionSwapsTiledWindowsAndKeepsFocus() {

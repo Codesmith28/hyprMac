@@ -252,6 +252,15 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                    executor.echo.isEcho(window, observedFrame: frame, now: deps.clock.now()) {
                     return // our own write
                 }
+                if let id = idByRef[window], lastStates[id] == .floating || floatOverride[id] == true {
+                    if let frame = try? deps.ax.frame(of: window), frame.width > 0, frame.height > 0 {
+                        firstSeenFrame[id] = frame
+                        if let bundle = bundleID(for: window) {
+                            appStateStore.save(bundleID: bundle, state: SavedAppState(state: .floating, frame: frame))
+                        }
+                    }
+                    return
+                }
                 if let end = lastDragEnd, deps.clock.now() - end <= tuning.dragGrace {
                     // Late notification from the user's drag: adopt a resize, else snap back; no fight.
                     adoptUserResizes([window])
@@ -289,6 +298,15 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
 
     /// Drops every trace of a window that is known to be destroyed (C4, C7).
     private func purge(_ ref: HyprPlatform.WindowRef) {
+        if let id = idByRef[ref], let bundle = bundleID(for: ref) {
+            let lastState = lastStates[id]
+            let existing = appStateStore.savedState(for: bundle)
+            let currentFrame = existing?.frame ?? firstSeenFrame[id] ?? lastTargets[id]
+            if let f = currentFrame, f.width > 0, f.height > 0 {
+                let st: SavedAppState.State = (lastState == .floating || floatOverride[id] == true) ? .floating : (lastState == .fullscreen ? .fullscreen : .tiled)
+                appStateStore.save(bundleID: bundle, state: SavedAppState(state: st, frame: f))
+            }
+        }
         executor.forget(ref)
         guard let id = idByRef.removeValue(forKey: ref) else { return }
         idsByPid[ref.pid]?.remove(id)

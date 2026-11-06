@@ -224,4 +224,42 @@ import Testing
 
         #expect(store.savedState(for: "com.example.editor")?.state == .tiled)
     }
+
+    @Test func resizingFloatingWindowPersistsNewDimensionsAcrossRelaunch() {
+        let url = temporaryStoreURL()
+        defer { cleanUp(url: url) }
+
+        let store = AppStateStore(path: url)
+        let h = Harness(appStateStore: store)
+        h.start()
+        h.c.queue.sync {}
+
+        let w1 = h.open(1)
+        h.hotkeys.pressToggleFloat()
+        h.settle()
+        #expect(store.savedState(for: "com.example.editor")?.state == .floating)
+
+        // User resizes the floating window to a new frame
+        let resizedFrame = rect(150, 120, 950, 650)
+        h.send(.userDragBegan(CGPoint(x: 500, y: 400)))
+        h.desk.setFrame(w1, resizedFrame)
+        h.send(.window(.resized, pid: 100, window: w1))
+        h.send(.userDragEnded(CGPoint(x: 600, y: 450)))
+        h.settle()
+
+        // Verify the store updated its persisted frame
+        let saved = store.savedState(for: "com.example.editor")
+        #expect(saved?.state == .floating)
+        #expect(saved?.frame == resizedFrame)
+
+        // Close window and reopen under a new window/pid
+        h.desk.closeWindow(w1)
+        h.settle()
+
+        let w2 = h.open(2)
+        h.settle()
+        #expect(h.tiled(h.s1) == 0)
+        #expect(h.c.testFloatOverride()[h.id(w2)!] == true)
+        #expect(h.frame(w2) == resizedFrame)
+    }
 }
