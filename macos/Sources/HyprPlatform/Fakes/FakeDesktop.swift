@@ -174,6 +174,8 @@ public final class FakeDesktop: @unchecked Sendable {
 
     var axTrusted = true
     var axHitTestOverride: ((CGPoint) -> AXHit?)?
+    var axFocusedApplicationOverride: (() -> pid_t?)?
+    var axFocusedWindowOverride: ((pid_t) -> WindowRef?)?
     var posterOnPost: ((SyntheticEvent) -> Void)?
 
     // MARK: locking / events

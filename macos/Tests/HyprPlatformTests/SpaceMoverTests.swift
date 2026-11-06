@@ -27,13 +27,19 @@ import Testing
         #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXWindow", pid: 1, window: w, isWindowItself: true), for: w))
         #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXGroup", pid: 1, window: w), for: w))
         #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXUnknown", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXToolbar", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXTabGroup", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXStaticText", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXGenericElement", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXImage", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXHeading", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXSplitGroup", pid: 1, window: w), for: w))
         #expect(!SpaceMover.isAcceptableGrab(AXHit(role: "AXGroup", pid: 1, window: other), for: w))
         #expect(!SpaceMover.isAcceptableGrab(AXHit(role: "AXGroup", pid: 1, window: nil), for: w))
-        #expect(!SpaceMover.isAcceptableGrab(AXHit(role: "AXStaticText", pid: 1, window: w), for: w))
         #expect(!SpaceMover.isAcceptableGrab(nil, for: w))
     }
 
-    @Test(arguments: ["AXButton", "AXRadioButton", "AXTabGroup", "AXTextField", "AXPopUpButton", "AXMenuButton", "AXToolbar"])
+    @Test(arguments: ["AXButton", "AXRadioButton", "AXTab", "AXTextField", "AXSearchField", "AXPopUpButton", "AXMenuButton", "AXComboBox", "AXSlider", "AXCheckBox"])
     func controlsRejected(_ role: String) {
         let w = WindowRef(pid: 1, windowID: 1)
         #expect(!SpaceMover.isAcceptableGrab(AXHit(role: role, pid: 1, window: w), for: w))
@@ -89,8 +95,9 @@ import Testing
         desk.updateQuirks(w) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, role: "AXRadioButton")] }
         #expect(mover.move(w, toSpace: 2) == .noGrabPoint)
         #expect(desk.posted.isEmpty)
-        // 4 normal candidates + 4 thin-band candidates.
-        #expect(desk.axCalls.filter { if case .elementAt = $0 { return true }; return false }.count == 8)
+        // Primary candidates + fine-grid candidates are all checked and rejected.
+        let calls = desk.axCalls.filter { if case .elementAt = $0 { return true }; return false }.count
+        #expect(calls > 8)
     }
 
     /// Quirk 15: the first candidate hits a tab button, the next one hits the titlebar.
@@ -191,6 +198,27 @@ import Testing
         #expect(desk.space(of: w) == ids[1])
         #expect(desk.spaces.activeSpace(display: 1) == desk.spaces.userSpace(index: 1, display: 1)?.id)
         #expect(desk.cursorPosition == CGPoint(x: -100, y: 0))
+    }
+
+    @Test func throwWindowWithUnifiedToolbar() {
+        let (desk, w, mover) = setup()
+        desk.updateQuirks(w) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, role: "AXToolbar")] }
+        #expect(mover.move(w, toSpace: 2) == .moved)
+        #expect(desk.space(of: w) == desk.spaces.userSpace(index: 2, display: 1)?.id)
+    }
+
+    @Test func throwWindowWithTitleText() {
+        let (desk, w, mover) = setup()
+        desk.updateQuirks(w) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0.2, to: 0.8, role: "AXStaticText")] }
+        #expect(mover.move(w, toSpace: 2) == .moved)
+        #expect(desk.space(of: w) == desk.spaces.userSpace(index: 2, display: 1)?.id)
+    }
+
+    @Test func throwWindowWithElectronGenericElement() {
+        let (desk, w, mover) = setup()
+        desk.updateQuirks(w) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, role: "AXGenericElement")] }
+        #expect(mover.move(w, toSpace: 2) == .moved)
+        #expect(desk.space(of: w) == desk.spaces.userSpace(index: 2, display: 1)?.id)
     }
 }
 

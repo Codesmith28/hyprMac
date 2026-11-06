@@ -37,6 +37,11 @@ public final class SpaceMover {
         /// close to the edge could start a resize in some apps.
         public var thinBandFallback = true
         public var thinBandOffset: CGFloat = 3
+        /// When primary candidates (at titlebarOffset and thinBandOffset) fail (e.g. apps with tabs,
+        /// centered search bars / command palettes, or custom toolbars), sample a finer grid across
+        /// the titlebar band to find an acceptable grab area.
+        public var fineGridFallback = true
+        public var fineGridYOffsets: [CGFloat] = [6, 12, 18, 24]
         /// What to do if physical Shift is still held (the user is still on ⌥⇧N) before ⌥N.
         public var shiftRelease: ShiftReleasePolicy = .waitUpTo(0.3)
         public var shiftPollInterval: TimeInterval = 0.01
@@ -58,10 +63,16 @@ public final class SpaceMover {
     }
 
     /// Roles that are controls, never a grab point.
-    public static let rejectedRoles: Set<String> = ["AXButton", "AXRadioButton", "AXTabGroup", "AXTextField",
-                                                    "AXPopUpButton", "AXMenuButton", "AXToolbar"]
-    /// Non-window roles accepted when they belong to the window (titlebar / tab-strip area).
-    public static let acceptedAreaRoles: Set<String> = ["AXGroup", "AXUnknown"]
+    public static let rejectedRoles: Set<String> = [
+        "AXButton", "AXRadioButton", "AXTab", "AXTextField", "AXSearchField",
+        "AXPopUpButton", "AXMenuButton", "AXComboBox", "AXSlider", "AXCheckBox",
+        "AXColorWell", "AXIncrementor", "AXScrollBar", "AXProgressIndicator"
+    ]
+    /// Non-window roles accepted when they belong to the window (titlebar / tab-strip / unified toolbar area).
+    public static let acceptedAreaRoles: Set<String> = [
+        "AXGroup", "AXUnknown", "AXToolbar", "AXTabGroup", "AXStaticText",
+        "AXHeading", "AXImage", "AXGenericElement", "AXSplitGroup"
+    ]
 
     private let ax: AXBackend
     private let spaces: SpaceProvider
@@ -114,15 +125,17 @@ public final class SpaceMover {
         return xs.map { CGPoint(x: $0, y: y) }
     }
 
-    /// A hit is a safe grab point if it is the window itself, or an `AXGroup`/`AXUnknown`
-    /// area of that same window. Controls (tabs, buttons, fields, toolbars) are rejected.
+    /// A hit is a safe grab point if it is the window itself, or an accepted area role
+    /// of that same window. Controls (tabs, buttons, fields, etc.) are rejected.
     public static func isAcceptableGrab(_ hit: AXHit?, for window: WindowRef) -> Bool {
-        guard let hit, hit.window == window, !rejectedRoles.contains(hit.role) else { return false }
+        guard let hit, !rejectedRoles.contains(hit.role) else { return false }
+        let belongsToWindow = (hit.window == window) || (hit.isWindowItself && hit.pid == window.pid)
+        guard belongsToWindow else { return false }
         if hit.isWindowItself || hit.role == "AXWindow" { return true }
         return acceptedAreaRoles.contains(hit.role)
     }
 
-    /// All candidates in search order: the normal band, then (if enabled) the thin band.
+    /// All candidates in primary search order: the normal band, then (if enabled) the thin band.
     public func candidates(for frame: CGRect) -> [CGPoint] {
         var pts = Self.grabCandidates(for: frame, titlebarOffset: configuration.titlebarOffset,
                                       trafficLightsOffset: configuration.trafficLightsOffset)
@@ -133,9 +146,59 @@ public final class SpaceMover {
         return pts
     }
 
+    /// Finer grid of candidate grab points across the titlebar band (avoiding traffic lights and right margin).
+    public func fineGridCandidates(for frame: CGRect) -> [CGPoint] {
+        let minX = frame.minX + max(configuration.trafficLightsOffset, 70)
+        let maxX = frame.maxX - 16
+        guard maxX > minX else { return [] }
+        let fractions: [CGFloat] = [0.15, 0.20, 0.30, 0.35, 0.40, 0.45, 0.55, 0.60, 0.65, 0.70, 0.80, 0.85, 0.90]
+        var xs: [CGFloat] = []
+        for f in fractions {
+            let x = frame.minX + frame.width * f
+            if x >= minX && x <= maxX { xs.append(x) }
+        }
+        if xs.isEmpty { xs.append((minX + maxX) / 2) }
+        let primary = candidates(for: frame)
+        var pts: [CGPoint] = []
+        for yOffset in configuration.fineGridYOffsets {
+            let y = frame.minY + yOffset
+            guard y < frame.maxY - 1 else { continue }
+            for x in xs {
+                let p = CGPoint(x: x, y: y)
+                if !primary.contains(where: { abs($0.x - p.x) < 0.5 && abs($0.y - p.y) < 0.5 }) {
+                    pts.append(p)
+                }
+            }
+        }
+        return pts
+    }
+
     /// The topmost on-screen layer-0 window containing `point` (window-server truth).
     public static func topmostWindow(at point: CGPoint, in onscreen: [OnscreenWindow]) -> CGWindowID? {
         onscreen.first { $0.layer == 0 && $0.isOnscreen && $0.bounds.contains(point) }?.id
+    }
+
+    /// Checks whether the window server agrees the target window (or its child/accessory surface) is topmost at `point`.
+    public static func isWindowServerAgreement(
+        at point: CGPoint,
+        target: WindowRef,
+        frame: CGRect,
+        hit: AXHit?,
+        in onscreen: [OnscreenWindow]
+    ) -> Bool {
+        guard let top = onscreen.first(where: { $0.layer == 0 && $0.isOnscreen && $0.bounds.contains(point) }) else {
+            return true
+        }
+        if top.id == target.windowID { return true }
+        if let hitWin = hit?.window, top.id == hitWin.windowID { return true }
+        if top.pid == target.pid {
+            let margin: CGFloat = 2
+            let expandedFrame = frame.insetBy(dx: -margin, dy: -margin)
+            if expandedFrame.contains(top.bounds) || top.bounds.insetBy(dx: -margin, dy: -margin).contains(frame) {
+                return true
+            }
+        }
+        return false
     }
 
     /// First candidate whose AX hit is an acceptable grab for `window` AND where the window
@@ -149,11 +212,26 @@ public final class SpaceMover {
                 Log.mover.debug("grab candidate \(p.debugDescription) rejected: \(hit?.role ?? "nil")")
                 continue
             }
-            if let list = onscreen, Self.topmostWindow(at: p, in: list) != window.windowID {
+            if let list = onscreen, !Self.isWindowServerAgreement(at: p, target: window, frame: frame, hit: hit, in: list) {
                 Log.mover.debug("grab candidate \(p.debugDescription) rejected: another window is on top")
                 continue
             }
             return p
+        }
+        if configuration.fineGridFallback {
+            for p in fineGridCandidates(for: frame) {
+                let hit = try? ax.element(at: p)
+                guard Self.isAcceptableGrab(hit, for: window) else {
+                    Log.mover.debug("fine grid candidate \(p.debugDescription) rejected: \(hit?.role ?? "nil")")
+                    continue
+                }
+                if let list = onscreen, !Self.isWindowServerAgreement(at: p, target: window, frame: frame, hit: hit, in: list) {
+                    Log.mover.debug("fine grid candidate \(p.debugDescription) rejected: another window is on top")
+                    continue
+                }
+                Log.mover.debug("grab point found via fine grid at \(p.debugDescription)")
+                return p
+            }
         }
         return nil
     }

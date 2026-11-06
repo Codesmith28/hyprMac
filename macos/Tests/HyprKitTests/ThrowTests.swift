@@ -186,4 +186,50 @@ import Testing
         h.settle()
         #expect(h.recorder.notices.isEmpty)
     }
+
+    // MARK: - App Structure Tests (Unified Toolbar, Title Text, Electron, Focus Fallback)
+
+    @Test func throwWindowWithUnifiedToolbar() {
+        let (h, a, _, _) = setup()
+        h.desk.updateQuirks(a) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, role: "AXToolbar")] }
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+    }
+
+    @Test func throwWindowWithTitleText() {
+        let (h, a, _, _) = setup()
+        h.desk.updateQuirks(a) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0.2, to: 0.8, role: "AXStaticText")] }
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+    }
+
+    @Test func throwElectronWindowWithGenericElement() {
+        let (h, a, _, _) = setup()
+        h.desk.updateQuirks(a) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, role: "AXGenericElement")] }
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+    }
+
+    @Test func throwFallsBackToTrackedFocusedWindowWhenAXFocusedAppFails() {
+        let (h, a, _, _) = setup()
+        // Simulate AX focusedApplication failing (e.g. uncooperative app, timing glitch)
+        h.desk.ax.focusedApplicationOverride = { nil }
+        #expect((try? h.desk.ax.focusedApplication()) == nil)
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+    }
+
+    @Test func throwFallsBackWhenAXFocusedWindowFails() {
+        let (h, a, _, _) = setup()
+        // Simulate AX focusedWindow(pid:) failing, falling back to windows(pid) or trackedFocusedRef
+        h.desk.ax.focusedWindowOverride = { _ in nil }
+        #expect((try? h.desk.ax.focusedWindow(pid: 100)) == nil)
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+    }
 }

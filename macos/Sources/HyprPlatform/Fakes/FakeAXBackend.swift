@@ -14,6 +14,15 @@ public final class FakeAXBackend: AXBackend, @unchecked Sendable {
         get { desk.locked { desk.axHitTestOverride } }
         set { desk.locked { desk.axHitTestOverride = newValue } }
     }
+    /// Optional overrides for focused application / window. Stored on the desk.
+    public var focusedApplicationOverride: (() -> pid_t?)? {
+        get { desk.locked { desk.axFocusedApplicationOverride } }
+        set { desk.locked { desk.axFocusedApplicationOverride = newValue } }
+    }
+    public var focusedWindowOverride: ((pid_t) -> WindowRef?)? {
+        get { desk.locked { desk.axFocusedWindowOverride } }
+        set { desk.locked { desk.axFocusedWindowOverride = newValue } }
+    }
 
     init(_ desk: FakeDesktop) { self.desk = desk }
 
@@ -174,11 +183,18 @@ public final class FakeAXBackend: AXBackend, @unchecked Sendable {
     }
 
     public func focusedApplication() throws -> pid_t? {
-        desk.locked { desk.callLog.append(.focusedApplication); return desk.focusedPid }
+        desk.locked {
+            desk.callLog.append(.focusedApplication)
+            if let o = desk.axFocusedApplicationOverride { return o() }
+            return desk.focusedPid
+        }
     }
 
     public func focusedWindow(pid: pid_t) throws -> WindowRef? {
-        try call(.focusedWindow(pid), pid: pid) { desk.focusedRef?.pid == pid ? desk.focusedRef : nil }
+        try call(.focusedWindow(pid), pid: pid) {
+            if let o = desk.axFocusedWindowOverride { return o(pid) }
+            return desk.focusedRef?.pid == pid ? desk.focusedRef : nil
+        }
     }
 
     /// Default model: the frontmost on-screen window under the point. Its top 28 pt are the

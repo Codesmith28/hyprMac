@@ -4,6 +4,8 @@ import Foundation
 import HyprPlatform
 import os
 
+typealias WindowRef = HyprPlatform.WindowRef
+
 /// The event coordinator: platform events → (debounced) reconcile → engine → executor.
 ///
 /// All mutable state is confined to `queue` (one serial queue). Platform callbacks hop onto it;
@@ -118,6 +120,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     /// of calling `identity.engineID(for:)`, which would re-assign generations for stale refs
     /// (a late report about a relaunched app's old window).
     var idByRef: [HyprPlatform.WindowRef: UInt64] = [:]
+    /// Tracked focused window ref on the active Space, used as a fallback when AX focusedApplication/Window fails.
+    var trackedFocusedRef: WindowRef?
     private var lastDragEnd: TimeInterval?
     private var reconcileGeneration = 0
     /// Timers scheduled on `queue` that haven't fired yet (for `testSettle`).
@@ -232,8 +236,14 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         switch event {
         case let .window(kind, _, window):
             switch kind {
+            case .focused:
+                if let window { trackedFocusedRef = window }
+                scheduleReconcile(after: tuning.debounce)
             case .destroyed:
-                if let window { purge(window) } // C7: a closed minimized/hidden window leaves no ghost
+                if let window {
+                    if trackedFocusedRef == window { trackedFocusedRef = nil }
+                    purge(window)
+                } // C7: a closed minimized/hidden window leaves no ghost
                 scheduleReconcile(after: tuning.debounce)
             case .moved, .resized:
                 guard let window else { return }
@@ -398,6 +408,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             }
             keepLimboGhosts(space: snap.space, display: display.id, seen: &seen, entries: &entries)
             if snap.unresolved.isEmpty && snap.unresponsivePids.isEmpty { unresolvedRetries = 0 } else { retryUnresolved() }
+            if let f = snap.focused { trackedFocusedRef = f }
             let focused = snap.focused.flatMap { idByRef[$0] }
             do {
                 let plan = try engine.reconcile(display: display.id, space: snap.space, usable: snap.usable,
@@ -479,14 +490,50 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         }
     }
 
+    /// Resolves the focused window to move, falling back from AX focused application to
+    /// frontmost application and the coordinator's tracked focus ref.
+    func resolveFocusedWindow() -> (pid: pid_t, window: WindowRef)? {
+        // 1. Standard AX focused application + window
+        if let pid = try? deps.ax.focusedApplication() {
+            if let w = try? deps.ax.focusedWindow(pid: pid) {
+                trackedFocusedRef = w
+                return (pid, w)
+            }
+            // Fallback: the app's first on-screen window
+            if let w = (try? deps.ax.windows(pid: pid))?.first(where: { (try? deps.ax.bool(.minimized, of: $0)) != true }) {
+                trackedFocusedRef = w
+                return (pid, w)
+            }
+        }
+        // 2. Fallback to NSWorkspace frontmostApplication
+        if let frontmost = NSWorkspace.shared.frontmostApplication {
+            let pid = frontmost.processIdentifier
+            if let w = try? deps.ax.focusedWindow(pid: pid) {
+                trackedFocusedRef = w
+                return (pid, w)
+            }
+            if let w = (try? deps.ax.windows(pid: pid))?.first(where: { (try? deps.ax.bool(.minimized, of: $0)) != true }) {
+                trackedFocusedRef = w
+                return (pid, w)
+            }
+        }
+        // 3. Fallback to Coordinator's tracked focused window ref in the active Space
+        if let tracked = trackedFocusedRef,
+           let id = idByRef[tracked],
+           let space = engine.space(of: id),
+           activeSpaces.contains(space) {
+            return (tracked.pid, tracked)
+        }
+        return nil
+    }
+
     /// ⌥⇧N: throw the focused window to Desktop N with the drag trick (focus follows).
     func throwFocusedWindow(toSpace n: Int, attempt: Int = 0) {
         queue.async { [self] in
             // A press while another throw runs is queued (last one wins), never lost: real E2E
             // (throw-rapid) showed a second ⌥⇧N 200 ms after the first vanished without any event.
             guard !throwInFlight else { pendingThrow = n; return }
-            guard let pid = try? deps.ax.focusedApplication(),
-                  let window = try? deps.ax.focusedWindow(pid: pid) else {
+            guard let (pid, window) = resolveFocusedWindow() else {
                 EventLog.shared.emit("throw", ["n": n, "result": "noFocusedWindow"])
                 return
             }
@@ -548,6 +595,11 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     private func currentDisplay() -> DisplayID? {
         if let pid = try? deps.ax.focusedApplication(), let w = try? deps.ax.focusedWindow(pid: pid),
            let frame = try? deps.ax.frame(of: w), let d = deps.displays.display(for: frame) {
+            return d.id
+        }
+        if let tracked = trackedFocusedRef,
+           let frame = try? deps.ax.frame(of: tracked),
+           let d = deps.displays.display(for: frame) {
             return d.id
         }
         return deps.displays.displays().first(where: { $0.isMain })?.id ?? deps.displays.displays().first?.id

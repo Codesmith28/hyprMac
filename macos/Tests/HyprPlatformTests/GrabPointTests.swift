@@ -140,4 +140,67 @@ import Testing
         }
         #expect(keys == [.maskAlternate, .maskAlternate])
     }
+
+    // MARK: - Modern macOS app structures
+
+    @Test func unifiedTitlebarToolbarRoleAccepted() {
+        // Standard macOS unified titlebar/toolbar (NSWindowStyleMaskUnifiedTitleAndToolbar)
+        let (_, w, mover) = setup([FakeTitlebarRegion(from: 0, to: 1, top: 0, bottom: 28, role: "AXToolbar")])
+        let pt = mover.findGrabPoint(for: w, frame: frame)
+        #expect(pt == CGPoint(x: 300, y: 108))
+    }
+
+    @Test func windowTitleStaticTextAccepted() {
+        // Dragging directly on the window title text in macOS titlebars
+        let (_, w, mover) = setup([FakeTitlebarRegion(from: 0.2, to: 0.8, top: 0, bottom: 28, role: "AXStaticText")])
+        let pt = mover.findGrabPoint(for: w, frame: frame)
+        #expect(pt == CGPoint(x: 300, y: 108))
+    }
+
+    @Test func electronGenericElementAccepted() {
+        // Electron / Chromium titlebar area (VS Code, Slack, Obsidian)
+        let (_, w, mover) = setup([FakeTitlebarRegion(from: 0, to: 1, top: 0, bottom: 28, role: "AXGenericElement")])
+        let pt = mover.findGrabPoint(for: w, frame: frame)
+        #expect(pt == CGPoint(x: 300, y: 108))
+    }
+
+    @Test func documentProxyIconAccepted() {
+        // Document proxy icon next to file name in titlebar
+        let (_, w, _) = setup([FakeTitlebarRegion(from: 0.2, to: 0.26, top: 0, bottom: 28, role: "AXImage")])
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXImage", pid: 100, window: w), for: w))
+    }
+
+    @Test func fineGridFindsDraggableStripWhenPrimaryPointsAreTabs() {
+        // Tabs covering the 4 primary points (traffic lights + 80, 25%, 50%, 75%):
+        // Tab 1: from 0.0 to 0.35 (covers 180 and 300)
+        // Tab 2: from 0.45 to 0.85 (covers 500 and 700)
+        // Gap between 0.35 and 0.45 is open draggable titlebar space (hits window itself).
+        let tabs = [
+            FakeTitlebarRegion(from: 0.0, to: 0.35, top: 0, bottom: 28, role: "AXRadioButton"),
+            FakeTitlebarRegion(from: 0.45, to: 0.85, top: 0, bottom: 28, role: "AXRadioButton"),
+        ]
+        let (desk, w, mover) = setup(tabs)
+        // Primary candidates all hit tabs; fine-grid finds candidate in the 0.35..0.45 gap (e.g. fraction 0.35 -> x = 380)
+        let grab = mover.findGrabPoint(for: w, frame: frame)
+        #expect(grab != nil)
+        #expect(grab?.x == 380)
+        #expect(mover.move(w, toSpace: 2) == .moved)
+        #expect(desk.space(of: w) == desk.spaces.userSpace(index: 2, display: 1)?.id)
+    }
+
+    @Test func windowServerAgreesWithChildOrLayeredSurface() {
+        // In Chromium/Electron/JetBrains apps, a child window or layered render surface
+        // with the same PID and matching frame sits at layer 0.
+        let (_, w, _) = setup([])
+        let onscreenWithChild = [
+            OnscreenWindow(id: 999, pid: 100, layer: 0, bounds: frame, isOnscreen: true),
+            OnscreenWindow(id: 1, pid: 100, layer: 0, bounds: frame, isOnscreen: true),
+        ]
+        let agrees = SpaceMover.isWindowServerAgreement(
+            at: CGPoint(x: 300, y: 108), target: w, frame: frame,
+            hit: AXHit(role: "AXWindow", pid: 100, window: w, isWindowItself: true),
+            in: onscreenWithChild
+        )
+        #expect(agrees)
+    }
 }

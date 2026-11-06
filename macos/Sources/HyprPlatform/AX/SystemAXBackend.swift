@@ -163,6 +163,7 @@ public final class SystemAXBackend: AXBackend, @unchecked Sendable {
         let subrole = (try? copy(el, kAXSubroleAttribute)).flatMap { AXDecoding.string($0) }
         let resolved = AXDecoding.resolveWindow(
             el,
+            maxDepth: 25,
             role: { [self] e in (try? copy(e, kAXRoleAttribute)).flatMap { AXDecoding.string($0) } },
             windowAttribute: { [self] e in Self.element((try? copy(e, kAXWindowAttribute)) ?? nil) },
             parent: { [self] e in Self.element((try? copy(e, kAXParentAttribute)) ?? nil) },
