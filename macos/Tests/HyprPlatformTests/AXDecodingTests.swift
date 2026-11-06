@@ -105,10 +105,43 @@ import Testing
         #expect(resolve(app, from: 0) == nil)
         var deep = (0..<8).map { Node(role: "AXGroup", window: nil, parent: $0 + 1, id: nil) }
         deep.append(Node(role: "AXWindow", window: nil, parent: nil, id: 1))
-        #expect(resolve(deep, from: 0) == nil)          // 8 levels up: beyond the limit
+        #expect(resolve(deep, from: 0) == nil)          // 8 levels up: beyond the limit of 6
         #expect(resolve(deep, from: 0, depth: 8)?.id == 1)
         // An AXWindow without a resolvable id keeps walking (and gives up).
         #expect(resolve([Node(role: "AXWindow", window: nil, parent: nil, id: nil)], from: 0) == nil)
+    }
+
+    @Test func deepHierarchyResolvesWithDefaultDepth() {
+        // Deep nesting common in Chromium / Electron apps (e.g. 15 levels of AXGenericElement / AXGroup)
+        var deep = (0..<15).map { Node(role: "AXGenericElement", window: nil, parent: $0 + 1, id: nil) }
+        deep.append(Node(role: "AXWindow", window: nil, parent: nil, id: 99))
+        let r = AXDecoding.resolveWindow(
+            0,
+            role: { deep[$0].role },
+            windowAttribute: { deep[$0].window },
+            parent: { deep[$0].parent },
+            windowID: { deep[$0].id }
+        )
+        #expect(r?.id == 99)
+        #expect(r?.isSelf == false)
+    }
+
+    @Test func ancestorWithWindowAttributeResolvesEarly() {
+        // Node 0 -> Node 1 (has kAXWindow attribute pointing to Node 2)
+        let t = [
+            Node(role: "AXGenericElement", window: nil, parent: 1, id: nil),
+            Node(role: "AXToolbar", window: 2, parent: nil, id: nil),
+            Node(role: "AXWindow", window: nil, parent: nil, id: 55),
+        ]
+        let r = AXDecoding.resolveWindow(
+            0,
+            role: { t[$0].role },
+            windowAttribute: { t[$0].window },
+            parent: { t[$0].parent },
+            windowID: { t[$0].id }
+        )
+        #expect(r?.id == 55)
+        #expect(r?.isSelf == false)
     }
 
     @Test func systemBackendInitSetsGlobalTimeoutSafely() {

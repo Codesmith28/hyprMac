@@ -30,7 +30,7 @@ config = {
     -- Keyboard shortcuts, written as '+'-separated names (case-insensitive).
     --   modifiers: alt (opt, option), shift, ctrl (control), cmd (command)
     --   keys:      a–z, 0–9, f1–f12, space, tab, return, escape, grave, minus, equal,
-    --              comma, period, slash
+    --              comma, period, slash, left, right, up, down
     -- A reload re-registers them.
     keys = {
         throw = "alt+shift",         -- + a digit 1–9: move the focused window to that Desktop (modifiers only)

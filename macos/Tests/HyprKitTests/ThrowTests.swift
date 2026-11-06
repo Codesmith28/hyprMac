@@ -90,15 +90,17 @@ import Testing
         #expect(h.desk.posted.isEmpty)
     }
 
-    @Test func throwTimeoutNotifiesAndKeepsLayout() {
+    @Test func throwTimeoutNotifiesAndKeepsLayout() throws {
         let (h, a, b, _) = setup()
         h.desk.nativeSwitchEnabled = false
+        let fa = try #require(h.frame(a))
+        let grab = try #require(h.c.mover.findGrabPoint(for: a, frame: fa))
         throwFocused(h, 2)
         #expect(h.recorder.throwFailures.count == 1)
         #expect(h.recorder.throwFailures.first?.contains("Switch to Desktop 2") == true)
         #expect(h.desk.space(of: a) == h.s1)
         #expect(h.frame(b) == leftHalf && h.frame(a) == rightHalf)
-        #expect(h.desk.posted.suffix(2).first == .leftMouseUp(CGPoint(x: 900, y: 45)))
+        #expect(h.desk.posted.suffix(2).first == .leftMouseUp(grab))
     }
 
     /// Real macOS (throw-rapid E2E): a second press during a throw used to vanish silently. Both calls
@@ -185,5 +187,77 @@ import Testing
         h.spaceKeys.key(25, flags: .maskAlternate) // ⌥9
         h.settle()
         #expect(h.recorder.notices.isEmpty)
+    }
+
+    // MARK: - App Structure Tests (Unified Toolbar, Title Text, Electron, Focus Fallback)
+
+    @Test func throwWindowWithUnifiedToolbar() {
+        let (h, a, _, _) = setup()
+        h.desk.updateQuirks(a) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, role: "AXToolbar")] }
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+    }
+
+    @Test func throwWindowWithTitleText() {
+        let (h, a, _, _) = setup()
+        h.desk.updateQuirks(a) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0.2, to: 0.8, role: "AXStaticText")] }
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+    }
+
+    @Test func throwElectronWindowWithGenericElement() {
+        let (h, a, _, _) = setup()
+        h.desk.updateQuirks(a) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, role: "AXGenericElement")] }
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+    }
+
+    @Test func throwFallsBackToTrackedFocusedWindowWhenAXFocusedAppFails() {
+        let (h, a, _, _) = setup()
+        // Simulate AX focusedApplication failing (e.g. uncooperative app, timing glitch)
+        h.desk.ax.focusedApplicationOverride = { nil }
+        #expect((try? h.desk.ax.focusedApplication()) == nil)
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+    }
+
+    @Test func throwFallsBackWhenAXFocusedWindowFails() {
+        let (h, a, _, _) = setup()
+        // Simulate AX focusedWindow(pid:) failing, falling back to windows(pid) or trackedFocusedRef
+        h.desk.ax.focusedWindowOverride = { _ in nil }
+        #expect((try? h.desk.ax.focusedWindow(pid: 100)) == nil)
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+    }
+
+    @Test func throwBrowserWindowWithTabHoverPreview() {
+        let (h, a, _, _) = setup()
+        // Add a tab hover card / preview belonging to the browser (pid 100) at layer 0
+        _ = h.desk.addWindow(pid: 100, id: 99, frame: rect(200, 32, 240, 80))
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+        #expect(h.desk.posted.contains(where: {
+            if case .leftMouseDragged = $0 { return true }; return false
+        }))
+    }
+
+    @Test func throwBrowserWindowWithTabsAcrossTitlebar() {
+        let (h, a, _, _) = setup()
+        // Tabs span top: 3..28 across the titlebar
+        h.desk.updateQuirks(a) {
+            $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, top: 3, bottom: 28, role: "AXRadioButton")]
+        }
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+        #expect(h.desk.posted.contains(where: {
+            if case .leftMouseDragged = $0 { return true }; return false
+        }))
     }
 }

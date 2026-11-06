@@ -9,6 +9,9 @@ hyprMac lives in the menu bar (the 2×2 grid icon). It has no Dock icon. After `
 | ⌥1 … ⌥9 | Switch to Desktop N. macOS does this. hyprMac only listens, to warn you when Desktop N doesn't exist. |
 | ⌥⇧1 … ⌥⇧9 | Move the focused window to Desktop N. You follow it, and it keeps focus. |
 | ⌥⇧F | Float or tile the focused window. Floating restores the size hyprMac first saw, centred. The choice sticks until you toggle again or close the window. Fullscreen windows are ignored. |
+| ⌃⌥C | Center the focused window. If tiled, floats and centers it at its original size. |
+| ⌃⌥H / J / K / L or ⌃⌥← / ↓ / ↑ / → | Move focus in the BSP tree (left, down, up, right). |
+| ⌃⌥⇧H / J / K / L or ⌃⌥⇧← / ↓ / ↑ / → | Move/swap the focused window in the BSP tree (left, down, up, right). Focus follows the moved window. |
 
 These are the defaults. You can change them under [keys](#keys-and-app-rules). The menu's **Keyboard Shortcuts…** shows the same list.
 
@@ -20,7 +23,9 @@ Drag a tiled window's edge and let go. hyprMac keeps the new size.
 - The split next to that edge moves with it, and the neighbours reflow. The new ratio sticks for later layouts.
 - Ratios stay between 10 % and 90 %, and within the windows' minimum sizes.
 - An edge on the screen boundary, or a window with no split on that axis, snaps back.
-- Moving a window by its titlebar, without changing its size, snaps it back to its tile.
+- Dragging a tiled window by its titlebar and dropping it onto another tile swaps the two tiles in the tree.
+- Dragging a floating window keeps its new position without snapping back.
+- Moving a tiled window within its own tile snaps it back.
 - A window that resizes itself, without the mouse, still counts as a fight.
 
 The log line is `{"event":"user_resize",...}`.

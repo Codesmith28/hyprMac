@@ -130,6 +130,16 @@ public final class Engine {
         return Plan(plan)
     }
 
+    /// Swaps the tree positions of two tiled windows on the same Space and returns the
+    /// resulting plan. Throws `.unknownWindow` if either is not tiled, `.invalidArgument` if
+    /// they are on different Spaces.
+    public func swap(window a: UInt64, with b: UInt64) throws -> Plan {
+        var p = hm_plan()
+        defer { hm_plan_free(&p) }
+        try check(hm_engine_swap(handle, a, b, &p))
+        return Plan(p)
+    }
+
     /// Records a minimum size discovered by read-back (0 on an axis = unknown, keeps the
     /// previous value). Throws `.unknownWindow` for windows the engine doesn't hold.
     public func reportMinSize(window: UInt64, size: CGSize) throws {

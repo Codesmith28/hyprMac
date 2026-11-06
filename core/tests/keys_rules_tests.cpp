@@ -87,7 +87,7 @@ TEST_CASE("chord grammar: keys") {
     CHECK(c.key == "t");
     CHECK(hypr::format_chord(c) == "ctrl+alt+t");
     for (const char *k : {"a", "z", "0", "9", "f1", "f12", "space", "tab", "return", "escape", "grave", "minus",
-                          "equal", "comma", "period", "slash"}) {
+                          "equal", "comma", "period", "slash", "left", "right", "up", "down"}) {
         INFO(k);
         CHECK(hypr::is_key_name(k));
         CHECK(parse_err((std::string("alt+") + k).c_str(), true).empty());

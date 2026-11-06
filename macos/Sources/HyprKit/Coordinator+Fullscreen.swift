@@ -24,7 +24,9 @@ extension Coordinator {
             let on = deps.spaces.spaces(of: ref.windowID)
             if !on.isEmpty, on.allSatisfy({ fullscreenSpaces.contains($0) }), !on.contains(space) {
                 limboSince[id] = nil
+                let old = lastStates[id]
                 lastStates[id] = .fullscreen
+                noteWindowStateChanged(id: id, oldState: old, newState: .fullscreen, frame: nil)
                 seen.insert(id)
                 entries.append(Engine.WindowEntry(id: id, state: .fullscreen))
             } else if on.isEmpty {

@@ -15,6 +15,9 @@ extension Coordinator {
         mover.fallbackSwitchFlags = keys.switchModifiers.cgFlags
         deps.onMain { [self] in
             deps.hotkeys.onToggleFloat = { [weak self] in self?.toggleFocusedFloat() }
+            deps.hotkeys.onCenterWindow = { [weak self] in self?.centerFocusedWindow() }
+            deps.hotkeys.onFocusDirection = { [weak self] dir in self?.focus(direction: dir) }
+            deps.hotkeys.onMoveDirection = { [weak self] dir in self?.move(direction: dir) }
             let failed = deps.hotkeys.start(bindings: keys) { [weak self] n in self?.throwFocusedWindow(toSpace: n) }
             var unavailable: [String] = []
             if !failed.isEmpty {
