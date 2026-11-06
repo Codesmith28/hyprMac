@@ -76,6 +76,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
 
     let engine: Engine
     private let configStore: ConfigStore
+    public var appStateStore: AppStateStore
+    var stateRestored: Set<UInt64> = []
     let identity = WindowIdentityMap()
     let discovery: WindowDiscovery
     let executor: GeometryExecutor
@@ -136,10 +138,12 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
 
     public var isPaused: Bool { mirrorLock.lock(); defer { mirrorLock.unlock() }; return pausedMirror }
 
-    public init(deps: Dependencies, configStore: ConfigStore, tuning: Tuning = Tuning()) {
+    public init(deps: Dependencies, configStore: ConfigStore, appStateStore: AppStateStore = AppStateStore(),
+                tuning: Tuning = Tuning()) {
         self.deps = deps
         self.tuning = tuning
         self.configStore = configStore
+        self.appStateStore = appStateStore
         self.engine = Engine()
         self.discovery = WindowDiscovery(ax: deps.ax, windowServer: deps.windowServer, spaces: deps.spaces,
                                          displays: deps.displays, apps: deps.apps)
@@ -151,7 +155,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     }
 
     /// Production wiring.
-    public static func live(configPath: URL) -> Coordinator {
+    public static func live(configPath: URL, statePath: URL = AppStateStore.defaultPath) -> Coordinator {
         let deps = Dependencies(
             ax: SystemAXBackend(), windowServer: SystemWindowServerQuery(),
             spaces: SkyLightSpaceProvider(), displays: SystemDisplayProvider(), apps: SystemAppProvider(),
@@ -160,7 +164,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             clock: SystemTimeSource(),
             makeEvents: { queue, handler in PlatformEvents(queue: queue, handler: handler) },
             onMain: { block in DispatchQueue.main.async(execute: block) })
-        return Coordinator(deps: deps, configStore: ConfigStore(path: configPath))
+        return Coordinator(deps: deps, configStore: ConfigStore(path: configPath), appStateStore: AppStateStore(path: statePath))
     }
 
     // MARK: TilingController
@@ -286,6 +290,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         identity.forget(engineID: id)
         uncooperative.remove(id)
         forgetToggleState(id)
+        stateRestored.remove(id)
         fights[id] = nil
         lastTargets[id] = nil
         lastStates[id] = nil
@@ -361,13 +366,16 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 // pulled into this Space when the engine already holds it elsewhere.
                 if w.membership == .inferred, let owner = engine.space(of: id), owner != snap.space { continue }
                 idsByPid[w.ref.pid, default: []].insert(id)
+                restoreSavedStateIfNeeded(id: id, ref: w.ref, platform: w.state, frame: w.frame)
                 var state = Self.tileState(w.state)
                 if state == .tiled, uncooperative.contains(id) { state = .floating }
                 if state == .tiled, floatsAsSmall(id: id, frame: w.frame) { state = .floating }
                 if state == .tiled, ruleFloat.contains(w.ref.pid) { state = .floating } // rules.float
                 // The ⌥⇧F override (Coordinator+Toggle) wins over size and fight floating.
                 state = resolveFloatOverride(id: id, platform: w.state, frame: w.frame, current: state)
+                let oldState = lastStates[id]
                 lastStates[id] = state
+                noteWindowStateChanged(id: id, oldState: oldState, newState: state, frame: w.frame)
                 seen.insert(id)
                 entries.append(Engine.WindowEntry(id: id, state: engineState(id: id, state: state, platform: w.state),
                                                   frame: Self.sanitized(w.frame), minSize: w.minSize ?? .zero))
@@ -660,6 +668,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     func testFightCount(_ id: UInt64) -> Int { queue.sync { fights[id]?.count ?? 0 } }
     func testFloatOverride() -> [UInt64: Bool] { queue.sync { floatOverride } }
     func testFirstSeenFrame(_ id: UInt64) -> CGRect? { queue.sync { firstSeenFrame[id] } }
+    func testStateRestored() -> Set<UInt64> { queue.sync { stateRestored } }
     func testActiveSpaces() -> Set<UInt64> { queue.sync { activeSpaces } }
     func testDump(space: UInt64) -> String { queue.sync { engine.debugDump(space: space) } }
     func testWaitForExecutor() -> Bool { executor.waitUntilIdle(timeout: 5) }

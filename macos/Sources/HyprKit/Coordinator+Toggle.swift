@@ -32,6 +32,10 @@ extension Coordinator {
         case .tiled:
             floatOverride[id] = true
             let frame = restoreFrame(for: window, id: id)
+            if let bundle = bundleID(for: window) {
+                let savedFrame = frame ?? (try? deps.ax.frame(of: window)) ?? firstSeenFrame[id]
+                appStateStore.save(bundleID: bundle, state: SavedAppState(state: .floating, frame: savedFrame))
+            }
             reconcileNow() // the window leaves the tree; its neighbours reflow
             if let frame { executor.place(window, frame: frame) }
             EventLog.shared.emit("toggle_float", ["window": Int(window.windowID), "state": "floating"])
@@ -40,6 +44,9 @@ extension Coordinator {
             floatOverride[id] = false
             uncooperative.remove(id)
             fights[id] = nil
+            if let bundle = bundleID(for: window) {
+                appStateStore.save(bundleID: bundle, state: SavedAppState(state: .tiled, frame: nil))
+            }
             reconcileNow() // dwindle insertion
             EventLog.shared.emit("toggle_float", ["window": Int(window.windowID), "state": "tiled"])
         case .minimized, .fullscreen, .hidden:
@@ -52,6 +59,7 @@ extension Coordinator {
     /// automatic (fight / rule / size) decisions.
     func resolveFloatOverride(id: UInt64, platform: WindowState, frame: CGRect,
                               current: Engine.TileState) -> Engine.TileState {
+        restoreSavedStateIfNeeded(id: id, platform: platform, frame: frame)
         if platform == .tiled || platform == .floating {
             if firstSeenFrame[id] == nil, frame.width > 0, frame.height > 0, Self.sanitized(frame) != .zero {
                 firstSeenFrame[id] = frame

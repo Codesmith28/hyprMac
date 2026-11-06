@@ -72,26 +72,34 @@ import Testing
 }
 
 @Suite struct HotkeyTableTests {
-    @Test func registrationTableHasDigitsAndToggleFloat() {
+    @Test func registrationTableHasDigitsAndToggleFloatAndNavigation() {
         let table = HotkeyCenter.registrationTable
-        #expect(table.count == 10)
-        #expect(Set(table.map(\.id)).count == 10)           // unique hotkey ids
+        #expect(table.count == 27)
+        #expect(Set(table.map(\.id)).count == 27)           // unique hotkey ids
         for n in 1...9 {
             #expect(table[n - 1].id == UInt32(n))
             #expect(table[n - 1].keyCode == UInt32(DigitKeys.keyCode(forDigit: n)!))
         }
         #expect(table[9].id == HotkeyCenter.toggleFloatID)
         #expect(table[9].keyCode == 3)                       // kVK_ANSI_F
+        #expect(table[10].id == HotkeyCenter.centerWindowID)
+        #expect(table[10].keyCode == 8)                      // kVK_ANSI_C
         #expect(HotkeyCenter.modifiers == UInt32(optionKey | shiftKey))
     }
 
     @Test func fakeRoutesToggleFloatSeparately() {
-        var thrown: [Int] = [], toggles = 0
+        var thrown: [Int] = [], toggles = 0, centers = 0, focused: [Direction] = [], moved: [Direction] = []
         let hot = FakeThrowHotkeys()
         hot.onToggleFloat = { toggles += 1 }
+        hot.onCenterWindow = { centers += 1 }
+        hot.onFocusDirection = { focused.append($0) }
+        hot.onMoveDirection = { moved.append($0) }
         hot.start { thrown.append($0) }
         hot.pressToggleFloat(); hot.press(2)
-        #expect(toggles == 1 && thrown == [2])
+        hot.pressCenterWindow()
+        hot.pressFocus(.left)
+        hot.pressMove(.right)
+        #expect(toggles == 1 && thrown == [2] && centers == 1 && focused == [.left] && moved == [.right])
     }
 }
 

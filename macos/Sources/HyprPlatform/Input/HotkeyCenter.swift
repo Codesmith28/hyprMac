@@ -5,6 +5,12 @@ import Foundation
 public protocol ThrowHotkeys: AnyObject {
     /// "Toggle floating ↔ tiling for the focused window" (⌥⇧F by default). Set before `start`.
     var onToggleFloat: (() -> Void)? { get set }
+    /// Center the window (⌃⌥C by default). Set before `start`.
+    var onCenterWindow: (() -> Void)? { get set }
+    /// Change focus in the BSP tree in the given direction. Set before `start`.
+    var onFocusDirection: ((Direction) -> Void)? { get set }
+    /// Move window in the BSP tree in the given direction. Set before `start`.
+    var onMoveDirection: ((Direction) -> Void)? { get set }
     /// True when the toggle-float shortcut could not be registered (taken by another app).
     var toggleFloatFailed: Bool { get }
     /// (Re-)registers the hotkeys for `bindings`, dropping the previous registrations first;
@@ -15,7 +21,7 @@ public protocol ThrowHotkeys: AnyObject {
 }
 
 public extension ThrowHotkeys {
-    /// Registers the default shortcuts (⌥⇧1–9, ⌥⇧F).
+    /// Registers the default shortcuts (⌥⇧1–9, ⌥⇧F, ⌃⌥C, etc.).
     @discardableResult
     func start(onThrow: @escaping (Int) -> Void) -> [Int] { start(bindings: .defaults, onThrow: onThrow) }
 }
@@ -30,19 +36,42 @@ public final class HotkeyCenter: ThrowHotkeys {
     private var handler: EventHandlerRef?
     fileprivate var onThrow: ((Int) -> Void)?
     public var onToggleFloat: (() -> Void)?
+    public var onCenterWindow: (() -> Void)?
+    public var onFocusDirection: ((Direction) -> Void)?
+    public var onMoveDirection: ((Direction) -> Void)?
     public private(set) var toggleFloatFailed = false
+    public private(set) var currentBindings: KeyBindings?
 
     /// Hotkey id of ⌥⇧F (digits use their own number 1–9).
     public static let toggleFloatID: UInt32 = 100
+    /// Hotkey id of Center Window (⌃⌥C).
+    public static let centerWindowID: UInt32 = 200
+    /// Base ID for focus direction shortcuts.
+    public static let focusBaseID: UInt32 = 210
+    /// Base ID for move direction shortcuts.
+    public static let moveBaseID: UInt32 = 230
+
     /// `kVK_ANSI_F`.
     public static let toggleFloatKeyCode = UInt32(kVK_ANSI_F)
 
     /// Every registration for `bindings`, in order: (hotkey id, virtual key code, Carbon modifiers).
     /// Pure data, so tests can check it.
     public static func registrations(for bindings: KeyBindings) -> [(id: UInt32, keyCode: UInt32, modifiers: UInt32)] {
-        (1...9).compactMap { n in
-            DigitKeys.keyCode(forDigit: n).map { (UInt32(n), UInt32($0), bindings.throwModifiers.carbon) }
-        } + [(toggleFloatID, bindings.toggleFloat.keyCode, bindings.toggleFloat.modifiers.carbon)]
+        var list: [(id: UInt32, keyCode: UInt32, modifiers: UInt32)] = []
+        for n in 1...9 {
+            if let kc = DigitKeys.keyCode(forDigit: n) {
+                list.append((UInt32(n), UInt32(kc), bindings.throwModifiers.carbon))
+            }
+        }
+        list.append((toggleFloatID, bindings.toggleFloat.keyCode, bindings.toggleFloat.modifiers.carbon))
+        list.append((centerWindowID, bindings.centerWindow.keyCode, bindings.centerWindow.modifiers.carbon))
+        for (i, item) in bindings.focusKeys.enumerated() {
+            list.append((focusBaseID + UInt32(i), item.spec.keyCode, item.spec.modifiers.carbon))
+        }
+        for (i, item) in bindings.moveKeys.enumerated() {
+            list.append((moveBaseID + UInt32(i), item.spec.keyCode, item.spec.modifiers.carbon))
+        }
+        return list
     }
 
     /// The default registrations: (hotkey id, virtual key code).
@@ -56,6 +85,7 @@ public final class HotkeyCenter: ThrowHotkeys {
     public func start(bindings: KeyBindings, onThrow: @escaping (Int) -> Void) -> [Int] {
         stop()
         self.onThrow = onThrow
+        self.currentBindings = bindings
         var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         let me = Unmanaged.passUnretained(self).toOpaque()
         InstallEventHandler(GetApplicationEventTarget(), { _, event, refcon in
@@ -65,7 +95,23 @@ public final class HotkeyCenter: ThrowHotkeys {
                                        nil, MemoryLayout<EventHotKeyID>.size, nil, &id)
             guard st == noErr, id.signature == HotkeyCenter.signature else { return OSStatus(eventNotHandledErr) }
             let center = Unmanaged<HotkeyCenter>.fromOpaque(refcon).takeUnretainedValue()
-            if id.id == HotkeyCenter.toggleFloatID { center.onToggleFloat?() } else { center.onThrow?(Int(id.id)) }
+            if id.id == HotkeyCenter.toggleFloatID {
+                center.onToggleFloat?()
+            } else if id.id == HotkeyCenter.centerWindowID {
+                center.onCenterWindow?()
+            } else if id.id >= HotkeyCenter.focusBaseID && id.id < HotkeyCenter.focusBaseID + UInt32(center.currentBindings?.focusKeys.count ?? 0) {
+                let idx = Int(id.id - HotkeyCenter.focusBaseID)
+                if let direction = center.currentBindings?.focusKeys[idx].direction {
+                    center.onFocusDirection?(direction)
+                }
+            } else if id.id >= HotkeyCenter.moveBaseID && id.id < HotkeyCenter.moveBaseID + UInt32(center.currentBindings?.moveKeys.count ?? 0) {
+                let idx = Int(id.id - HotkeyCenter.moveBaseID)
+                if let direction = center.currentBindings?.moveKeys[idx].direction {
+                    center.onMoveDirection?(direction)
+                }
+            } else {
+                center.onThrow?(Int(id.id))
+            }
             return noErr
         }, 1, &spec, me, &handler)
 

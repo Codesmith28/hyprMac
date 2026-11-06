@@ -21,7 +21,7 @@ unsigned modifier_bit(const std::string &t) {
     return 0;
 }
 
-const char *const kNamedKeys[] = {"space", "tab", "return", "escape", "grave", "minus", "equal", "comma", "period", "slash"};
+const char *const kNamedKeys[] = {"space", "tab", "return", "escape", "grave", "minus", "equal", "comma", "period", "slash", "left", "right", "up", "down"};
 
 std::string quote(const std::string &s) { return "'" + s + "'"; }
 
