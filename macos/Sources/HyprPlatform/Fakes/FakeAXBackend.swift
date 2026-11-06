@@ -174,6 +174,13 @@ public final class FakeAXBackend: AXBackend, @unchecked Sendable {
         }
     }
 
+    public func raise(_ r: WindowRef) throws {
+        try call(.raise(r), pid: r.pid, ref: r) {
+            _ = try window(r)
+            desk.focus(r)
+        }
+    }
+
     public func enhancedUserInterface(pid: pid_t) throws -> Bool {
         try call(.enhancedUI(pid), pid: pid) { desk.appTable[pid]?.enhancedUI ?? false }
     }

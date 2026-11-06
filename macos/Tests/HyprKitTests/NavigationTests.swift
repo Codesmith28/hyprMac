@@ -85,4 +85,58 @@ import Testing
 
         #expect(h.frame(a) == centred)
     }
+
+    @Test func focusDirectionUsesRaiseAndSwitchesFocus() {
+        let h = started()
+        let a = h.open(1), b = h.open(2)
+        h.desk.focus(a)
+        h.settle()
+        h.desk.clearAXCalls()
+
+        h.hotkeys.pressFocus(.right)
+        h.settle()
+        #expect((try? h.desk.ax.bool(.focused, of: b)) == true)
+        #expect(h.desk.axCalls.contains(.raise(b)))
+    }
+
+    @Test func moveDirectionUsesRaiseToRetainFocus() {
+        let h = started()
+        let a = h.open(1), b = h.open(2)
+        h.desk.focus(a)
+        h.settle()
+        h.desk.clearAXCalls()
+
+        h.hotkeys.pressMove(.right)
+        h.settle()
+        #expect(h.frame(a) == rightHalf)
+        #expect(h.frame(b) == leftHalf)
+        #expect(h.desk.axCalls.contains(.raise(a)))
+        #expect((try? h.desk.ax.bool(.focused, of: a)) == true)
+    }
+
+    @Test func navigationAndToggleFloatWorkWithFallbackResolution() {
+        let h = started()
+        let a = h.open(1), b = h.open(2)
+        h.desk.focus(a)
+        h.settle()
+
+        // Simulate Electron/Chromium where AX focused application returns nil
+        h.desk.ax.focusedApplicationOverride = { nil }
+
+        // Directional focus still works via resolveFocusedWindow fallback to trackedFocusedRef
+        h.hotkeys.pressFocus(.right)
+        h.settle()
+        #expect((try? h.desk.ax.bool(.focused, of: b)) == true)
+
+        // Center window still works via resolveFocusedWindow
+        h.hotkeys.pressCenterWindow()
+        h.settle()
+        #expect(h.c.testFloatOverride()[h.id(b)!] == true)
+        #expect(h.frame(b) == centred)
+
+        // Toggle float still works via resolveFocusedWindow
+        h.hotkeys.pressToggleFloat()
+        h.settle()
+        #expect(h.c.testFloatOverride()[h.id(b)!] == false)
+    }
 }

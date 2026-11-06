@@ -5,6 +5,7 @@ import Foundation
 public enum SyntheticEvent: Equatable, Sendable {
     case mouseMove(CGPoint)
     case leftMouseDown(CGPoint)
+    case leftMouseDragged(CGPoint)
     case leftMouseUp(CGPoint)
     case keyDown(CGKeyCode, CGEventFlags)
     case keyUp(CGKeyCode, CGEventFlags)
@@ -44,12 +45,15 @@ public final class SystemEventPoster: EventPoster {
             cg = CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .left)
         case .leftMouseDown(let p):
             cg = CGEvent(mouseEventSource: source, mouseType: .leftMouseDown, mouseCursorPosition: p, mouseButton: .left)
+        case .leftMouseDragged(let p):
+            cg = CGEvent(mouseEventSource: source, mouseType: .leftMouseDragged, mouseCursorPosition: p, mouseButton: .left)
         case .leftMouseUp(let p):
             cg = CGEvent(mouseEventSource: source, mouseType: .leftMouseUp, mouseCursorPosition: p, mouseButton: .left)
+            cg?.setIntegerValueField(.mouseEventButtonNumber, value: 0)
         case .keyDown(let k, let f), .keyUp(let k, let f):
             var down = false
             if case .keyDown = event { down = true }
-            cg = CGEvent(keyboardEventSource: source, virtualKey: k, keyDown: down)
+            cg = CGEvent(keyboardEventSource: CGEventSource(stateID: .privateState), virtualKey: k, keyDown: down)
             cg?.flags = f
         case .warpCursor(let p):
             CGWarpMouseCursorPosition(p)
@@ -58,7 +62,7 @@ public final class SystemEventPoster: EventPoster {
         }
         guard let e = cg else { return }
         switch event {
-        case .mouseMove, .leftMouseDown, .leftMouseUp: e.flags = [] // never inherit held ⌥⇧
+        case .mouseMove, .leftMouseDown, .leftMouseDragged, .leftMouseUp: e.flags = [] // never inherit held ⌥⇧
         default: break
         }
         e.setIntegerValueField(.eventSourceUserData, value: SyntheticEventMarker.value)

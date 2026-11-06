@@ -51,6 +51,7 @@ import Testing
 
     @Test func withoutThinBandGhosttyHasNoGrabPoint() {
         let (desk, w, mover) = setup(Self.ghosttyTabs, thinBand: false)
+        mover.configuration.fineGridFallback = false
         #expect(mover.move(w, toSpace: 2) == .noGrabPoint)
         #expect(desk.posted.isEmpty)
     }
@@ -70,13 +71,15 @@ import Testing
     /// The window server must agree the target is topmost at the grab point.
     @Test func windowServerCrossCheckRejectsCoveredPoints() {
         let (desk, w, mover) = setup([])
+        desk.addApp(pid: 200, bundleID: "com.example.other")
         // AX (wrongly) claims the target at every point, but another window covers its titlebar.
         desk.ax.hitTestOverride = { _ in AXHit(role: "AXWindow", pid: 100, window: w, isWindowItself: true) }
-        desk.addWindow(pid: 100, id: 2, frame: rect(50, 50, 900, 200))
+        desk.addWindow(pid: 200, id: 2, frame: rect(50, 50, 900, 200))
         #expect(mover.findGrabPoint(for: w, frame: frame) == nil)
         let (desk2, w2, unchecked) = setup([], windowServer: false)
+        desk2.addApp(pid: 200, bundleID: "com.example.other")
         desk2.ax.hitTestOverride = { _ in AXHit(role: "AXWindow", pid: 100, window: w2, isWindowItself: true) }
-        desk2.addWindow(pid: 100, id: 2, frame: rect(50, 50, 900, 200))
+        desk2.addWindow(pid: 200, id: 2, frame: rect(50, 50, 900, 200))
         #expect(unchecked.findGrabPoint(for: w2, frame: frame) == CGPoint(x: 300, y: 108))
     }
 
@@ -202,5 +205,48 @@ import Testing
             in: onscreenWithChild
         )
         #expect(agrees)
+    }
+
+    @Test func browserTabHoverPreviewAgreement() {
+        // Tab hover preview / tooltip popup at top.bounds.minY = 32 belonging to browser pid 100
+        let (_, w, _) = setup([])
+        let hoverCardBounds = rect(200, 32, 240, 80)
+        let onscreenWithPreview = [
+            OnscreenWindow(id: 888, pid: 100, layer: 0, bounds: hoverCardBounds, isOnscreen: true),
+            OnscreenWindow(id: 1, pid: 100, layer: 0, bounds: frame, isOnscreen: true),
+        ]
+        let agrees = SpaceMover.isWindowServerAgreement(
+            at: CGPoint(x: 250, y: 50), target: w, frame: frame,
+            hit: AXHit(role: "AXWindow", pid: 100, window: w, isWindowItself: true),
+            in: onscreenWithPreview
+        )
+        #expect(agrees)
+    }
+
+    @Test func browserWithWideTabsFindsPointNearTrafficLights() {
+        // Tab 1 covers 180 (traffic lights offset 80); Tab 2 covers all fractions >= 0.15.
+        // Gap at fraction 0.1125 (trafficLightsOffset + 10 -> x = 190) is clear.
+        let tabs = [
+            FakeTitlebarRegion(from: 0.0, to: 0.11, top: 0, bottom: 28, role: "AXRadioButton"),
+            FakeTitlebarRegion(from: 0.13, to: 1.0, top: 0, bottom: 28, role: "AXRadioButton"),
+        ]
+        let (desk, w, mover) = setup(tabs)
+        let grab = mover.findGrabPoint(for: w, frame: frame)
+        #expect(grab != nil)
+        #expect(grab?.x == 190) // trafficLightsOffset (80) + 10 = 90 + frame.minX(100) = 190
+        #expect(mover.move(w, toSpace: 2) == .moved)
+        #expect(desk.space(of: w) == desk.spaces.userSpace(index: 2, display: 1)?.id)
+    }
+
+    @Test func browserWithTabsCoveringLeftFindsPointNearRightEdge() {
+        // Tabs cover from 0.0 to 0.91 (including fractions up to 0.90 and maxX - 80);
+        // candidate at maxX - 40 (x = 844, fraction = 0.93) is clear.
+        let tabs = [FakeTitlebarRegion(from: 0.0, to: 0.91, top: 0, bottom: 28, role: "AXRadioButton")]
+        let (desk, w, mover) = setup(tabs)
+        let grab = mover.findGrabPoint(for: w, frame: frame)
+        #expect(grab != nil)
+        #expect(grab?.x == 844) // maxX (884) - 40 = 844
+        #expect(mover.move(w, toSpace: 2) == .moved)
+        #expect(desk.space(of: w) == desk.spaces.userSpace(index: 2, display: 1)?.id)
     }
 }

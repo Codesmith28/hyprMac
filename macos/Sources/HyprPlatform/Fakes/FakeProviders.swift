@@ -101,6 +101,12 @@ public final class FakeEventPoster: EventPoster {
                 if let hit = desk.hitTest(p), let w = hit.window, SpaceMover.isAcceptableGrab(hit, for: w) {
                     desk.grabbed = w
                 }
+            case .leftMouseDragged(let p):
+                desk.cursor = p
+                if desk.mouseIsDown && desk.grabbed == nil,
+                   let hit = desk.hitTest(p), let w = hit.window, SpaceMover.isAcceptableGrab(hit, for: w) {
+                    desk.grabbed = w
+                }
             case .leftMouseUp(let p):
                 desk.cursor = p
                 desk.mouseIsDown = false

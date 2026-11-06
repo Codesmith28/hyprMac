@@ -45,18 +45,7 @@ extension Coordinator {
                           engine.space(of: otherId) == currentSpace else { return nil }
                     return (otherId, rect)
                 }
-                let targetWindow: (id: UInt64, rect: CGRect)? = {
-                    if let containing = otherTiled.first(where: { $0.rect.contains(center) }) {
-                        return containing
-                    }
-                    if !target.contains(center) {
-                        return otherTiled.min(by: {
-                            hypot($0.rect.midX - center.x, $0.rect.midY - center.y) <
-                            hypot($1.rect.midX - center.x, $1.rect.midY - center.y)
-                        })
-                    }
-                    return nil
-                }()
+                let targetWindow: (id: UInt64, rect: CGRect)? = otherTiled.first(where: { $0.rect.contains(center) })
                 if let targetWindow {
                     guard let plan = try? engine.swap(window: id, with: targetWindow.id) else { continue }
                     activity += 1

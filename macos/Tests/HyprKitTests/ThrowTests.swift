@@ -90,15 +90,17 @@ import Testing
         #expect(h.desk.posted.isEmpty)
     }
 
-    @Test func throwTimeoutNotifiesAndKeepsLayout() {
+    @Test func throwTimeoutNotifiesAndKeepsLayout() throws {
         let (h, a, b, _) = setup()
         h.desk.nativeSwitchEnabled = false
+        let fa = try #require(h.frame(a))
+        let grab = try #require(h.c.mover.findGrabPoint(for: a, frame: fa))
         throwFocused(h, 2)
         #expect(h.recorder.throwFailures.count == 1)
         #expect(h.recorder.throwFailures.first?.contains("Switch to Desktop 2") == true)
         #expect(h.desk.space(of: a) == h.s1)
         #expect(h.frame(b) == leftHalf && h.frame(a) == rightHalf)
-        #expect(h.desk.posted.suffix(2).first == .leftMouseUp(CGPoint(x: 900, y: 45)))
+        #expect(h.desk.posted.suffix(2).first == .leftMouseUp(grab))
     }
 
     /// Real macOS (throw-rapid E2E): a second press during a throw used to vanish silently. Both calls
@@ -231,5 +233,31 @@ import Testing
         throwFocused(h, 2)
         #expect(h.desk.space(of: a) == h.s2)
         #expect(h.recorder.throwFailures.isEmpty)
+    }
+
+    @Test func throwBrowserWindowWithTabHoverPreview() {
+        let (h, a, _, _) = setup()
+        // Add a tab hover card / preview belonging to the browser (pid 100) at layer 0
+        _ = h.desk.addWindow(pid: 100, id: 99, frame: rect(200, 32, 240, 80))
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+        #expect(h.desk.posted.contains(where: {
+            if case .leftMouseDragged = $0 { return true }; return false
+        }))
+    }
+
+    @Test func throwBrowserWindowWithTabsAcrossTitlebar() {
+        let (h, a, _, _) = setup()
+        // Tabs span top: 3..28 across the titlebar
+        h.desk.updateQuirks(a) {
+            $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, top: 3, bottom: 28, role: "AXRadioButton")]
+        }
+        throwFocused(h, 2)
+        #expect(h.desk.space(of: a) == h.s2)
+        #expect(h.recorder.throwFailures.isEmpty)
+        #expect(h.desk.posted.contains(where: {
+            if case .leftMouseDragged = $0 { return true }; return false
+        }))
     }
 }

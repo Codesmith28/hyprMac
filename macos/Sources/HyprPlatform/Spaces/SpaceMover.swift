@@ -41,7 +41,9 @@ public final class SpaceMover {
         /// centered search bars / command palettes, or custom toolbars), sample a finer grid across
         /// the titlebar band to find an acceptable grab area.
         public var fineGridFallback = true
-        public var fineGridYOffsets: [CGFloat] = [6, 12, 18, 24]
+        public var fineGridYOffsets: [CGFloat] = [1, 2, 4, 8, 14, 20]
+        /// Whether to dynamically inspect and target safe titlebar gaps between and around traffic light buttons.
+        public var trafficLightsFallback = true
         /// What to do if physical Shift is still held (the user is still on ⌥⇧N) before ⌥N.
         public var shiftRelease: ShiftReleasePolicy = .waitUpTo(0.3)
         public var shiftPollInterval: TimeInterval = 0.01
@@ -146,6 +148,30 @@ public final class SpaceMover {
         return pts
     }
 
+    /// Dynamically finds grab points in the safe non-control spaces between and around the traffic light buttons.
+    /// This corner is universally titlebar in macOS and immune to full tab bars or centered search bars.
+    public func trafficLightCandidates(for window: WindowRef, frame: CGRect, close: CGRect?, mini: CGRect?, zoom: CGRect?) -> [CGPoint] {
+        guard configuration.trafficLightsFallback else { return [] }
+        var pts: [CGPoint] = []
+        if let c = close, let m = mini {
+            // Gap between Close (red) and Minimize (yellow)
+            pts.append(CGPoint(x: (c.maxX + m.minX) / 2, y: (c.midY + m.midY) / 2))
+        }
+        if let m = mini, let z = zoom {
+            // Gap between Minimize (yellow) and Zoom/Fullscreen (green)
+            pts.append(CGPoint(x: (m.maxX + z.minX) / 2, y: (m.midY + z.midY) / 2))
+        }
+        if let z = zoom {
+            // Just right of Zoom button
+            pts.append(CGPoint(x: z.maxX + 6, y: z.midY))
+        }
+        if let c = close, configuration.thinBandFallback {
+            // Thin margin above close button
+            pts.append(CGPoint(x: c.midX, y: max(frame.minY + 2, c.minY - 3)))
+        }
+        return pts
+    }
+
     /// Finer grid of candidate grab points across the titlebar band (avoiding traffic lights and right margin).
     public func fineGridCandidates(for frame: CGRect) -> [CGPoint] {
         let minX = frame.minX + max(configuration.trafficLightsOffset, 70)
@@ -153,9 +179,29 @@ public final class SpaceMover {
         guard maxX > minX else { return [] }
         let fractions: [CGFloat] = [0.15, 0.20, 0.30, 0.35, 0.40, 0.45, 0.55, 0.60, 0.65, 0.70, 0.80, 0.85, 0.90]
         var xs: [CGFloat] = []
+        let nearTrafficLights = [
+            frame.minX + configuration.trafficLightsOffset + 10,
+            frame.minX + configuration.trafficLightsOffset + 25,
+        ]
+        for x in nearTrafficLights {
+            if x >= minX && x <= maxX && !xs.contains(where: { abs($0 - x) < 0.5 }) {
+                xs.append(x)
+            }
+        }
         for f in fractions {
             let x = frame.minX + frame.width * f
-            if x >= minX && x <= maxX { xs.append(x) }
+            if x >= minX && x <= maxX && !xs.contains(where: { abs($0 - x) < 0.5 }) {
+                xs.append(x)
+            }
+        }
+        let rightEdge = [
+            maxX - 80,
+            maxX - 40,
+        ]
+        for x in rightEdge {
+            if x >= minX && x <= maxX && !xs.contains(where: { abs($0 - x) < 0.5 }) {
+                xs.append(x)
+            }
         }
         if xs.isEmpty { xs.append((minX + maxX) / 2) }
         let primary = candidates(for: frame)
@@ -191,13 +237,7 @@ public final class SpaceMover {
         }
         if top.id == target.windowID { return true }
         if let hitWin = hit?.window, top.id == hitWin.windowID { return true }
-        if top.pid == target.pid {
-            let margin: CGFloat = 2
-            let expandedFrame = frame.insetBy(dx: -margin, dy: -margin)
-            if expandedFrame.contains(top.bounds) || top.bounds.insetBy(dx: -margin, dy: -margin).contains(frame) {
-                return true
-            }
-        }
+        if top.pid == target.pid { return true }
         return false
     }
 
@@ -206,6 +246,22 @@ public final class SpaceMover {
     /// resolving to the wrong window).
     public func findGrabPoint(for window: WindowRef, frame: CGRect) -> CGPoint? {
         let onscreen = windowServer?.onscreenWindows()
+
+        // 1. Dynamic traffic light gaps (highest priority when real AX buttons exist)
+        let (close, mini, zoom) = ax.trafficLightButtons(of: window)
+        if close != nil || mini != nil || zoom != nil {
+            for p in trafficLightCandidates(for: window, frame: frame, close: close, mini: mini, zoom: zoom) {
+                let hit = try? ax.element(at: p)
+                guard Self.isAcceptableGrab(hit, for: window) else { continue }
+                if let list = onscreen, !Self.isWindowServerAgreement(at: p, target: window, frame: frame, hit: hit, in: list) {
+                    continue
+                }
+                Log.mover.debug("grab point found in traffic light area at \(p.debugDescription)")
+                return p
+            }
+        }
+
+        // 2. Primary candidates
         for p in candidates(for: frame) {
             let hit = try? ax.element(at: p)
             guard Self.isAcceptableGrab(hit, for: window) else {
@@ -218,6 +274,8 @@ public final class SpaceMover {
             }
             return p
         }
+
+        // 3. Fine grid candidates
         if configuration.fineGridFallback {
             for p in fineGridCandidates(for: frame) {
                 let hit = try? ax.element(at: p)
@@ -277,10 +335,22 @@ public final class SpaceMover {
         let saved = poster.cursorLocation()
         poster.post(.mouseMove(grab))
         poster.post(.leftMouseDown(grab))
-        defer {
+        poster.post(.leftMouseDragged(CGPoint(x: grab.x + 1, y: grab.y)))
+        poster.post(.leftMouseDragged(grab))
+
+        var mouseReleased = false
+        func ensureMouseUp() {
+            guard !mouseReleased else { return }
+            mouseReleased = true
             poster.post(.leftMouseUp(grab))
+            let curr = poster.cursorLocation()
+            if curr != grab {
+                poster.post(.leftMouseUp(curr))
+            }
             poster.post(.warpCursor(saved))
         }
+        defer { ensureMouseUp() }
+
         clock.sleep(configuration.pressDelay)
         let flags = switchFlags(forDesktop: n)
         lastShiftOutcome = waitForShiftRelease(posting: flags)

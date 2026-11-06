@@ -4,9 +4,9 @@ import Foundation
 import HyprPlatform
 
 /// Native window navigation and positioning:
-/// - Directional focus in the BSP tree (⌃⌥H/J/K/L, ⌃⌥←/↓/↑/→)
-/// - Directional window move/swap in the BSP tree (⌃⌥⇧H/J/K/L, ⌃⌥⇧←/↓/↑/→)
-/// - Center window (⌃⌥C)
+/// - Directional focus in the BSP tree (⌥⇧H/J/K/L, ⌥⇧←/↓/↑/→)
+/// - Directional window move/swap in the BSP tree (⌥⇧⌘H/J/K/L, ⌥⇧⌘←/↓/↑/→)
+/// - Center window (⌥⇧C)
 extension Coordinator {
 
     public func focus(direction: Direction) {
@@ -26,8 +26,7 @@ extension Coordinator {
     func focusNow(direction: Direction) {
         dispatchPrecondition(condition: .onQueue(queue))
         guard running, !userPaused, !stageManagerPaused, !dragging, !throwInFlight else { return }
-        guard let pid = try? deps.ax.focusedApplication(),
-              let window = try? deps.ax.focusedWindow(pid: pid),
+        guard let (pid, window) = resolveFocusedWindow(),
               !isIgnored(pid: pid),
               let id = idByRef[window] else { return }
         guard let currentFrame = lastTargets[id] ?? (try? deps.ax.frame(of: window)) else { return }
@@ -38,12 +37,9 @@ extension Coordinator {
         guard let targetId = findCandidate(from: id, currentFrame: currentFrame, space: sid, direction: direction),
               let targetRef = ref(for: targetId) else { return }
 
-        try? deps.ax.setBool(.main, true, of: targetRef)
-        try? deps.ax.setBool(.focused, true, of: targetRef)
-        if #available(macOS 14.0, *) {
-            NSRunningApplication(processIdentifier: targetRef.pid)?.activate()
-        } else {
-            NSRunningApplication(processIdentifier: targetRef.pid)?.activate(options: .activateIgnoringOtherApps)
+        _ = try? deps.ax.raise(targetRef)
+        if let app = NSRunningApplication(processIdentifier: targetRef.pid) {
+            app.activate(options: .activateIgnoringOtherApps)
         }
         EventLog.shared.emit("focus_direction", ["window": Int(targetRef.windowID), "direction": direction.rawValue])
     }
@@ -51,8 +47,7 @@ extension Coordinator {
     func moveNow(direction: Direction) {
         dispatchPrecondition(condition: .onQueue(queue))
         guard running, !userPaused, !stageManagerPaused, !dragging, !throwInFlight else { return }
-        guard let pid = try? deps.ax.focusedApplication(),
-              let window = try? deps.ax.focusedWindow(pid: pid),
+        guard let (pid, window) = resolveFocusedWindow(),
               !isIgnored(pid: pid),
               let id = idByRef[window],
               lastStates[id] == .tiled else { return }
@@ -67,16 +62,17 @@ extension Coordinator {
         apply(plan)
 
         // Keep focus on the moved window
-        try? deps.ax.setBool(.main, true, of: window)
-        try? deps.ax.setBool(.focused, true, of: window)
+        _ = try? deps.ax.raise(window)
+        if let app = NSRunningApplication(processIdentifier: window.pid) {
+            app.activate(options: .activateIgnoringOtherApps)
+        }
         EventLog.shared.emit("move_direction", ["window": Int(window.windowID), "target": Int(targetId), "direction": direction.rawValue])
     }
 
     func centerFocusedWindowNow() {
         dispatchPrecondition(condition: .onQueue(queue))
         guard running, !userPaused, !stageManagerPaused, !dragging, !throwInFlight else { return }
-        guard let pid = try? deps.ax.focusedApplication(),
-              let window = try? deps.ax.focusedWindow(pid: pid),
+        guard let (pid, window) = resolveFocusedWindow(),
               !isIgnored(pid: pid),
               let id = idByRef[window],
               let state = lastStates[id] else { return }

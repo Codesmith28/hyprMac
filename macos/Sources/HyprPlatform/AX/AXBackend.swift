@@ -80,6 +80,9 @@ public protocol AXBackend: AnyObject {
     func setSize(_ size: CGSize, of window: WindowRef) throws
     func bool(_ attribute: AXBoolAttribute, of window: WindowRef) throws -> Bool
     func setBool(_ attribute: AXBoolAttribute, _ value: Bool, of window: WindowRef) throws
+    func raise(_ window: WindowRef) throws
+    /// Bounding boxes of the window's traffic light buttons (close, minimize, zoom/fullscreen) when available.
+    func trafficLightButtons(of window: WindowRef) -> (close: CGRect?, minimize: CGRect?, zoom: CGRect?)
     /// `AXEnhancedUserInterface` on the application element.
     func enhancedUserInterface(pid: pid_t) throws -> Bool
     func setEnhancedUserInterface(_ value: Bool, pid: pid_t) throws
@@ -87,4 +90,10 @@ public protocol AXBackend: AnyObject {
     func focusedWindow(pid: pid_t) throws -> WindowRef?
     /// `AXUIElementCopyElementAtPosition` on the system-wide element.
     func element(at point: CGPoint) throws -> AXHit?
+}
+
+public extension AXBackend {
+    func trafficLightButtons(of window: WindowRef) -> (close: CGRect?, minimize: CGRect?, zoom: CGRect?) {
+        (nil, nil, nil)
+    }
 }

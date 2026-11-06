@@ -53,6 +53,7 @@ public enum FakeAXCall: Equatable, Sendable {
     case setSize(WindowRef, CGSize)
     case bool(AXBoolAttribute, WindowRef)
     case setBool(AXBoolAttribute, Bool, WindowRef)
+    case raise(WindowRef)
     case enhancedUI(pid_t)
     case setEnhancedUI(pid_t, Bool)
     case focusedApplication
@@ -61,7 +62,7 @@ public enum FakeAXCall: Equatable, Sendable {
 
     public var isWrite: Bool {
         switch self {
-        case .setPosition, .setSize, .setBool, .setEnhancedUI: return true
+        case .setPosition, .setSize, .setBool, .setEnhancedUI, .raise: return true
         default: return false
         }
     }
@@ -491,7 +492,7 @@ public final class FakeDesktop: @unchecked Sendable {
 extension FakeAXCall {
     var target: WindowRef? {
         switch self {
-        case .facts(let r), .frame(let r), .setPosition(let r, _), .setSize(let r, _), .bool(_, let r), .setBool(_, _, let r):
+        case .facts(let r), .frame(let r), .setPosition(let r, _), .setSize(let r, _), .bool(_, let r), .setBool(_, _, let r), .raise(let r):
             return r
         default: return nil
         }

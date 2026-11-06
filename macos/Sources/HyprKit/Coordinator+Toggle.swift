@@ -20,7 +20,7 @@ extension Coordinator {
     func toggleFocusedFloatNow() {
         dispatchPrecondition(condition: .onQueue(queue))
         guard running, !userPaused, !stageManagerPaused, !dragging, !throwInFlight else { return }
-        guard let pid = try? deps.ax.focusedApplication(), let window = try? deps.ax.focusedWindow(pid: pid),
+        guard let (pid, window) = resolveFocusedWindow(),
               !isIgnored(pid: pid), let id = idByRef[window], let state = lastStates[id] else { return }
         // Fullscreen / minimized / hidden windows are left alone (checked live too: the cached
         // state may predate the change).

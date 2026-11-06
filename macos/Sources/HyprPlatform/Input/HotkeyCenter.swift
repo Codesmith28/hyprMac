@@ -44,7 +44,7 @@ public final class HotkeyCenter: ThrowHotkeys {
 
     /// Hotkey id of ⌥⇧F (digits use their own number 1–9).
     public static let toggleFloatID: UInt32 = 100
-    /// Hotkey id of Center Window (⌃⌥C).
+    /// Hotkey id of Center Window (⌥⇧C).
     public static let centerWindowID: UInt32 = 200
     /// Base ID for focus direction shortcuts.
     public static let focusBaseID: UInt32 = 210

@@ -116,20 +116,20 @@ public struct KeyBindings: Equatable, Sendable {
     /// Modifiers hyprMac listens for with 1–9 (the native "Switch to Desktop N" shortcut).
     public var switchModifiers: KeyModifiers
 
-    /// Prefix for native navigation and window operations (default: ctrl + option).
+    /// Prefix for native navigation and window operations (default: opt + shift).
     public var prefix: KeyModifiers
-    /// Center the window (default: pref + c, i.e. ⌃⌥C).
+    /// Center the window (default: pref + c, i.e. ⌥⇧C).
     public var centerWindow: KeySpec
-    /// Move focus in the BSP tree (pref + h/j/k/l and pref + arrow keys).
+    /// Move focus in the BSP tree (pref + h/j/k/l and pref + arrow keys, i.e. ⌥⇧H/J/K/L, ⌥⇧←/↓/↑/→).
     public var focusKeys: [(direction: Direction, spec: KeySpec)]
-    /// Move windows in the BSP tree (pref + shift + h/j/k/l and pref + shift + arrow keys).
+    /// Move windows in the BSP tree (pref + cmd + h/j/k/l and pref + cmd + arrow keys, i.e. ⌥⇧⌘H/J/K/L, ⌥⇧⌘←/↓/↑/→).
     public var moveKeys: [(direction: Direction, spec: KeySpec)]
 
     public init(
         throwModifiers: KeyModifiers,
         toggleFloat: KeySpec,
         switchModifiers: KeyModifiers,
-        prefix: KeyModifiers = [.control, .option],
+        prefix: KeyModifiers = [.option, .shift],
         centerWindow: KeySpec? = nil,
         focusKeys: [(direction: Direction, spec: KeySpec)]? = nil,
         moveKeys: [(direction: Direction, spec: KeySpec)]? = nil
@@ -139,7 +139,7 @@ public struct KeyBindings: Equatable, Sendable {
         self.switchModifiers = switchModifiers
         self.prefix = prefix
         self.centerWindow = centerWindow ?? KeySpec(modifiers: prefix, key: "c")!
-        let moveMods = prefix.union(.shift)
+        let moveMods = prefix.contains(.shift) ? prefix.union(.command) : prefix.union(.shift)
         self.focusKeys = focusKeys ?? [
             (.left, KeySpec(modifiers: prefix, key: "h")!),
             (.left, KeySpec(modifiers: prefix, key: "left")!),
