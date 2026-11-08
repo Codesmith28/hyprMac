@@ -5,6 +5,7 @@
 -- Defined as "alt+shift" ("opt shift" / "<M-S>"). Hardcoded in binary for macOS safety.
 local prefix = "alt+shift"
 
+---@diagnostic disable-next-line: lowercase-global
 config = {
     gaps = {
         inner = 8,
