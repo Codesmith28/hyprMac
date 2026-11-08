@@ -21,6 +21,38 @@ void merge_min(MinSize &into, double w, double h) {
     if (h > 0) into.h = h;
 }
 
+bool is_valid_frame(const Rect &r) {
+    return is_valid_rect(r) && r.w > 0 && r.h > 0;
+}
+
+bool frames_identical(const Rect &a, const Rect &b) {
+    return std::abs(a.x - b.x) <= 0.5 &&
+           std::abs(a.y - b.y) <= 0.5 &&
+           std::abs(a.w - b.w) <= 0.5 &&
+           std::abs(a.h - b.h) <= 0.5;
+}
+
+bool pairwise_precedes(const Rect &a, std::size_t a_idx,
+                       const Rect &b, std::size_t b_idx) {
+    if (!is_valid_frame(a) || !is_valid_frame(b) || frames_identical(a, b)) {
+        return a_idx > b_idx;
+    }
+
+    const double overlap_y = std::max(0.0, std::min(a.bottom(), b.bottom()) - std::max(a.y, b.y));
+    const double min_h = std::min(a.h, b.h);
+    const bool substantial_overlap = (min_h > 0 && overlap_y >= 0.5 * min_h);
+
+    if (substantial_overlap) {
+        if (std::abs(a.x - b.x) > 0.5) return a.x < b.x;
+        if (std::abs(a.y - b.y) > 0.5) return a.y < b.y;
+    } else {
+        if (std::abs(a.y - b.y) > 0.5) return a.y < b.y;
+        if (std::abs(a.x - b.x) > 0.5) return a.x < b.x;
+    }
+
+    return a_idx > b_idx;
+}
+
 } // namespace
 
 Engine::Engine(const Config &cfg) : cfg_(cfg) {}
@@ -183,7 +215,42 @@ hm_status Engine::reconcile(const Snapshot &s, Plan &out) {
     std::sort(restores.begin(), restores.end(),
               [this](WindowId a, WindowId b) { return model_.ghost(a)->seq > model_.ghost(b)->seq; });
     for (WindowId w : restores) restore(space, w, snap, pending);
-    for (auto it = inserts.rbegin(); it != inserts.rend(); ++it) dwindle_insert(space, *it, snap, pending);
+
+    if (space.tree.empty() && inserts.size() > 1) {
+        std::unordered_map<WindowId, Rect> frames;
+        frames.reserve(snap.windows.size());
+        for (const WindowInfo &w : snap.windows) {
+            frames.emplace(w.id, w.frame);
+        }
+
+        const std::size_t n = inserts.size();
+        std::vector<int> scores(n, 0);
+        for (std::size_t i = 0; i < n; ++i) {
+            const Rect &r_i = frames[inserts[i]];
+            for (std::size_t j = 0; j < n; ++j) {
+                if (i != j) {
+                    const Rect &r_j = frames[inserts[j]];
+                    if (pairwise_precedes(r_i, i, r_j, j)) {
+                        scores[i]++;
+                    }
+                }
+            }
+        }
+
+        std::vector<std::size_t> order(n);
+        for (std::size_t i = 0; i < n; ++i) order[i] = i;
+
+        std::sort(order.begin(), order.end(), [&](std::size_t i, std::size_t j) {
+            if (scores[i] != scores[j]) return scores[i] > scores[j];
+            return i > j;
+        });
+
+        for (std::size_t idx : order) {
+            dwindle_insert(space, inserts[idx], snap, pending);
+        }
+    } else {
+        for (auto it = inserts.rbegin(); it != inserts.rend(); ++it) dwindle_insert(space, *it, snap, pending);
+    }
 
     for (const WindowInfo &w : snap.windows) drop_if_untracked(w.id);
 

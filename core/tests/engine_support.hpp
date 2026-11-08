@@ -30,6 +30,17 @@ inline Snapshot snap(SpaceId space, std::initializer_list<W> windows, WindowId f
     return s;
 }
 
+inline Snapshot snap_frames(SpaceId space, std::initializer_list<std::pair<WindowId, Rect>> windows,
+                            WindowId focused = 0, Rect usable = kUsable, DisplayId display = 1) {
+    Snapshot s;
+    s.display = display;
+    s.space = space;
+    s.usable = usable;
+    s.focused = focused;
+    for (const auto &p : windows) s.windows.push_back({p.first, WindowState::Tiled, p.second, 0, 0});
+    return s;
+}
+
 inline Plan reconcile_ok(Engine &e, const Snapshot &s) {
     Plan p;
     REQUIRE(e.reconcile(s, p) == HM_OK);

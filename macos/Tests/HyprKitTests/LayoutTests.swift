@@ -106,4 +106,34 @@ import Testing
         #expect(h.frame(a) == leftHalf)
         #expect(tabs.allSatisfy { h.frame($0) == rightHalf }) // tabs share one frame
     }
+
+    @Test func preExistingSideBySideWindowsPreserveSpatialArrangementWhenLeftIsFrontmost() {
+        let h = Harness()
+        let a = h.desk.addWindow(pid: 100, id: 1, frame: rect(100, 100, 400, 600))
+        let b = h.desk.addWindow(pid: 100, id: 2, frame: rect(600, 100, 400, 600))
+        h.desk.focus(a)
+        h.start()
+        #expect(h.frame(a) == leftHalf)
+        #expect(h.frame(b) == rightHalf)
+    }
+
+    @Test func preExistingSideBySideWindowsPreserveSpatialArrangementWhenRightIsFrontmost() {
+        let h = Harness()
+        let a = h.desk.addWindow(pid: 100, id: 1, frame: rect(100, 100, 400, 600))
+        let b = h.desk.addWindow(pid: 100, id: 2, frame: rect(600, 100, 400, 600))
+        h.desk.focus(b)
+        h.start()
+        #expect(h.frame(a) == leftHalf)
+        #expect(h.frame(b) == rightHalf)
+    }
+
+    @Test func preExistingVerticallyStackedWindowsPreserveSpatialArrangement() {
+        let h = Harness()
+        let top = h.desk.addWindow(pid: 100, id: 1, frame: rect(100, 100, 600, 300))
+        let bottom = h.desk.addWindow(pid: 100, id: 2, frame: rect(100, 500, 600, 300))
+        h.desk.focus(bottom)
+        h.start()
+        #expect(h.frame(top) == leftHalf)
+        #expect(h.frame(bottom) == rightHalf)
+    }
 }
