@@ -11,7 +11,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### 🚀 Added
 - 🧭 **Native Navigation**: Directional focus (`⌥⇧H/J/K/L`, `⌥⇧Arrows`) and window swap (`⌥⇧⌘H/J/K/L`, `⌥⇧⌘Arrows`).
 - ⌨️ **Configurable Keybindings**: Expose all navigation, prefix, and action keys in `init.lua`.
-- 🔤 **Neovim Key Notation**: Support `<M-S-f>`, `<C-c>`, and space-separated modifiers (`opt shift`).
 - 🎯 **Center Window**: `⌥⇧C` shortcut to center active window on current display.
 - 🖱️ **Cursor Warp**: Auto-center cursor onto newly focused windows.
 - 🪟 **Drag-to-Swap**: Drag and drop tiled windows onto neighbors to swap layout slots.
@@ -23,11 +22,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 🐛 Fixed
 - ⚡ **Faster Space Throws**: Reduced transition delays by ~60% for snappier workspace throws.
-- 🌐 **Browser & Electron Throws**: Micro drag-delta fixes throwing Chrome, Brave, Arc, and Safari (`⌥⇧1..9`).
-- 📐 **Traffic Light Geometry**: Replaced hardcoded coordinates with runtime AX button midpoint queries.
+- 🚦 **Window Throw Reliability**: Dynamic traffic-light gap detection & micro drag-delta fix moving complex windows (Chrome, Arc, Safari, Teams) across spaces (⌥⇧1..9).
 - 🖱️ **Ghost Click Bug**: Guaranteed cursor release across grab and target positions via `defer`.
 - 🔍 **Electron Window Focus**: Fixed focus activation for apps with read-only AX focus (e.g. Obsidian).
-- 👆 **Trackpad Swipes**: Restricted drag swaps to window tiles, protecting native macOS space gestures.
+- 👆 **Gesture Protection**: Require direct on-tile drops for window swaps to prevent native trackpad space swipes from being hijacked.
 - 🍏 **macOS 14 Modernization**: Replaced deprecated `activateIgnoringOtherApps` API.
 
 ### 🧹 Maintenance
