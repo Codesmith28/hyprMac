@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 🚀 Added
 - **Native Keybindings**: Focus (`⌥⇧H/J/K/L`, `⌥⇧←/↓/↑/→`) and move/swap (`⌥⇧⌘H/J/K/L`, `⌥⇧⌘←/↓/↑/→`) with Vim & Arrow keys.
+- **Configurable Keybindings**: Expose all navigation, prefix, and window keys in `init.lua` for full transparency and native compatibility.
 - **Center Window**: `⌥⇧C` centers the focused window on its active display.
 - **Warp Cursor on Focus**: Automatically moves mouse pointer to the center of the newly focused window.
 - **Drag-to-Swap**: Dragging a tiled window onto a neighboring tile swaps their layout slots.
@@ -18,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`make update` Target**: Single command to recompile, install, and restart background service.
 
 ### 🐛 Fixed
+- **Snappy Space Throw**: Reduced routine delay buffers by ~60% (press delay, shift release, and post-switch settle).
 - **Browser & Electron Space Throw**: Added micro drag-delta to reliably throw Chrome, Brave, Arc, and Safari windows via `⌥⇧1..9`.
 - **Dynamic Traffic Light Gaps**: Replaced hardcoded titlebar coordinates with runtime AX button midpoint geometry.
 - **Ghost Click Elimination**: Guaranteed mouse button release on both grab point and current cursor position via `defer`.
