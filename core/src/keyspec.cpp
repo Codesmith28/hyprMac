@@ -193,7 +193,9 @@ std::string extras_to_json(const Extras &e) {
     json_list(out, e.rules.ignore);
     out += ",\"float\":";
     json_list(out, e.rules.float_);
-    out += "}}";
+    out += "},\"osd_popup\":";
+    out += e.osd_popup ? "true" : "false";
+    out += "}";
     return out;
 }
 

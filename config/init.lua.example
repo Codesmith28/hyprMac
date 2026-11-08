@@ -7,6 +7,9 @@ local prefix = "alt+shift"
 
 ---@diagnostic disable-next-line: lowercase-global
 config = {
+    -- Show brief on-screen HUD popup on window & workspace actions (default: true)
+    osd_popup = true,
+
     gaps = {
         inner = 8,
         outer = 12,

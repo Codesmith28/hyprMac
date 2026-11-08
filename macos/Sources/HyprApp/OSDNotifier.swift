@@ -25,6 +25,65 @@ public final class OSDNotifier {
         display(title: title, icon: icon)
     }
 
+    /// Shows the OSD notification when switching to Desktop N.
+    public func showSpaceSwitch(toSpace: Int) {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.showSpaceSwitch(toSpace: toSpace)
+            }
+            return
+        }
+
+        let title = "Desktop \(toSpace)"
+        let icon = Self.spaceIcon()
+        display(title: title, icon: icon)
+    }
+
+    /// Shows the OSD notification when throwing a window to Desktop N.
+    public func showSpaceThrow(app: String?, toSpace: Int) {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.showSpaceThrow(app: app, toSpace: toSpace)
+            }
+            return
+        }
+
+        let title: String
+        if let app = app?.trimmingCharacters(in: .whitespacesAndNewlines), !app.isEmpty {
+            title = "\(app) ➔ Desktop \(toSpace)"
+        } else {
+            title = "Desktop \(toSpace)"
+        }
+        let icon = Self.throwIcon()
+        display(title: title, icon: icon)
+    }
+
+    /// Returns the icon for switching spaces.
+    public static func spaceIcon() -> NSImage? {
+        let symbolName = "rectangle.stack"
+        let fallbackName = "macwindow"
+        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+            ?? NSImage(systemSymbolName: fallbackName, accessibilityDescription: nil)
+        if #available(macOS 12.0, *), let image {
+            let config = NSImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+            return image.withSymbolConfiguration(config)
+        }
+        return image
+    }
+
+    /// Returns the icon for throwing a window to a space.
+    public static func throwIcon() -> NSImage? {
+        let symbolName = "arrow.right.to.line"
+        let fallbackName = "arrow.forward.square"
+        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+            ?? NSImage(systemSymbolName: fallbackName, accessibilityDescription: nil)
+        if #available(macOS 12.0, *), let image {
+            let config = NSImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+            return image.withSymbolConfiguration(config)
+        }
+        return image
+    }
+
     /// Formats the notification text: e.g. "Ghostty: Floated" or "Floated" / "Tiled".
     public static func formatTitle(app: String?, state: WindowToggleState) -> String {
         let stateText = state == .floating ? "Floated" : "Tiled"

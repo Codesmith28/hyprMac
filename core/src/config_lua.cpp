@@ -264,17 +264,19 @@ std::string describe_key(lua_State *L, int idx) {
 
 struct Field {
     std::string_view name;
-    enum Kind { Number, Table, String, StringList } kind;
+    enum Kind { Number, Table, String, StringList, Boolean } kind;
     double *target;                          // Number
     std::vector<Field> children;             // Table
     std::optional<std::string> *str;         // String
     std::vector<std::string> *list;          // StringList
+    bool *boolean;                           // Boolean
 };
 
-Field num_field(std::string_view n, double *t) { return {n, Field::Number, t, {}, nullptr, nullptr}; }
-Field table_field(std::string_view n, std::vector<Field> c) { return {n, Field::Table, nullptr, std::move(c), nullptr, nullptr}; }
-Field str_field(std::string_view n, std::optional<std::string> *t) { return {n, Field::String, nullptr, {}, t, nullptr}; }
-Field list_field(std::string_view n, std::vector<std::string> *t) { return {n, Field::StringList, nullptr, {}, nullptr, t}; }
+Field num_field(std::string_view n, double *t) { return {n, Field::Number, t, {}, nullptr, nullptr, nullptr}; }
+Field table_field(std::string_view n, std::vector<Field> c) { return {n, Field::Table, nullptr, std::move(c), nullptr, nullptr, nullptr}; }
+Field str_field(std::string_view n, std::optional<std::string> *t) { return {n, Field::String, nullptr, {}, t, nullptr, nullptr}; }
+Field list_field(std::string_view n, std::vector<std::string> *t) { return {n, Field::StringList, nullptr, {}, nullptr, t, nullptr}; }
+Field bool_field(std::string_view n, bool *t) { return {n, Field::Boolean, nullptr, {}, nullptr, nullptr, t}; }
 
 // Reads the list at the top of the stack into `out`: a Lua sequence of non-empty strings,
 // at most hypr::kMaxRuleEntries. Raw, non-allocating API only. Returns an error or "".
@@ -354,6 +356,12 @@ std::string check_table(lua_State *L, const std::string &where, const std::vecto
                     type_error = read_string_list(L, path, match->list);
                 else
                     type_error = path + " must be a list of strings, got " + luaL_typename(L, -1);
+            } else if (match->kind == Field::Boolean) {
+                if (lua_type(L, -1) == LUA_TBOOLEAN) {
+                    if (match->boolean != nullptr) *match->boolean = (lua_toboolean(L, -1) != 0);
+                } else {
+                    type_error = path + " must be a boolean, got " + luaL_typename(L, -1);
+                }
             } else if (lua_type(L, -1) == LUA_TTABLE) {
                 type_error = check_table(L, path, match->children);
             } else {
@@ -509,6 +517,7 @@ hm_status run(const char *src, size_t len, const std::string &path, hm_config *i
                                      str_field("move_left", &key_move_left), str_field("move_down", &key_move_down),
                                      str_field("move_up", &key_move_up), str_field("move_right", &key_move_right)}),
                 table_field("rules", {list_field("ignore", &extras.rules.ignore), list_field("float", &extras.rules.float_)}),
+                bool_field("osd_popup", &extras.osd_popup),
             };
             message = check_table(L, "config", schema);
         }

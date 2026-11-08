@@ -3,6 +3,7 @@ import Foundation
 /// What the app shell needs from the tiling machinery. Implemented by `Coordinator`.
 public protocol TilingController: AnyObject {
     var isPaused: Bool { get }
+    var osdPopup: Bool { get }
     var delegate: TilingControllerDelegate? { get set }
     func start()
     func stop()
@@ -34,6 +35,10 @@ public enum TilingNotice: Equatable {
     case switchShortcutMismatch(configured: String, native: [String])
     /// Active application window state toggled between floating and tiled.
     case windowStateToggled(app: String?, state: WindowToggleState)
+    /// Switched to Desktop / Workspace N.
+    case spaceSwitched(toSpace: Int)
+    /// Focused window thrown to Desktop / Workspace N.
+    case windowThrown(app: String?, toSpace: Int)
 }
 
 public protocol TilingControllerDelegate: AnyObject {

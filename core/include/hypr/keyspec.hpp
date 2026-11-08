@@ -54,6 +54,7 @@ struct Rules {
 struct Extras {
     Keys keys;
     Rules rules;
+    bool osd_popup = true;
 };
 
 // Cross-field checks (throw vs switch, toggle_float vs throw digits). "" when fine, else a

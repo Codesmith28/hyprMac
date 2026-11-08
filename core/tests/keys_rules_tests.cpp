@@ -55,10 +55,10 @@ Extras extras(const std::string &lua) {
 bool has(const std::string &hay, const std::string &needle) { return hay.find(needle) != std::string::npos; }
 
 const char *kDefaultJson =
-    R"({"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt"},"rules":{"ignore":[],"float":[]}})";
+    R"({"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt"},"rules":{"ignore":[],"float":[]},"osd_popup":true})";
 
 const char *kShippedExampleJson =
-    R"({"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt","center_window":"alt+shift+c","focus_left":"alt+shift+h","focus_down":"alt+shift+j","focus_up":"alt+shift+k","focus_right":"alt+shift+l","move_left":"alt+shift+cmd+h","move_down":"alt+shift+cmd+j","move_up":"alt+shift+cmd+k","move_right":"alt+shift+cmd+l"},"rules":{"ignore":["com.docker.docker","com.mongodb.compass"],"float":["com.apple.systempreferences","com.apple.calculator"]}})";
+    R"({"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt","center_window":"alt+shift+c","focus_left":"alt+shift+h","focus_down":"alt+shift+j","focus_up":"alt+shift+k","focus_right":"alt+shift+l","move_left":"alt+shift+cmd+h","move_down":"alt+shift+cmd+j","move_up":"alt+shift+cmd+k","move_right":"alt+shift+cmd+l"},"rules":{"ignore":["com.docker.docker","com.mongodb.compass"],"float":["com.apple.systempreferences","com.apple.calculator"]},"osd_popup":true})";
 
 std::string parse_err(const char *text, bool key) {
     hypr::Chord c;
@@ -170,7 +170,7 @@ TEST_CASE("extras: custom keys come back canonical") {
     auto e = extras("config = { keys = { throw = 'Ctrl+Alt', toggle_float = 'ALT+shift+Space', switch = 'ctrl' } }\n");
     REQUIRE(e.status == HM_OK);
     CHECK(e.json == R"({"keys":{"throw":"ctrl+alt","toggle_float":"alt+shift+space","switch":"ctrl"},)"
-                    R"("rules":{"ignore":[],"float":[]}})");
+                    R"("rules":{"ignore":[],"float":[]},"osd_popup":true})");
     e = extras("config = { keys = { toggle_float = 'ctrl+alt+t' } }\n");  // partial table: others keep defaults
     REQUIRE(e.status == HM_OK);
     CHECK(has(e.json, R"("throw":"alt+shift","toggle_float":"ctrl+alt+t","switch":"alt")"));
@@ -203,6 +203,12 @@ TEST_CASE("extras: grammar errors use the loader style and keep the previous con
     CHECK(has(e.err, "unknown key 'thro' in config.keys (did you mean 'throw'?)"));
     e = extras("config = { keys = 'alt' }\n");
     CHECK(has(e.err, "config.keys must be a table"));
+    e = extras("config = { osd_popup = false }\n");
+    CHECK(e.status == HM_OK);
+    CHECK(has(e.json, R"("osd_popup":false)"));
+    e = extras("config = { osd_popup = 'no' }\n");
+    CHECK(e.status == HM_ERR_CONFIG);
+    CHECK(has(e.err, "config.osd_popup must be a boolean, got string"));
 }
 
 TEST_CASE("hm_config_load_file accepts keys and rules as known keys, and still validates them") {

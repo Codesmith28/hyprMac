@@ -21,6 +21,7 @@ public struct Config: Equatable {
     public var floatMinHeight: Double
     public var keys: KeyBindings = .defaults
     public var rules = AppRules()
+    public var osdPopup: Bool = true
 
     public static var defaults: Config { var c = hm_config(); hm_config_default(&c); return Config(c) }
 
@@ -30,14 +31,15 @@ public struct Config: Equatable {
     }
     public init(innerGap: Double, outerGap: Double, splitRatio: Double = 0.5,
                 floatMinWidth: Double = 400, floatMinHeight: Double = 300,
-                keys: KeyBindings = .defaults, rules: AppRules = AppRules()) {
+                keys: KeyBindings = .defaults, rules: AppRules = AppRules(),
+                osdPopup: Bool = true) {
         self.innerGap = innerGap; self.outerGap = outerGap; self.splitRatio = splitRatio
         self.floatMinWidth = floatMinWidth; self.floatMinHeight = floatMinHeight
-        self.keys = keys; self.rules = rules
+        self.keys = keys; self.rules = rules; self.osdPopup = osdPopup
     }
 
     /// Parses the JSON of `hm_config_load_extras` (canonical, already validated by the core).
-    public static func parseExtras(json: String) -> (keys: KeyBindings, rules: AppRules)? {
+    public static func parseExtras(json: String) -> (keys: KeyBindings, rules: AppRules, osdPopup: Bool)? {
         guard let data = json.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let k = root["keys"] as? [String: String],
@@ -72,7 +74,8 @@ public struct Config: Equatable {
         guard let r = root["rules"] as? [String: Any],
               let ignore = r["ignore"] as? [String], let float = r["float"] as? [String]
         else { return nil }
-        return (keys, AppRules(ignore: ignore, float: float))
+        let osd = root["osd_popup"] as? Bool ?? true
+        return (keys, AppRules(ignore: ignore, float: float), osd)
     }
     var c: hm_config {
         hm_config(inner_gap: innerGap, outer_gap: outerGap, split_ratio: splitRatio,
@@ -121,6 +124,7 @@ public final class ConfigStore {
         var loaded = Config(c)
         loaded.keys = extras.keys
         loaded.rules = extras.rules
+        loaded.osdPopup = extras.osdPopup
         current = loaded
         return .loaded(current)
     }

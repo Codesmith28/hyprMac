@@ -176,7 +176,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
             controller.stop()
             waitForPermission()
         case let .windowStateToggled(app, state):
-            osdNotifier.show(app: app, state: state)
+            if controller.osdPopup {
+                osdNotifier.show(app: app, state: state)
+            }
+        case let .spaceSwitched(toSpace):
+            if controller.osdPopup {
+                osdNotifier.showSpaceSwitch(toSpace: toSpace)
+            }
+        case let .windowThrown(app, toSpace):
+            if controller.osdPopup {
+                osdNotifier.showSpaceThrow(app: app, toSpace: toSpace)
+            }
         }
         refreshMenu()
     }

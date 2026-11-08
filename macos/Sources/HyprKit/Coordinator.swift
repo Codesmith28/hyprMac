@@ -141,6 +141,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     }
 
     public var isPaused: Bool { mirrorLock.lock(); defer { mirrorLock.unlock() }; return pausedMirror }
+    public var osdPopup: Bool { configStore.current.osdPopup }
 
     public init(deps: Dependencies, configStore: ConfigStore, appStateStore: AppStateStore = AppStateStore(),
                 tuning: Tuning = Tuning()) {
@@ -504,6 +505,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                       target.id != deps.spaces.activeSpace(display: display) {
                 // macOS is about to animate; a throw posted during the animation would be dropped.
                 transitions.noteTransition(at: deps.clock.now())
+                notify(.spaceSwitched(toSpace: n))
             }
         }
     }
@@ -577,6 +579,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                            let plan = try? engine.relayout(space: src) {
                             apply(plan)
                         }
+                        let app = appDisplayName(for: window)
+                        notify(.windowThrown(app: app, toSpace: n))
                     case .alreadyThere:
                         break
                     case .transitionInFlight:

@@ -33,7 +33,8 @@ import Testing
         #expect(h.frame(b) == root) // the source Space closed the hole right away
         #expect(h.tiled(h.s1) == 1 && h.tiled(h.s2) == 2)
         #expect(h.c.testSpaceOf(h.id(a)!) == h.s2)
-        #expect(h.recorder.notices.isEmpty)
+        #expect(h.recorder.throwFailures.isEmpty)
+        #expect(h.recorder.notices == [.windowThrown(app: "com.example.editor", toSpace: 2)])
         // The drag trick released the mouse and put the cursor back.
         #expect(h.desk.posted.contains(.keyDown(19, .maskAlternate)))
         if case .warpCursor = h.desk.posted.last {} else { Issue.record("cursor not restored") }
@@ -117,7 +118,8 @@ import Testing
         }
         h.settle()
         #expect(h.desk.space(of: a) == h.s3)
-        #expect(h.recorder.notices.isEmpty)
+        #expect(h.recorder.throwFailures.isEmpty)
+        #expect(h.recorder.notices == [.windowThrown(app: "com.example.editor", toSpace: 2), .windowThrown(app: "com.example.editor", toSpace: 3)])
     }
 
     @Test func throwDuringTransitionIsRetriedAfterSettling() {
@@ -128,7 +130,8 @@ import Testing
         h.desk.clock.advance(by: 1) // the animation finishes before the retry fires
         h.settle()
         #expect(h.desk.space(of: a) == h.s2)
-        #expect(h.recorder.notices.isEmpty)
+        #expect(h.recorder.throwFailures.isEmpty)
+        #expect(h.recorder.notices == [.windowThrown(app: "com.example.editor", toSpace: 2)])
     }
 
     @Test func throwDuringEndlessTransitionGivesUpQuietly() {
@@ -168,7 +171,7 @@ import Testing
         h.spaceKeys.key(20, flags: .maskAlternate)  // ⌥3 exists
         h.spaceKeys.key(25, flags: [.maskAlternate, .maskShift]) // not a switch
         h.settle()
-        #expect(h.recorder.notices.count == 1)
+        #expect(h.recorder.notices == [.missingSpace(requested: 4, count: 3), .spaceSwitched(toSpace: 3)])
     }
 
     @Test func spaceKeyStartsTransitionSoThrowWaits() {
