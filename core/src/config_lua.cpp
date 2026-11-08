@@ -414,6 +414,11 @@ std::string parse_keys(const std::optional<std::string> &t, const std::optional<
         if (!e.empty()) return std::string("keys.") + it.name + ": " + e;
         *it.dst = c;
     }
+    if (out->prefix.mods != 0) {
+        if (out->prefix.mods != (hypr::kModAlt | hypr::kModShift)) {
+            return "keys.prefix: prefix is hardcoded to Option+Shift ('opt shift' / 'alt+shift') for native macOS safety and cannot be changed";
+        }
+    }
     return hypr::validate_keys(*out);
 }
 

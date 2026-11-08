@@ -45,9 +45,8 @@ public struct Config: Equatable {
               var keys = KeyBindings(throw: t, toggleFloat: f, switch: s)
         else { return nil }
 
-        if let prefStr = k["prefix"], let pref = KeyModifiers(parsing: prefStr) {
-            keys.prefix = pref
-        }
+        // Defensive programming: prefix is hardcoded in the binary to Option + Shift for native macOS safety.
+        keys.prefix = [.option, .shift]
         if let cwStr = k["center_window"], let cw = KeySpec(parsing: cwStr) {
             keys.centerWindow = cw
         }

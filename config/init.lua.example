@@ -1,64 +1,39 @@
 -- ~/.config/hyprmac/init.lua
--- hyprMac configuration. Everything is optional; delete a line to use the default.
--- Reload from the menu bar (hyprMac ▸ Reload Configuration) after editing,
--- or from a terminal with: pkill -HUP -x hyprMac
---
--- If this file has a mistake (a syntax error, an unknown key, a wrong type or a
--- value out of range), hyprMac rejects the whole file, keeps the settings it had
--- and shows a notification with the line and the problem.
---
--- The file runs in a sandbox: only the base, string, math and table libraries
--- are available (no io, os, require or load), with memory and time limits.
--- Gaps follow one rule: two tiles plus the inner gap fill their parent exactly,
--- and the outer gap is applied once, around the whole usable screen area.
+-- hyprMac configuration (reload: 'pkill -HUP -x hyprMac' or menu bar)
+
+-- Global prefix: Option + Shift (⌥⇧).
+-- Defined as "alt+shift" ("opt shift" / "<M-S>"). Hardcoded in binary for macOS safety.
+local prefix = "alt+shift"
 
 config = {
     gaps = {
-        inner = 8,   -- points between adjacent windows      (0 – 200)
-        outer = 12,  -- points between windows and the edges (0 – 200)
+        inner = 8,
+        outer = 12,
     },
-    -- A new window splits the focused one along its longer side and takes the
-    -- second half; split_ratio is the share the existing window keeps.
-    split_ratio = 0.5, -- share of a split given to the existing window (0.1 – 0.9)
-    -- Windows that are smaller than this when hyprMac FIRST sees them (dialogs,
-    -- palettes, small tools) float instead of tiling. The decision is per window
-    -- and sticky; a reload only affects windows seen afterwards. 0 disables an axis.
+    split_ratio = 0.5,
     float = {
-        min_width = 400,  -- points (0 – 2000)
-        min_height = 300, -- points (0 – 2000)
+        min_width = 400,
+        min_height = 300,
     },
-    -- Keyboard shortcuts, written as '+'-separated names (case-insensitive).
-    --   modifiers: alt (opt, option), shift, ctrl (control), cmd (command)
-    --   keys:      a–z, 0–9, f1–f12, space, tab, return, escape, grave, minus, equal,
-    --              comma, period, slash, left, right, up, down
-    -- A reload re-registers them.
     keys = {
-        throw = "alt+shift",         -- + a digit 1–9: move the focused window to that Desktop (modifiers only)
-        toggle_float = "alt+shift+f", -- float / tile the focused window (modifiers + exactly one key)
-        -- The modifiers hyprMac LISTENS for with 1–9, to warn when "Desktop N" doesn't exist
-        -- (modifiers only). Switching itself stays the native macOS shortcut, so this must
-        -- match System Settings ▸ Keyboard ▸ Keyboard Shortcuts ▸ Mission Control; hyprMac
-        -- warns when it doesn't. The throw uses the native shortcut's real modifiers.
+        -- Native desktop switch modifiers (System Settings ▸ Keyboard Shortcuts ▸ Mission Control)
         switch = "alt",
 
-        -- Window management and navigation shortcuts:
-        -- Native macOS bindings (like opt+cmd+d for Dock hiding) are never touched or overridden.
-        -- Customize or rebind any of these to suit your preferences:
-        prefix = "alt+shift",              -- prefix for navigation operations (default: alt+shift)
-        center_window = "alt+shift+c",     -- center focused window (floats it if tiled)
-        focus_left = "alt+shift+h",        -- focus left window in BSP tree
-        focus_down = "alt+shift+j",        -- focus window below in BSP tree
-        focus_up = "alt+shift+k",          -- focus window above in BSP tree
-        focus_right = "alt+shift+l",       -- focus right window in BSP tree
-        move_left = "alt+shift+cmd+h",     -- swap/move window left in BSP tree
-        move_down = "alt+shift+cmd+j",     -- swap/move window down in BSP tree
-        move_up = "alt+shift+cmd+k",       -- swap/move window up in BSP tree
-        move_right = "alt+shift+cmd+l",    -- swap/move window right in BSP tree
+        -- Window management shortcuts (Neovim notation like "<M-S-f>" also supported)
+        throw = prefix,                        -- + 1–9: throw window to Desktop N (⌥⇧1..9)
+        toggle_float = prefix .. "+f",         -- tile / float focused window (⌥⇧F)
+        center_window = prefix .. "+c",        -- center focused window (⌥⇧C)
+        focus_left = prefix .. "+h",           -- focus left (⌥⇧H)
+        focus_down = prefix .. "+j",           -- focus down (⌥⇧J)
+        focus_up = prefix .. "+k",             -- focus up (⌥⇧K)
+        focus_right = prefix .. "+l",          -- focus right (⌥⇧L)
+        move_left = prefix .. "+cmd+h",        -- swap/move left (⌥⇧⌘H)
+        move_down = prefix .. "+cmd+j",        -- swap/move down (⌥⇧⌘J)
+        move_up = prefix .. "+cmd+k",          -- swap/move up (⌥⇧⌘K)
+        move_right = prefix .. "+cmd+l",       -- swap/move right (⌥⇧⌘L)
     },
-    -- Per-app rules, by bundle id (up to 200 each). Find one with:
-    --   osascript -e 'id of app "Calculator"'
     rules = {
-        ignore = {},  -- never managed: never tiled, never moved       e.g. { "com.example.app" }
-        float = {},   -- always floating (⌥⇧F can still tile one); added to the built-in list
+        ignore = {},  -- bundle IDs never managed by hyprMac
+        float = {},   -- bundle IDs that always float
     },
 }

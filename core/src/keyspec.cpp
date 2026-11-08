@@ -13,11 +13,17 @@ std::string lower_ascii(std::string_view s) {
     return out;
 }
 
-unsigned modifier_bit(const std::string &t) {
-    if (t == "alt" || t == "opt" || t == "option") return kModAlt;
+unsigned modifier_bit(const std::string &t, bool allow_single_letter = false) {
+    if (t == "alt" || t == "opt" || t == "option" || t == "meta") return kModAlt;
     if (t == "shift") return kModShift;
     if (t == "ctrl" || t == "control") return kModCtrl;
-    if (t == "cmd" || t == "command") return kModCmd;
+    if (t == "cmd" || t == "command" || t == "super") return kModCmd;
+    if (allow_single_letter) {
+        if (t == "m" || t == "a") return kModAlt;
+        if (t == "s") return kModShift;
+        if (t == "c") return kModCtrl;
+        if (t == "d") return kModCmd;
+    }
     return 0;
 }
 
@@ -76,19 +82,28 @@ bool is_key_name(std::string_view name) {
 std::string parse_chord(std::string_view text, bool key_required, Chord &out) {
     out = Chord{};
     if (text.empty()) return "must not be empty";
+    bool is_bracketed = (text.size() >= 3 && text.front() == '<' && text.back() == '>');
+    std::string_view inner = is_bracketed ? text.substr(1, text.size() - 2) : text;
     std::vector<std::string> tokens;
     size_t start = 0;
-    for (size_t i = 0; i <= text.size(); ++i) {
-        if (i == text.size() || text[i] == '+') {
-            tokens.push_back(lower_ascii(text.substr(start, i - start)));
+    for (size_t i = 0; i <= inner.size(); ++i) {
+        if (i == inner.size() || inner[i] == '+' || (is_bracketed && inner[i] == '-') || (!is_bracketed && inner[i] == ' ')) {
+            std::string tok = lower_ascii(inner.substr(start, i - start));
+            if (!tok.empty() || i == inner.size() || inner[i] == '+') {
+                tokens.push_back(std::move(tok));
+            }
             start = i + 1;
         }
     }
     int keys = 0;
     for (size_t i = 0; i < tokens.size(); ++i) {
         const std::string &t = tokens[i];
-        if (t.empty()) return "empty element in " + quote(std::string(text)) + " (stray '+')";
-        if (unsigned bit = modifier_bit(t)) {
+        if (t.empty()) {
+            std::string stray = is_bracketed ? "'-'" : "'+'";
+            return "empty element in " + quote(std::string(text)) + " (stray " + stray + ")";
+        }
+        bool allow_single = is_bracketed && (!key_required || i + 1 < tokens.size());
+        if (unsigned bit = modifier_bit(t, allow_single)) {
             if (out.mods & bit) return "duplicate modifier " + quote(t);
             out.mods |= bit;
             continue;
@@ -103,7 +118,7 @@ std::string parse_chord(std::string_view text, bool key_required, Chord &out) {
         return "unknown modifier " + quote(t);
     }
     if (out.mods == 0) return "needs at least one modifier";
-    if (key_required && keys == 0) return "needs exactly one key (for example 'alt+shift+f')";
+    if (key_required && keys == 0) return "needs exactly one key (for example 'alt+shift+f' or '<M-S-f>')";
     return "";
 }
 
