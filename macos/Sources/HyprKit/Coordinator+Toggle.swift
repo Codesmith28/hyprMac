@@ -39,6 +39,7 @@ extension Coordinator {
             reconcileNow() // the window leaves the tree; its neighbours reflow
             if let frame { executor.place(window, frame: frame) }
             EventLog.shared.emit("toggle_float", ["window": Int(window.windowID), "state": "floating"])
+            notify(.windowStateToggled(app: appDisplayName(for: window), state: .floating))
         case .floating:
             guard !platformFloating.contains(id) else { return } // eligibility floats stay floating
             floatOverride[id] = false
@@ -50,6 +51,7 @@ extension Coordinator {
             }
             reconcileNow() // dwindle insertion
             EventLog.shared.emit("toggle_float", ["window": Int(window.windowID), "state": "tiled"])
+            notify(.windowStateToggled(app: appDisplayName(for: window), state: .tiled))
         case .minimized, .fullscreen, .hidden:
             return
         }

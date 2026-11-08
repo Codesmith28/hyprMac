@@ -258,9 +258,9 @@ public final class FakeDesktop: @unchecked Sendable {
         }
     }
 
-    public func addApp(pid: pid_t, bundleID: String?, policy: ActivationPolicy = .regular) {
+    public func addApp(pid: pid_t, bundleID: String?, name: String? = nil, policy: ActivationPolicy = .regular) {
         locked {
-            appTable[pid] = App(info: AppInfo(pid: pid, bundleID: bundleID, activationPolicy: policy))
+            appTable[pid] = App(info: AppInfo(pid: pid, bundleID: bundleID, name: name, activationPolicy: policy))
             emit(.appLaunched(pid, bundleID: bundleID))
         }
     }

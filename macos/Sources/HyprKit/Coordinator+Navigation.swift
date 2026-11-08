@@ -105,6 +105,7 @@ extension Coordinator {
                 }
             }
             EventLog.shared.emit("center_window", ["window": Int(window.windowID), "state": "floating"])
+            notify(.windowStateToggled(app: appDisplayName(for: window), state: .floating))
         case .floating:
             guard let frame = calculateCenteredFrame(for: window, id: id) else { return }
             firstSeenFrame[id] = frame

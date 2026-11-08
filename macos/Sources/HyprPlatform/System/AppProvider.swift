@@ -21,6 +21,7 @@ public final class SystemAppProvider: AppProvider {
     static func info(_ app: NSRunningApplication) -> AppInfo? {
         guard !app.isTerminated else { return nil }
         return AppInfo(pid: app.processIdentifier, bundleID: app.bundleIdentifier,
+                       name: app.localizedName,
                        activationPolicy: ActivationPolicy(rawValue: app.activationPolicy.rawValue) ?? .prohibited,
                        isHidden: app.isHidden)
     }

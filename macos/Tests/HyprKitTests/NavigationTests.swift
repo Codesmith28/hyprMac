@@ -71,6 +71,7 @@ import Testing
         #expect(h.frame(b) == centred)
         #expect(h.tiled(h.s1) == 1)
         #expect(h.frame(a) == root)
+        #expect(h.recorder.notices.contains(.windowStateToggled(app: "com.example.editor", state: .floating)))
     }
 
     @Test func centerWindowReCentersAlreadyFloatingWindow() {
@@ -88,6 +89,8 @@ import Testing
         h.settle()
 
         #expect(h.frame(a) == centred)
+        let toggleNotices = h.recorder.notices.filter { if case .windowStateToggled = $0 { return true }; return false }
+        #expect(toggleNotices.count == 1)
     }
 
     @Test func focusDirectionUsesRaiseAndSwitchesFocus() {

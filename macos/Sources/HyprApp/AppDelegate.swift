@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
     private var statusItem: NSStatusItem!
     private var controller: TilingController?
     private let notifier = Notifier()
+    private let osdNotifier = OSDNotifier()
     private var signalSources: [DispatchSourceSignal] = []
     private var permissionTimer: Timer?
     private var pauseItem: NSMenuItem!
@@ -174,6 +175,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
                           id: "permission")
             controller.stop()
             waitForPermission()
+        case let .windowStateToggled(app, state):
+            osdNotifier.show(app: app, state: state)
         }
         refreshMenu()
     }

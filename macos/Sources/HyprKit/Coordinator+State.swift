@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import HyprPlatform
@@ -15,6 +16,23 @@ extension Coordinator {
     func bundleID(for id: UInt64) -> String? {
         guard let ref = identity.ref(forEngineID: id) else { return nil }
         return bundleID(for: ref)
+    }
+
+    /// Retrieves the display name (or bundle ID) for a window ref.
+    func appDisplayName(for ref: HyprPlatform.WindowRef) -> String? {
+        if let name = deps.apps.application(pid: ref.pid)?.name, !name.isEmpty {
+            return name
+        }
+        if let name = NSRunningApplication(processIdentifier: ref.pid)?.localizedName, !name.isEmpty {
+            return name
+        }
+        return bundleID(for: ref)
+    }
+
+    /// Retrieves the display name (or bundle ID) for an engine ID.
+    func appDisplayName(for id: UInt64) -> String? {
+        guard let ref = identity.ref(forEngineID: id) else { return nil }
+        return appDisplayName(for: ref)
     }
 
     /// Restores saved state for an app when first evaluated:

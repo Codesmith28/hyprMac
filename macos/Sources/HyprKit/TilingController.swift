@@ -11,6 +11,14 @@ public protocol TilingController: AnyObject {
     func reloadConfig()
 }
 
+/// The target floating state when a window's state is toggled.
+public enum WindowToggleState: String, Equatable, Sendable, CustomStringConvertible {
+    case floating
+    case tiled
+
+    public var description: String { rawValue }
+}
+
 /// User-visible notices the shell turns into notifications / menu state.
 public enum TilingNotice: Equatable {
     case missingSpace(requested: Int, count: Int)
@@ -24,6 +32,8 @@ public enum TilingNotice: Equatable {
     case hotkeysUnavailable(String)
     /// `keys.switch` doesn't match any enabled native "Switch to Desktop N" shortcut.
     case switchShortcutMismatch(configured: String, native: [String])
+    /// Active application window state toggled between floating and tiled.
+    case windowStateToggled(app: String?, state: WindowToggleState)
 }
 
 public protocol TilingControllerDelegate: AnyObject {
