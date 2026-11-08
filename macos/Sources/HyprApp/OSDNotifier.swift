@@ -10,11 +10,6 @@ public final class OSDNotifier {
     private var label: NSTextField?
     private var stackView: NSStackView?
     private var dismissWorkItem: DispatchWorkItem?
-    private var debounceWorkItem: DispatchWorkItem?
-
-    /// Settle/debounce delay for workspace switching so the popup doesn't appear
-    /// on the current desktop during slide animations, and rapid switches settle on the final workspace.
-    public var debounceDelay: TimeInterval = 0.28
 
     public init() {}
 
@@ -27,15 +22,12 @@ public final class OSDNotifier {
             return
         }
 
-        debounceWorkItem?.cancel()
-        debounceWorkItem = nil
-
         let title = Self.formatTitle(app: app, state: state)
         let icon = Self.icon(for: state)
         display(title: title, icon: icon)
     }
 
-    /// Shows the OSD notification when switching to Desktop N after a settle/debounce delay.
+    /// Shows the OSD notification when switching to Desktop N immediately and synchronously.
     public func showSpaceSwitch(toSpace: Int) {
         if !Thread.isMainThread {
             DispatchQueue.main.async { [weak self] in
@@ -44,15 +36,9 @@ public final class OSDNotifier {
             return
         }
 
-        debounceWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            let title = "Desktop \(toSpace)"
-            let icon = Self.spaceIcon()
-            self.display(title: title, icon: icon)
-        }
-        debounceWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + debounceDelay, execute: workItem)
+        let title = "Desktop \(toSpace)"
+        let icon = Self.spaceIcon()
+        display(title: title, icon: icon)
     }
 
     /// Shows the OSD notification when throwing a window to Desktop N.
@@ -63,9 +49,6 @@ public final class OSDNotifier {
             }
             return
         }
-
-        debounceWorkItem?.cancel()
-        debounceWorkItem = nil
 
         let title: String
         if let app = app?.trimmingCharacters(in: .whitespacesAndNewlines), !app.isEmpty {
@@ -283,22 +266,37 @@ public final class OSDNotifier {
 
         let panelSize = NSSize(width: width, height: height)
         let targetRect = targetFrame(for: panelSize)
+
+        // Disable CoreAnimation actions during instantaneous frame/content updates so quick successions stay in sync
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         panel.setFrame(targetRect, display: true)
         panel.invalidateShadow()
 
-        // Fades in smoothly (~0.12s) to alpha 0.95
-        panel.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.12
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            panel.animator().alphaValue = 0.95
+        let isAlreadyVisible = panel.isVisible && panel.alphaValue > 0.05
+
+        if isAlreadyVisible {
+            // Already visible: instantly snap to full opacity without fade delay
+            panel.alphaValue = 0.95
+            CATransaction.commit()
+            panel.orderFrontRegardless()
+        } else {
+            // First appearance: fast smooth fade-in
+            panel.alphaValue = 0.0
+            CATransaction.commit()
+            panel.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.08
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().alphaValue = 0.95
+            }
         }
 
-        // Stays visible for ~1.2s then fades out smoothly (~0.25s) to alpha 0
+        // Stays visible for ~1.2s then fades out smoothly (~0.20s) to alpha 0
         let workItem = DispatchWorkItem { [weak panel] in
             guard let panel else { return }
             NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.25
+                context.duration = 0.20
                 context.timingFunction = CAMediaTimingFunction(name: .easeIn)
                 panel.animator().alphaValue = 0.0
             }, completionHandler: {
