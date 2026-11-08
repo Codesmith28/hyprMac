@@ -9,30 +9,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.2.0] - 2026-11-08
 
 ### 🚀 Added
-- **Native Keybindings**: Focus (`⌥⇧H/J/K/L`, `⌥⇧←/↓/↑/→`) and move/swap (`⌥⇧⌘H/J/K/L`, `⌥⇧⌘←/↓/↑/→`) with Vim & Arrow keys.
-- **Configurable Keybindings**: Expose all navigation, prefix, and window keys in `init.lua` for full transparency and native compatibility.
-- **Neovim-Style Key Notation**: Bracketed keys (e.g. `<M-S-f>`, `<C-c>`) and space-separated modifiers (`opt shift`) supported defensively alongside standard tokens.
-- **Center Window**: `⌥⇧C` centers the focused window on its active display.
-- **Warp Cursor on Focus**: Automatically moves mouse pointer to the center of the newly focused window.
-- **Drag-to-Swap**: Dragging a tiled window onto a neighboring tile swaps their layout slots.
-- **State & Dimension Persistence**: Remembers floating/tiled states and exact window dimensions across app relaunch.
-- **OSD Popup HUD Notifications**: Native non-persistent AppKit HUD overlay displaying window state toggles (Floated / Tiled), workspace switches, and window throws.
-- **Configurable OSD HUD**: Added `osd_popup = true/false` option to `init.lua` to easily toggle visual HUD notifications.
-- **Application Filtering Rules**: Configurable `rules.float` (System Settings, Calculator) and `rules.ignore` (Docker Desktop, MongoDB Compass).
-- **`make update` Target**: Single command to recompile, install, and restart background service.
-
-### 🧹 Maintenance
-- **Lua Unvendoring**: Removed ~28,700 lines of vendored C code from Git tracking, replaced with automated SHA256-verified build-time fetch to keep static binary portability.
-- **LuaLS Global Diagnostic**: Added directive in `init.lua` to cleanly suppress `lowercase-global` for the global configuration table.
+- 🧭 **Native Navigation**: Directional focus (`⌥⇧H/J/K/L`, `⌥⇧Arrows`) and window swap (`⌥⇧⌘H/J/K/L`, `⌥⇧⌘Arrows`).
+- ⌨️ **Configurable Keybindings**: Expose all navigation, prefix, and action keys in `init.lua`.
+- 🔤 **Neovim Key Notation**: Support `<M-S-f>`, `<C-c>`, and space-separated modifiers (`opt shift`).
+- 🎯 **Center Window**: `⌥⇧C` shortcut to center active window on current display.
+- 🖱️ **Cursor Warp**: Auto-center cursor onto newly focused windows.
+- 🪟 **Drag-to-Swap**: Drag and drop tiled windows onto neighbors to swap layout slots.
+- 💾 **State Persistence**: Retain tiled/floating states and exact window dimensions across app relaunch.
+- 🔔 **OSD HUD Notifications**: Native AppKit overlay for window states, workspace switches, and throws.
+- 🎛️ **OSD Configuration**: Toggle HUD notifications via `osd_popup` flag in `init.lua`.
+- 📋 **Window Rules**: Configurable `rules.float` and `rules.ignore` app filtering lists.
+- ⚡ **`make update` Command**: Rebuild, reinstall, and restart background daemon in one step.
 
 ### 🐛 Fixed
-- **Snappy Space Throw**: Reduced routine delay buffers by ~60% (press delay, shift release, and post-switch settle).
-- **Browser & Electron Space Throw**: Added micro drag-delta to reliably throw Chrome, Brave, Arc, and Safari windows via `⌥⇧1..9`.
-- **Dynamic Traffic Light Gaps**: Replaced hardcoded titlebar coordinates with runtime AX button midpoint geometry.
-- **Ghost Click Elimination**: Guaranteed mouse button release on both grab point and current cursor position via `defer`.
-- **Electron Focus Activation**: Added `AXRaise` and `NSRunningApplication.activate` for apps with read-only focus attributes (Obsidian).
-- **Trackpad Workspace Gestures**: Restricted tile-swap to on-tile drops, preventing native screen-edge space drags from hijacking.
-- **macOS 14 Deprecation Warnings**: Replaced deprecated `activateIgnoringOtherApps` with modern activation APIs.
+- ⚡ **Faster Space Throws**: Reduced transition delays by ~60% for snappier workspace throws.
+- 🌐 **Browser & Electron Throws**: Micro drag-delta fixes throwing Chrome, Brave, Arc, and Safari (`⌥⇧1..9`).
+- 📐 **Traffic Light Geometry**: Replaced hardcoded coordinates with runtime AX button midpoint queries.
+- 🖱️ **Ghost Click Bug**: Guaranteed cursor release across grab and target positions via `defer`.
+- 🔍 **Electron Window Focus**: Fixed focus activation for apps with read-only AX focus (e.g. Obsidian).
+- 👆 **Trackpad Swipes**: Restricted drag swaps to window tiles, protecting native macOS space gestures.
+- 🍏 **macOS 14 Modernization**: Replaced deprecated `activateIgnoringOtherApps` API.
+
+### 🧹 Maintenance
+- 📦 **Lua Unvendoring**: Removed ~28.7k lines of tracked C code; fetch & verify via SHA256 at build time.
+- 🩺 **LuaLS Diagnostics**: Suppressed `lowercase-global` warnings in user configuration.
 
 ---
 
