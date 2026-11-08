@@ -34,7 +34,7 @@ import Testing
         #expect(h.tiled(h.s1) == 1 && h.tiled(h.s2) == 2)
         #expect(h.c.testSpaceOf(h.id(a)!) == h.s2)
         #expect(h.recorder.throwFailures.isEmpty)
-        #expect(h.recorder.notices == [.windowThrown(app: "com.example.editor", toSpace: 2)])
+        #expect(h.recorder.notices == [.windowThrown(app: "com.example.editor", fromSpace: 1, toSpace: 2)])
         // The drag trick released the mouse and put the cursor back.
         #expect(h.desk.posted.contains(.keyDown(19, .maskAlternate)))
         if case .warpCursor = h.desk.posted.last {} else { Issue.record("cursor not restored") }
@@ -119,7 +119,7 @@ import Testing
         h.settle()
         #expect(h.desk.space(of: a) == h.s3)
         #expect(h.recorder.throwFailures.isEmpty)
-        #expect(h.recorder.notices == [.windowThrown(app: "com.example.editor", toSpace: 2), .windowThrown(app: "com.example.editor", toSpace: 3)])
+        #expect(h.recorder.notices == [.windowThrown(app: "com.example.editor", fromSpace: 1, toSpace: 2), .windowThrown(app: "com.example.editor", fromSpace: 2, toSpace: 3)])
     }
 
     @Test func throwDuringTransitionIsRetriedAfterSettling() {
@@ -131,7 +131,18 @@ import Testing
         h.settle()
         #expect(h.desk.space(of: a) == h.s2)
         #expect(h.recorder.throwFailures.isEmpty)
-        #expect(h.recorder.notices == [.windowThrown(app: "com.example.editor", toSpace: 2)])
+        #expect(h.recorder.notices == [.windowThrown(app: "com.example.editor", fromSpace: 1, toSpace: 2)])
+    }
+
+    @Test func throwMovesWindowLeftDirection() {
+        let (h, a, _, _) = setup()
+        throwFocused(h, 2)
+        #expect(h.recorder.notices.contains(.windowThrown(app: "com.example.editor", fromSpace: 1, toSpace: 2)))
+        h.desk.clock.advance(by: 2)
+        h.desk.focus(a)
+        h.settle()
+        throwFocused(h, 1)
+        #expect(h.recorder.notices.contains(.windowThrown(app: "com.example.editor", fromSpace: 2, toSpace: 1)))
     }
 
     @Test func throwDuringEndlessTransitionGivesUpQuietly() {

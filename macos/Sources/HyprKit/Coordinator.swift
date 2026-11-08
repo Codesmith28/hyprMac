@@ -564,6 +564,22 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             activity += 1
             throwInFlight = true
             let sourceSpace = idByRef[window].flatMap { engine.space(of: $0) }
+            let fromSpace: Int? = {
+                let displays = deps.displays.displays()
+                if let src = sourceSpace,
+                   let d = displays.first(where: { deps.spaces.activeSpace(display: $0.id) == src }),
+                   let s = deps.spaces.spaces(display: d.id).first(where: { $0.id == src && $0.kind == .user }) {
+                    return s.index
+                }
+                let mainDisplay = displays.first(where: { $0.isMain }) ?? displays.first
+                if let d = mainDisplay {
+                    let active = deps.spaces.activeSpace(display: d.id)
+                    if let s = deps.spaces.spaces(display: d.id).first(where: { $0.id == active && $0.kind == .user }) {
+                        return s.index
+                    }
+                }
+                return nil
+            }()
             moverQueue.async { [self] in
                 let result = mover.move(window, toSpace: n)
                 queue.async { [self] in
@@ -580,7 +596,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                             apply(plan)
                         }
                         let app = appDisplayName(for: window)
-                        notify(.windowThrown(app: app, toSpace: n))
+                        notify(.windowThrown(app: app, fromSpace: fromSpace, toSpace: n))
                     case .alreadyThere:
                         break
                     case .transitionInFlight:
