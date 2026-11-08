@@ -21,7 +21,7 @@ OUT      := $(BUILD)/$(strip $(MODE))
 OBJDIR   := $(OUT)/obj
 LIB      := $(OUT)/libhyprcore.a
 
-LUA_DIR  := third_party/lua-5.4.7
+include mk/deps.mk
 CPPFLAGS := -Icore/include -I$(LUA_DIR) -Ithird_party/doctest -MMD -MP
 CXXFLAGS := -std=c++20 $(OPT) -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wno-sign-conversion -mmacosx-version-min=14.0
 CFLAGS   := -std=c99 $(OPT) -DLUA_USE_MACOSX -w -mmacosx-version-min=14.0

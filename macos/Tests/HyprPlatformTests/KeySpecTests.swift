@@ -44,8 +44,8 @@ import Testing
     @Test func everyGrammarKeyNameHasAKeyCode() {
         var names = (97...122).map { String(UnicodeScalar($0)!) } + (0...9).map(String.init)
         names += (1...12).map { "f\($0)" }
-        names += ["space", "tab", "return", "escape", "grave", "minus", "equal", "comma", "period", "slash"]
-        #expect(names.count == 58)
+        names += ["space", "tab", "return", "escape", "grave", "minus", "equal", "comma", "period", "slash", "left", "right", "up", "down"]
+        #expect(names.count == 62)
         for n in names { #expect(KeySpec.keyCodes[n] != nil, "\(n)") }
         #expect(KeySpec.keyCodes.count == names.count)
         #expect(Set(KeySpec.keyCodes.values).count == names.count) // no two names share a key
@@ -76,17 +76,20 @@ import Testing
 
     @Test func registrationsFollowTheSpec() {
         let regs = HotkeyCenter.registrations(for: custom)
-        #expect(regs.count == 10)
+        #expect(regs.count == 27)
         let ctrlAlt = UInt32(controlKey | optionKey)
         for n in 1...9 {
             #expect(regs[n - 1].id == UInt32(n) && regs[n - 1].modifiers == ctrlAlt)
             #expect(regs[n - 1].keyCode == UInt32(DigitKeys.keyCode(forDigit: n)!))
         }
         #expect(regs[9].id == HotkeyCenter.toggleFloatID && regs[9].keyCode == UInt32(kVK_ANSI_T) && regs[9].modifiers == ctrlAlt)
-        // Defaults unchanged.
+        // Defaults throw and toggle.
         let d = HotkeyCenter.registrations(for: .defaults)
-        #expect(d.allSatisfy { $0.modifiers == UInt32(optionKey | shiftKey) })
+        for n in 0...9 {
+            #expect(d[n].modifiers == UInt32(optionKey | shiftKey))
+        }
         #expect(d[9].keyCode == UInt32(kVK_ANSI_F))
+        #expect(d[10].id == HotkeyCenter.centerWindowID && d[10].keyCode == 8) // 'c'
     }
 
     @Test func fakeHotkeysRegisterFromTheSpecAndReRegister() {

@@ -34,6 +34,16 @@ struct Keys {
     Chord throw_to{kModAlt | kModShift, ""};
     Chord toggle_float{kModAlt | kModShift, "f"};
     Chord switch_to{kModAlt, ""};
+    Chord prefix{0, ""};
+    Chord center_window{0, ""};
+    Chord focus_left{0, ""};
+    Chord focus_down{0, ""};
+    Chord focus_up{0, ""};
+    Chord focus_right{0, ""};
+    Chord move_left{0, ""};
+    Chord move_down{0, ""};
+    Chord move_up{0, ""};
+    Chord move_right{0, ""};
 };
 
 struct Rules {
@@ -44,6 +54,7 @@ struct Rules {
 struct Extras {
     Keys keys;
     Rules rules;
+    bool osd_popup = true;
 };
 
 // Cross-field checks (throw vs switch, toggle_float vs throw digits). "" when fine, else a

@@ -82,12 +82,19 @@ import Testing
         #expect(eval(WindowFacts(frame: frame, hasCloseButton: false)) == .managed(.floating))
     }
 
-    @Test func floatListFloatsButSystemSettingsTiles() {
-        let calc = AppInfo(pid: 1, bundleID: "com.apple.calculator")
-        #expect(eval(WindowFacts(frame: frame), app: calc) == .managed(.floating))
-        let settings = AppInfo(pid: 1, bundleID: "com.apple.systempreferences")
-        #expect(eval(WindowFacts(frame: frame), app: settings) == .managed(.tiled))
-        #expect(WindowEligibility.defaultFloatBundleIDs.count <= 3)
+    @Test func defaultFloatListFloats() {
+        let defaultFloats = [
+            "com.apple.archiveutility",
+            "com.apple.calculator",
+            "com.apple.systempreferences",
+            "com.docker.docker",
+            "com.mongodb.compass",
+        ]
+        for bundle in defaultFloats {
+            let app = AppInfo(pid: 1, bundleID: bundle)
+            #expect(eval(WindowFacts(frame: frame), app: app) == .managed(.floating))
+        }
+        #expect(WindowEligibility.defaultFloatBundleIDs == Set(defaultFloats))
     }
 
     @Test func minimizedWithoutOnscreenEntry() {

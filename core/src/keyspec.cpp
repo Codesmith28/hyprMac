@@ -13,15 +13,21 @@ std::string lower_ascii(std::string_view s) {
     return out;
 }
 
-unsigned modifier_bit(const std::string &t) {
-    if (t == "alt" || t == "opt" || t == "option") return kModAlt;
+unsigned modifier_bit(const std::string &t, bool allow_single_letter = false) {
+    if (t == "alt" || t == "opt" || t == "option" || t == "meta") return kModAlt;
     if (t == "shift") return kModShift;
     if (t == "ctrl" || t == "control") return kModCtrl;
-    if (t == "cmd" || t == "command") return kModCmd;
+    if (t == "cmd" || t == "command" || t == "super") return kModCmd;
+    if (allow_single_letter) {
+        if (t == "m" || t == "a") return kModAlt;
+        if (t == "s") return kModShift;
+        if (t == "c") return kModCtrl;
+        if (t == "d") return kModCmd;
+    }
     return 0;
 }
 
-const char *const kNamedKeys[] = {"space", "tab", "return", "escape", "grave", "minus", "equal", "comma", "period", "slash"};
+const char *const kNamedKeys[] = {"space", "tab", "return", "escape", "grave", "minus", "equal", "comma", "period", "slash", "left", "right", "up", "down"};
 
 std::string quote(const std::string &s) { return "'" + s + "'"; }
 
@@ -76,19 +82,28 @@ bool is_key_name(std::string_view name) {
 std::string parse_chord(std::string_view text, bool key_required, Chord &out) {
     out = Chord{};
     if (text.empty()) return "must not be empty";
+    bool is_bracketed = (text.size() >= 3 && text.front() == '<' && text.back() == '>');
+    std::string_view inner = is_bracketed ? text.substr(1, text.size() - 2) : text;
     std::vector<std::string> tokens;
     size_t start = 0;
-    for (size_t i = 0; i <= text.size(); ++i) {
-        if (i == text.size() || text[i] == '+') {
-            tokens.push_back(lower_ascii(text.substr(start, i - start)));
+    for (size_t i = 0; i <= inner.size(); ++i) {
+        if (i == inner.size() || inner[i] == '+' || (is_bracketed && inner[i] == '-') || (!is_bracketed && inner[i] == ' ')) {
+            std::string tok = lower_ascii(inner.substr(start, i - start));
+            if (!tok.empty() || i == inner.size() || inner[i] == '+') {
+                tokens.push_back(std::move(tok));
+            }
             start = i + 1;
         }
     }
     int keys = 0;
     for (size_t i = 0; i < tokens.size(); ++i) {
         const std::string &t = tokens[i];
-        if (t.empty()) return "empty element in " + quote(std::string(text)) + " (stray '+')";
-        if (unsigned bit = modifier_bit(t)) {
+        if (t.empty()) {
+            std::string stray = is_bracketed ? "'-'" : "'+'";
+            return "empty element in " + quote(std::string(text)) + " (stray " + stray + ")";
+        }
+        bool allow_single = is_bracketed && (!key_required || i + 1 < tokens.size());
+        if (unsigned bit = modifier_bit(t, allow_single)) {
             if (out.mods & bit) return "duplicate modifier " + quote(t);
             out.mods |= bit;
             continue;
@@ -103,7 +118,7 @@ std::string parse_chord(std::string_view text, bool key_required, Chord &out) {
         return "unknown modifier " + quote(t);
     }
     if (out.mods == 0) return "needs at least one modifier";
-    if (key_required && keys == 0) return "needs exactly one key (for example 'alt+shift+f')";
+    if (key_required && keys == 0) return "needs exactly one key (for example 'alt+shift+f' or '<M-S-f>')";
     return "";
 }
 
@@ -134,11 +149,53 @@ std::string extras_to_json(const Extras &e) {
     json_string(out, format_chord(e.keys.toggle_float));
     out += ",\"switch\":";
     json_string(out, format_chord(e.keys.switch_to));
+    if (e.keys.prefix.mods != 0) {
+        out += ",\"prefix\":";
+        json_string(out, format_chord(e.keys.prefix));
+    }
+    if (!e.keys.center_window.key.empty()) {
+        out += ",\"center_window\":";
+        json_string(out, format_chord(e.keys.center_window));
+    }
+    if (!e.keys.focus_left.key.empty()) {
+        out += ",\"focus_left\":";
+        json_string(out, format_chord(e.keys.focus_left));
+    }
+    if (!e.keys.focus_down.key.empty()) {
+        out += ",\"focus_down\":";
+        json_string(out, format_chord(e.keys.focus_down));
+    }
+    if (!e.keys.focus_up.key.empty()) {
+        out += ",\"focus_up\":";
+        json_string(out, format_chord(e.keys.focus_up));
+    }
+    if (!e.keys.focus_right.key.empty()) {
+        out += ",\"focus_right\":";
+        json_string(out, format_chord(e.keys.focus_right));
+    }
+    if (!e.keys.move_left.key.empty()) {
+        out += ",\"move_left\":";
+        json_string(out, format_chord(e.keys.move_left));
+    }
+    if (!e.keys.move_down.key.empty()) {
+        out += ",\"move_down\":";
+        json_string(out, format_chord(e.keys.move_down));
+    }
+    if (!e.keys.move_up.key.empty()) {
+        out += ",\"move_up\":";
+        json_string(out, format_chord(e.keys.move_up));
+    }
+    if (!e.keys.move_right.key.empty()) {
+        out += ",\"move_right\":";
+        json_string(out, format_chord(e.keys.move_right));
+    }
     out += "},\"rules\":{\"ignore\":";
     json_list(out, e.rules.ignore);
     out += ",\"float\":";
     json_list(out, e.rules.float_);
-    out += "}}";
+    out += "},\"osd_popup\":";
+    out += e.osd_popup ? "true" : "false";
+    out += "}";
     return out;
 }
 

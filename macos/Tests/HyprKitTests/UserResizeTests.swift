@@ -58,4 +58,71 @@ import Testing
         #expect(h.c.testUncooperative() == [h.id(b)!])
         #expect(h.frame(a) == root)
     }
+
+    @Test func draggingTiledWindowTitlebarOntoAnotherTileSwapsThem() {
+        let h = Harness(); h.start()
+        let a = h.open(1), b = h.open(2)
+        #expect(h.frame(a) == leftHalf)
+        #expect(h.frame(b) == rightHalf)
+
+        h.send(.userDragBegan(CGPoint(x: 100, y: 45)))
+        // Move window `a` so its center is inside `rightHalf`
+        h.desk.setFrame(a, rect(800, 37, 704, 851))
+        h.send(.window(.moved, pid: 100, window: a))
+        h.send(.userDragEnded(CGPoint(x: 800, y: 45)))
+
+        #expect(h.frame(a) == rightHalf)
+        #expect(h.frame(b) == leftHalf)
+        #expect(h.c.testFightCount(h.id(a)!) == 0)
+
+        // Persists across reconciles
+        h.reconcile()
+        #expect(h.frame(a) == rightHalf)
+        #expect(h.frame(b) == leftHalf)
+    }
+
+    @Test func draggingFloatingWindowKeepsNewPosition() {
+        let h = Harness(); h.start()
+        h.c.queue.sync {}
+        _ = h.open(1)
+        let b = h.open(2)
+        h.desk.focus(b)
+        h.hotkeys.pressToggleFloat()
+        h.settle()
+        #expect(h.c.testFloatOverride()[h.id(b)!] == true)
+
+        let draggedFrame = rect(350, 250, 400, 300)
+        h.send(.userDragBegan(CGPoint(x: 520, y: 312)))
+        h.desk.setFrame(b, draggedFrame)
+        h.send(.window(.moved, pid: 100, window: b))
+        h.send(.userDragEnded(CGPoint(x: 600, y: 350)))
+
+        #expect(h.frame(b) == draggedFrame)
+        #expect(h.c.testFirstSeenFrame(h.id(b)!) == draggedFrame)
+
+        h.reconcile()
+        #expect(h.frame(b) == draggedFrame)
+        #expect(h.c.testFirstSeenFrame(h.id(b)!) == draggedFrame)
+    }
+
+    @Test func draggingNativelyFloatingWindowKeepsNewPosition() {
+        let h = Harness(); h.start()
+        _ = h.open(1)
+        let b = h.open(2, resizable: false)
+        h.settle()
+        #expect(h.c.testTiledCount(space: h.s1) == 1)
+
+        let draggedFrame = rect(400, 200, 300, 200)
+        h.send(.userDragBegan(CGPoint(x: 250, y: 250)))
+        h.desk.setFrame(b, draggedFrame)
+        h.send(.window(.moved, pid: 100, window: b))
+        h.send(.userDragEnded(CGPoint(x: 450, y: 250)))
+
+        #expect(h.frame(b) == draggedFrame)
+        #expect(h.c.testFirstSeenFrame(h.id(b)!) == draggedFrame)
+
+        h.reconcile()
+        #expect(h.frame(b) == draggedFrame)
+        #expect(h.c.testFirstSeenFrame(h.id(b)!) == draggedFrame)
+    }
 }

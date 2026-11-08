@@ -27,11 +27,14 @@ public enum WindowEligibility {
     /// hyprMac's own bundle id; its windows are never managed.
     public static let ownBundleID = "dev.codesmith28.hyprmac"
 
-    /// Apps whose standard windows float by default. Deliberately tiny:
-    /// - `com.apple.archiveutility`: transient extraction progress windows.
-    /// - `com.apple.calculator`: a fixed-layout utility that is resizable on recent macOS.
-    /// (`com.apple.systempreferences` panes tile fine and are *not* listed.)
-    public static let defaultFloatBundleIDs: Set<String> = ["com.apple.archiveutility", "com.apple.calculator"]
+    /// Apps whose standard windows float by default.
+    public static let defaultFloatBundleIDs: Set<String> = [
+        "com.apple.archiveutility",
+        "com.apple.calculator",
+        "com.apple.systempreferences",
+        "com.docker.docker",
+        "com.mongodb.compass",
+    ]
 
     public static let tiledRole = "AXWindow"
     public static let tiledSubrole = "AXStandardWindow"

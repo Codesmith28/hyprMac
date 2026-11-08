@@ -27,13 +27,19 @@ import Testing
         #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXWindow", pid: 1, window: w, isWindowItself: true), for: w))
         #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXGroup", pid: 1, window: w), for: w))
         #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXUnknown", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXToolbar", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXTabGroup", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXStaticText", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXGenericElement", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXImage", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXHeading", pid: 1, window: w), for: w))
+        #expect(SpaceMover.isAcceptableGrab(AXHit(role: "AXSplitGroup", pid: 1, window: w), for: w))
         #expect(!SpaceMover.isAcceptableGrab(AXHit(role: "AXGroup", pid: 1, window: other), for: w))
         #expect(!SpaceMover.isAcceptableGrab(AXHit(role: "AXGroup", pid: 1, window: nil), for: w))
-        #expect(!SpaceMover.isAcceptableGrab(AXHit(role: "AXStaticText", pid: 1, window: w), for: w))
         #expect(!SpaceMover.isAcceptableGrab(nil, for: w))
     }
 
-    @Test(arguments: ["AXButton", "AXRadioButton", "AXTabGroup", "AXTextField", "AXPopUpButton", "AXMenuButton", "AXToolbar"])
+    @Test(arguments: ["AXButton", "AXRadioButton", "AXTab", "AXTextField", "AXSearchField", "AXPopUpButton", "AXMenuButton", "AXComboBox", "AXSlider", "AXCheckBox"])
     func controlsRejected(_ role: String) {
         let w = WindowRef(pid: 1, windowID: 1)
         #expect(!SpaceMover.isAcceptableGrab(AXHit(role: role, pid: 1, window: w), for: w))
@@ -46,6 +52,8 @@ import Testing
         let grab = CGPoint(x: 300, y: 108)
         #expect(desk.posted == [
             .mouseMove(grab), .leftMouseDown(grab),
+            .leftMouseDragged(CGPoint(x: grab.x + 1, y: grab.y)),
+            .leftMouseDragged(grab),
             .keyDown(19, .maskAlternate), .keyUp(19, .maskAlternate),
             .leftMouseUp(grab), .warpCursor(CGPoint(x: 1000, y: 800)),
         ])
@@ -53,9 +61,9 @@ import Testing
         #expect(desk.spaces.activeSpace(display: 1) == target.id)
         #expect(desk.cursorPosition == CGPoint(x: 1000, y: 800))
         let sleeps = desk.clock.sleeps
-        #expect(sleeps.first == 0.05)
-        #expect(sleeps.last == 0.4) // settle before mouse-up
-        #expect(sleeps.dropFirst().dropLast().allSatisfy { $0 == 0.02 })
+        #expect(sleeps.first == mover.configuration.pressDelay)
+        #expect(sleeps.last == mover.configuration.settle) // settle before mouse-up
+        #expect(sleeps.dropFirst().dropLast().allSatisfy { $0 == mover.configuration.pollInterval })
     }
 
     @Test func noSuchSpaceReportsCount() {
@@ -89,8 +97,9 @@ import Testing
         desk.updateQuirks(w) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, role: "AXRadioButton")] }
         #expect(mover.move(w, toSpace: 2) == .noGrabPoint)
         #expect(desk.posted.isEmpty)
-        // 4 normal candidates + 4 thin-band candidates.
-        #expect(desk.axCalls.filter { if case .elementAt = $0 { return true }; return false }.count == 8)
+        // Primary candidates + fine-grid candidates are all checked and rejected.
+        let calls = desk.axCalls.filter { if case .elementAt = $0 { return true }; return false }.count
+        #expect(calls > 8)
     }
 
     /// Quirk 15: the first candidate hits a tab button, the next one hits the titlebar.
@@ -120,13 +129,14 @@ import Testing
         #expect(mover.findGrabPoint(for: w, frame: frame) == CGPoint(x: 700, y: 108))
     }
 
-    @Test func timeoutStillReleasesMouseAndRestoresCursor() {
+    @Test func timeoutStillReleasesMouseAndRestoresCursor() throws {
         let (desk, w, mover) = setup()
         desk.nativeSwitchEnabled = false
+        let grab = try #require(mover.findGrabPoint(for: w, frame: frame))
         let start = desk.clock.now()
         #expect(mover.move(w, toSpace: 2) == .timedOut)
         #expect(desk.clock.now() - start >= 1.0)
-        #expect(desk.posted.suffix(2) == [.leftMouseUp(CGPoint(x: 300, y: 108)), .warpCursor(CGPoint(x: 1000, y: 800))])
+        #expect(desk.posted.suffix(2) == [.leftMouseUp(grab), .warpCursor(CGPoint(x: 1000, y: 800))])
         #expect(desk.cursorPosition == CGPoint(x: 1000, y: 800))
         #expect(desk.space(of: w) == desk.spaces.userSpace(index: 1, display: 1)?.id)
     }
@@ -192,6 +202,55 @@ import Testing
         #expect(desk.spaces.activeSpace(display: 1) == desk.spaces.userSpace(index: 1, display: 1)?.id)
         #expect(desk.cursorPosition == CGPoint(x: -100, y: 0))
     }
+
+    @Test func throwWindowWithUnifiedToolbar() {
+        let (desk, w, mover) = setup()
+        desk.updateQuirks(w) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, role: "AXToolbar")] }
+        #expect(mover.move(w, toSpace: 2) == .moved)
+        #expect(desk.space(of: w) == desk.spaces.userSpace(index: 2, display: 1)?.id)
+    }
+
+    @Test func throwWindowWithTitleText() {
+        let (desk, w, mover) = setup()
+        desk.updateQuirks(w) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0.2, to: 0.8, role: "AXStaticText")] }
+        #expect(mover.move(w, toSpace: 2) == .moved)
+        #expect(desk.space(of: w) == desk.spaces.userSpace(index: 2, display: 1)?.id)
+    }
+
+    @Test func throwWindowWithElectronGenericElement() {
+        let (desk, w, mover) = setup()
+        desk.updateQuirks(w) { $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, role: "AXGenericElement")] }
+        #expect(mover.move(w, toSpace: 2) == .moved)
+        #expect(desk.space(of: w) == desk.spaces.userSpace(index: 2, display: 1)?.id)
+    }
+
+    @Test func fineGridCandidatesIncludeTrafficLightsAndRightMargins() {
+        let cfg = SpaceMover.Configuration()
+        #expect(cfg.fineGridYOffsets == [1, 2, 4, 8, 14, 20])
+        let (_, _, sm) = setup()
+        let candidates = sm.fineGridCandidates(for: frame)
+        // Check near traffic lights (80 + 10 = 90 -> 190; 80 + 25 = 105 -> 205)
+        #expect(candidates.contains(where: { $0.x == 190 && $0.y == frame.minY + 1 }))
+        #expect(candidates.contains(where: { $0.x == 205 && $0.y == frame.minY + 2 }))
+        // Check near right edge (maxX = 900 - 16 = 884; 884 - 80 = 804; 884 - 40 = 844)
+        #expect(candidates.contains(where: { $0.x == 804 && $0.y == frame.minY + 1 }))
+        #expect(candidates.contains(where: { $0.x == 844 && $0.y == frame.minY + 1 }))
+    }
+
+    @Test func browserWindowWithTabsCoveringAllStandardPointsThrowsViaThinTopStrip() {
+        let (desk, w, mover) = setup()
+        // Tabs span top 3 to 28 across full width (like Chrome / Brave / Safari)
+        desk.updateQuirks(w) {
+            $0.titlebarRegions = [FakeTitlebarRegion(from: 0, to: 1, top: 3, bottom: 28, role: "AXRadioButton")]
+        }
+        let grab = mover.findGrabPoint(for: w, frame: frame)
+        #expect(grab != nil)
+        #expect(grab?.y == frame.minY + 1) // grabbed via 1 pt strip above tabs
+        #expect(mover.move(w, toSpace: 2) == .moved)
+        #expect(desk.space(of: w) == desk.spaces.userSpace(index: 2, display: 1)?.id)
+        #expect(desk.posted.contains(.leftMouseDragged(CGPoint(x: grab!.x + 1, y: grab!.y))))
+        #expect(desk.posted.contains(.leftMouseDragged(grab!)))
+    }
 }
 
 @Suite struct FakeDesktopTests {
@@ -226,6 +285,17 @@ import Testing
         #expect(try desk.ax.bool(.minimized, of: b))
         #expect(desk.spaces.spaces(of: 2).isEmpty) // minimized: no Space info
         #expect(desk.spaces.spaces(of: 1) == [desk.spaces.activeSpace(display: 1)])
+    }
+
+    @Test func raiseSetsMainAndFocused() throws {
+        let desk = makeDesk()
+        _ = desk.addWindow(pid: 100, id: 1, frame: rect(0, 25, 500, 500))
+        let b = desk.addWindow(pid: 100, id: 2, frame: rect(0, 25, 500, 500))
+        try desk.ax.raise(b)
+        #expect(try desk.ax.focusedWindow(pid: 100) == b)
+        #expect(try desk.ax.bool(.main, of: b))
+        #expect(try desk.ax.bool(.focused, of: b))
+        #expect(desk.axCalls.contains(.raise(b)))
     }
 
     @Test func goneAppAndWindowRaiseInvalidElement() {

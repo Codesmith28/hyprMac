@@ -44,16 +44,27 @@ public final class SystemAXBackend: AXBackend, @unchecked Sendable {
 
     public func windows(pid: pid_t) throws -> [WindowRef] {
         let app = AXUIElementCreateApplication(pid)
-        let list: [AXUIElement] = (try copy(app, kAXWindowsAttribute) as? [AnyObject] ?? [])
+        var list: [AXUIElement] = (try copy(app, kAXWindowsAttribute) as? [AnyObject] ?? [])
             .compactMap { Self.element($0 as CFTypeRef) }
+        if list.isEmpty {
+            if let focused = (try? copy(app, kAXFocusedWindowAttribute)).flatMap(Self.element) {
+                list.append(focused)
+            }
+            if let main = (try? copy(app, kAXMainWindowAttribute)).flatMap(Self.element),
+               !list.contains(where: { CFEqual($0, main) }) {
+                list.append(main)
+            }
+        }
         var refs: [WindowRef] = []
         lock.lock()
         cache = cache.filter { $0.key.pid != pid }
         for el in list {
             guard let wid = PrivateAPI.windowID(of: el) else { continue }
             let ref = WindowRef(pid: pid, windowID: wid)
-            cache[ref] = el
-            refs.append(ref)
+            if cache[ref] == nil {
+                cache[ref] = el
+                refs.append(ref)
+            }
         }
         lock.unlock()
         return refs
@@ -65,6 +76,10 @@ public final class SystemAXBackend: AXBackend, @unchecked Sendable {
         if let el = cache[window] { lock.unlock(); return el }
         lock.unlock()
         _ = try windows(pid: window.pid)
+        lock.lock()
+        if let el = cache[window] { lock.unlock(); return el }
+        lock.unlock()
+        _ = try? focusedWindow(pid: window.pid)
         lock.lock(); defer { lock.unlock() }
         guard let el = cache[window] else { throw AXBackendError.unknownWindow }
         return el
@@ -122,12 +137,38 @@ public final class SystemAXBackend: AXBackend, @unchecked Sendable {
         try set(try element(for: window), attribute.rawValue, value as CFBoolean)
     }
 
+    public func raise(_ window: WindowRef) throws {
+        let el = try element(for: window)
+        AXUIElementPerformAction(el, "AXRaise" as CFString)
+        _ = try? setBool(.main, true, of: window)
+        _ = try? setBool(.focused, true, of: window)
+    }
+
     public func enhancedUserInterface(pid: pid_t) throws -> Bool {
         AXDecoding.bool(try copy(AXUIElementCreateApplication(pid), "AXEnhancedUserInterface"))
     }
 
     public func setEnhancedUserInterface(_ value: Bool, pid: pid_t) throws {
         try set(AXUIElementCreateApplication(pid), "AXEnhancedUserInterface", value as CFBoolean)
+    }
+
+    public func trafficLightButtons(of window: WindowRef) -> (close: CGRect?, minimize: CGRect?, zoom: CGRect?) {
+        guard let el = try? element(for: window) else { return (nil, nil, nil) }
+        func frameOf(_ attr: String) -> CGRect? {
+            guard let val = try? copy(el, attr), CFGetTypeID(val) == AXUIElementGetTypeID() else { return nil }
+            let btn = val as! AXUIElement
+            var pos = CGPoint.zero
+            var size = CGSize.zero
+            guard let p = try? copy(btn, kAXPositionAttribute), CFGetTypeID(p) == AXValueGetTypeID(),
+                  AXValueGetValue(p as! AXValue, .cgPoint, &pos),
+                  let s = try? copy(btn, kAXSizeAttribute), CFGetTypeID(s) == AXValueGetTypeID(),
+                  AXValueGetValue(s as! AXValue, .cgSize, &size) else { return nil }
+            return CGRect(origin: pos, size: size)
+        }
+        let close = frameOf(kAXCloseButtonAttribute)
+        let min = frameOf("AXMinimizeButton")
+        let zoom = frameOf("AXFullScreenButton") ?? frameOf("AXZoomButton")
+        return (close, min, zoom)
     }
 
     public func focusedApplication() throws -> pid_t? {
@@ -139,10 +180,10 @@ public final class SystemAXBackend: AXBackend, @unchecked Sendable {
     }
 
     public func focusedWindow(pid: pid_t) throws -> WindowRef? {
-        guard let v = try copy(AXUIElementCreateApplication(pid), kAXFocusedWindowAttribute),
-              CFGetTypeID(v) == AXUIElementGetTypeID() else { return nil }
-        let el = v as! AXUIElement // type-checked above
-        guard let wid = PrivateAPI.windowID(of: el) else { return nil }
+        let app = AXUIElementCreateApplication(pid)
+        let el = (try? copy(app, kAXFocusedWindowAttribute)).flatMap(Self.element)
+            ?? (try? copy(app, kAXMainWindowAttribute)).flatMap(Self.element)
+        guard let el, let wid = PrivateAPI.windowID(of: el) else { return nil }
         let ref = WindowRef(pid: pid, windowID: wid)
         lock.lock(); cache[ref] = el; lock.unlock()
         return ref
@@ -163,6 +204,7 @@ public final class SystemAXBackend: AXBackend, @unchecked Sendable {
         let subrole = (try? copy(el, kAXSubroleAttribute)).flatMap { AXDecoding.string($0) }
         let resolved = AXDecoding.resolveWindow(
             el,
+            maxDepth: 25,
             role: { [self] e in (try? copy(e, kAXRoleAttribute)).flatMap { AXDecoding.string($0) } },
             windowAttribute: { [self] e in Self.element((try? copy(e, kAXWindowAttribute)) ?? nil) },
             parent: { [self] e in Self.element((try? copy(e, kAXParentAttribute)) ?? nil) },

@@ -64,7 +64,7 @@ config = { keys = { throw = "ctrl+alt", toggle_float = "ctrl+alt+t", switch = "c
         let h = Harness(config: ctrlAltKeys); h.start()
         let b = h.hotkeys.bindings
         #expect(b?.throwModifiers == [.control, .option] && b?.toggleFloat.display == "⌃⌥T")
-        #expect(h.hotkeys.registrations.count == 10)
+        #expect(h.hotkeys.registrations.count == 27)
         #expect(h.spaceKeys.modifiers == .maskControl)
         #expect(h.recorder.notices.isEmpty)
     }

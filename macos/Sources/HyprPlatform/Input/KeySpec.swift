@@ -98,10 +98,16 @@ public struct KeySpec: Equatable, Sendable {
         "f10": 109, "f11": 103, "f12": 111,
         "space": 49, "tab": 48, "return": 36, "escape": 53, "grave": 50, "minus": 27, "equal": 24,
         "comma": 43, "period": 47, "slash": 44,
+        "left": 123, "right": 124, "down": 125, "up": 126,
     ]
 }
 
-/// The three configurable shortcuts (`config.keys`).
+/// Direction in 2D space for BSP tree focus and window movement.
+public enum Direction: String, CaseIterable, Sendable {
+    case left, down, up, right
+}
+
+/// The configurable shortcuts (`config.keys`).
 public struct KeyBindings: Equatable, Sendable {
     /// Modifiers + digit 1–9: throw the focused window to that Desktop.
     public var throwModifiers: KeyModifiers
@@ -110,11 +116,65 @@ public struct KeyBindings: Equatable, Sendable {
     /// Modifiers hyprMac listens for with 1–9 (the native "Switch to Desktop N" shortcut).
     public var switchModifiers: KeyModifiers
 
-    public init(throwModifiers: KeyModifiers, toggleFloat: KeySpec, switchModifiers: KeyModifiers) {
-        self.throwModifiers = throwModifiers; self.toggleFloat = toggleFloat; self.switchModifiers = switchModifiers
+    /// Prefix for native navigation and window operations (default: opt + shift).
+    public var prefix: KeyModifiers
+    /// Center the window (default: pref + c, i.e. ⌥⇧C).
+    public var centerWindow: KeySpec
+    /// Move focus in the BSP tree (pref + h/j/k/l and pref + arrow keys, i.e. ⌥⇧H/J/K/L, ⌥⇧←/↓/↑/→).
+    public var focusKeys: [(direction: Direction, spec: KeySpec)]
+    /// Move windows in the BSP tree (pref + cmd + h/j/k/l and pref + cmd + arrow keys, i.e. ⌥⇧⌘H/J/K/L, ⌥⇧⌘←/↓/↑/→).
+    public var moveKeys: [(direction: Direction, spec: KeySpec)]
+
+    public init(
+        throwModifiers: KeyModifiers,
+        toggleFloat: KeySpec,
+        switchModifiers: KeyModifiers,
+        prefix: KeyModifiers = [.option, .shift],
+        centerWindow: KeySpec? = nil,
+        focusKeys: [(direction: Direction, spec: KeySpec)]? = nil,
+        moveKeys: [(direction: Direction, spec: KeySpec)]? = nil
+    ) {
+        self.throwModifiers = throwModifiers
+        self.toggleFloat = toggleFloat
+        self.switchModifiers = switchModifiers
+        self.prefix = prefix
+        self.centerWindow = centerWindow ?? KeySpec(modifiers: prefix, key: "c")!
+        let moveMods = prefix.contains(.shift) ? prefix.union(.command) : prefix.union(.shift)
+        self.focusKeys = focusKeys ?? [
+            (.left, KeySpec(modifiers: prefix, key: "h")!),
+            (.left, KeySpec(modifiers: prefix, key: "left")!),
+            (.down, KeySpec(modifiers: prefix, key: "j")!),
+            (.down, KeySpec(modifiers: prefix, key: "down")!),
+            (.up, KeySpec(modifiers: prefix, key: "k")!),
+            (.up, KeySpec(modifiers: prefix, key: "up")!),
+            (.right, KeySpec(modifiers: prefix, key: "l")!),
+            (.right, KeySpec(modifiers: prefix, key: "right")!),
+        ]
+        self.moveKeys = moveKeys ?? [
+            (.left, KeySpec(modifiers: moveMods, key: "h")!),
+            (.left, KeySpec(modifiers: moveMods, key: "left")!),
+            (.down, KeySpec(modifiers: moveMods, key: "j")!),
+            (.down, KeySpec(modifiers: moveMods, key: "down")!),
+            (.up, KeySpec(modifiers: moveMods, key: "k")!),
+            (.up, KeySpec(modifiers: moveMods, key: "up")!),
+            (.right, KeySpec(modifiers: moveMods, key: "l")!),
+            (.right, KeySpec(modifiers: moveMods, key: "right")!),
+        ]
     }
 
-    /// Equal to the hard-coded behaviour before keys were configurable: ⌥⇧1–9, ⌥⇧F, ⌥1–9.
+    public static func == (a: KeyBindings, b: KeyBindings) -> Bool {
+        a.throwModifiers == b.throwModifiers
+            && a.toggleFloat == b.toggleFloat
+            && a.switchModifiers == b.switchModifiers
+            && a.prefix == b.prefix
+            && a.centerWindow == b.centerWindow
+            && a.focusKeys.count == b.focusKeys.count
+            && zip(a.focusKeys, b.focusKeys).allSatisfy { $0.direction == $1.direction && $0.spec == $1.spec }
+            && a.moveKeys.count == b.moveKeys.count
+            && zip(a.moveKeys, b.moveKeys).allSatisfy { $0.direction == $1.direction && $0.spec == $1.spec }
+    }
+
+    /// Equal to the default shortcuts: ⌥⇧1–9, ⌥⇧F, ⌥1–9, ⌃⌥C, ⌃⌥H/J/K/L+arrows, ⌃⌥⇧H/J/K/L+arrows.
     public static let defaults = KeyBindings(
         throwModifiers: [.option, .shift],
         toggleFloat: KeySpec(modifiers: [.option, .shift], key: "f")!,

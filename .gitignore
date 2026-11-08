@@ -1,8 +1,10 @@
 /build/
 /macos/.build/
 /macos/.swiftpm/
+/third_party/lua-5.4.7/
 .DS_Store
 *.o
 *.a
 *.dSYM/
 /.worktrees/
+*.mov

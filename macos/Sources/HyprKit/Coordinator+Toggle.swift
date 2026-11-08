@@ -20,7 +20,7 @@ extension Coordinator {
     func toggleFocusedFloatNow() {
         dispatchPrecondition(condition: .onQueue(queue))
         guard running, !userPaused, !stageManagerPaused, !dragging, !throwInFlight else { return }
-        guard let pid = try? deps.ax.focusedApplication(), let window = try? deps.ax.focusedWindow(pid: pid),
+        guard let (pid, window) = resolveFocusedWindow(),
               !isIgnored(pid: pid), let id = idByRef[window], let state = lastStates[id] else { return }
         // Fullscreen / minimized / hidden windows are left alone (checked live too: the cached
         // state may predate the change).
@@ -32,16 +32,26 @@ extension Coordinator {
         case .tiled:
             floatOverride[id] = true
             let frame = restoreFrame(for: window, id: id)
+            if let bundle = bundleID(for: window) {
+                let savedFrame = frame ?? (try? deps.ax.frame(of: window)) ?? firstSeenFrame[id]
+                appStateStore.save(bundleID: bundle, state: SavedAppState(state: .floating, frame: savedFrame))
+            }
             reconcileNow() // the window leaves the tree; its neighbours reflow
             if let frame { executor.place(window, frame: frame) }
             EventLog.shared.emit("toggle_float", ["window": Int(window.windowID), "state": "floating"])
+            notify(.windowStateToggled(app: appDisplayName(for: window), state: .floating))
         case .floating:
             guard !platformFloating.contains(id) else { return } // eligibility floats stay floating
             floatOverride[id] = false
             uncooperative.remove(id)
             fights[id] = nil
+            let lastFrame = firstSeenFrame[id] ?? (try? deps.ax.frame(of: window))
+            if let bundle = bundleID(for: window) {
+                appStateStore.save(bundleID: bundle, state: SavedAppState(state: .tiled, frame: lastFrame))
+            }
             reconcileNow() // dwindle insertion
             EventLog.shared.emit("toggle_float", ["window": Int(window.windowID), "state": "tiled"])
+            notify(.windowStateToggled(app: appDisplayName(for: window), state: .tiled))
         case .minimized, .fullscreen, .hidden:
             return
         }
@@ -52,6 +62,7 @@ extension Coordinator {
     /// automatic (fight / rule / size) decisions.
     func resolveFloatOverride(id: UInt64, platform: WindowState, frame: CGRect,
                               current: Engine.TileState) -> Engine.TileState {
+        restoreSavedStateIfNeeded(id: id, platform: platform, frame: frame)
         if platform == .tiled || platform == .floating {
             if firstSeenFrame[id] == nil, frame.width > 0, frame.height > 0, Self.sanitized(frame) != .zero {
                 firstSeenFrame[id] = frame

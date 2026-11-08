@@ -78,11 +78,13 @@ public enum WindowState: Int32, Sendable, CaseIterable {
 public struct AppInfo: Equatable, Sendable {
     public var pid: pid_t
     public var bundleID: String?
+    public var name: String?
     public var activationPolicy: ActivationPolicy
     public var isHidden: Bool
-    public init(pid: pid_t, bundleID: String?, activationPolicy: ActivationPolicy = .regular, isHidden: Bool = false) {
+    public init(pid: pid_t, bundleID: String?, name: String? = nil, activationPolicy: ActivationPolicy = .regular, isHidden: Bool = false) {
         self.pid = pid
         self.bundleID = bundleID
+        self.name = name
         self.activationPolicy = activationPolicy
         self.isHidden = isHidden
     }

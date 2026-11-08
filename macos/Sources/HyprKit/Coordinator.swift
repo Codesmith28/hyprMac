@@ -4,6 +4,8 @@ import Foundation
 import HyprPlatform
 import os
 
+typealias WindowRef = HyprPlatform.WindowRef
+
 /// The event coordinator: platform events → (debounced) reconcile → engine → executor.
 ///
 /// All mutable state is confined to `queue` (one serial queue). Platform callbacks hop onto it;
@@ -76,11 +78,13 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
 
     let engine: Engine
     private let configStore: ConfigStore
+    public var appStateStore: AppStateStore
+    var stateRestored: Set<UInt64> = []
     let identity = WindowIdentityMap()
     let discovery: WindowDiscovery
     let executor: GeometryExecutor
     let mover: SpaceMover
-    private let transitions = SpaceTransitionGuard(settle: 0.5)
+    private let transitions = SpaceTransitionGuard(settle: 0.25)
     private var events: PlatformEvents?
 
     var userPaused = false
@@ -116,6 +120,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     /// of calling `identity.engineID(for:)`, which would re-assign generations for stale refs
     /// (a late report about a relaunched app's old window).
     var idByRef: [HyprPlatform.WindowRef: UInt64] = [:]
+    /// Tracked focused window ref on the active Space, used as a fallback when AX focusedApplication/Window fails.
+    var trackedFocusedRef: WindowRef?
     private var lastDragEnd: TimeInterval?
     private var reconcileGeneration = 0
     /// Timers scheduled on `queue` that haven't fired yet (for `testSettle`).
@@ -135,11 +141,14 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     }
 
     public var isPaused: Bool { mirrorLock.lock(); defer { mirrorLock.unlock() }; return pausedMirror }
+    public var osdPopup: Bool { configStore.current.osdPopup }
 
-    public init(deps: Dependencies, configStore: ConfigStore, tuning: Tuning = Tuning()) {
+    public init(deps: Dependencies, configStore: ConfigStore, appStateStore: AppStateStore = AppStateStore(),
+                tuning: Tuning = Tuning()) {
         self.deps = deps
         self.tuning = tuning
         self.configStore = configStore
+        self.appStateStore = appStateStore
         self.engine = Engine()
         self.discovery = WindowDiscovery(ax: deps.ax, windowServer: deps.windowServer, spaces: deps.spaces,
                                          displays: deps.displays, apps: deps.apps)
@@ -151,7 +160,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     }
 
     /// Production wiring.
-    public static func live(configPath: URL) -> Coordinator {
+    public static func live(configPath: URL, statePath: URL = AppStateStore.defaultPath) -> Coordinator {
         let deps = Dependencies(
             ax: SystemAXBackend(), windowServer: SystemWindowServerQuery(),
             spaces: SkyLightSpaceProvider(), displays: SystemDisplayProvider(), apps: SystemAppProvider(),
@@ -160,7 +169,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             clock: SystemTimeSource(),
             makeEvents: { queue, handler in PlatformEvents(queue: queue, handler: handler) },
             onMain: { block in DispatchQueue.main.async(execute: block) })
-        return Coordinator(deps: deps, configStore: ConfigStore(path: configPath))
+        return Coordinator(deps: deps, configStore: ConfigStore(path: configPath), appStateStore: AppStateStore(path: statePath))
     }
 
     // MARK: TilingController
@@ -228,8 +237,14 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         switch event {
         case let .window(kind, _, window):
             switch kind {
+            case .focused:
+                if let window { trackedFocusedRef = window }
+                scheduleReconcile(after: tuning.debounce)
             case .destroyed:
-                if let window { purge(window) } // C7: a closed minimized/hidden window leaves no ghost
+                if let window {
+                    if trackedFocusedRef == window { trackedFocusedRef = nil }
+                    purge(window)
+                } // C7: a closed minimized/hidden window leaves no ghost
                 scheduleReconcile(after: tuning.debounce)
             case .moved, .resized:
                 guard let window else { return }
@@ -237,6 +252,15 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 if let frame = try? deps.ax.frame(of: window),
                    executor.echo.isEcho(window, observedFrame: frame, now: deps.clock.now()) {
                     return // our own write
+                }
+                if let id = idByRef[window], lastStates[id] == .floating || floatOverride[id] == true {
+                    if let frame = try? deps.ax.frame(of: window), frame.width > 0, frame.height > 0 {
+                        firstSeenFrame[id] = frame
+                        if let bundle = bundleID(for: window) {
+                            appStateStore.save(bundleID: bundle, state: SavedAppState(state: .floating, frame: frame))
+                        }
+                    }
+                    return
                 }
                 if let end = lastDragEnd, deps.clock.now() - end <= tuning.dragGrace {
                     // Late notification from the user's drag: adopt a resize, else snap back; no fight.
@@ -275,6 +299,15 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
 
     /// Drops every trace of a window that is known to be destroyed (C4, C7).
     private func purge(_ ref: HyprPlatform.WindowRef) {
+        if let id = idByRef[ref], let bundle = bundleID(for: ref) {
+            let lastState = lastStates[id]
+            let existing = appStateStore.savedState(for: bundle)
+            let currentFrame = existing?.frame ?? firstSeenFrame[id] ?? lastTargets[id]
+            if let f = currentFrame, f.width > 0, f.height > 0 {
+                let st: SavedAppState.State = (lastState == .floating || floatOverride[id] == true) ? .floating : (lastState == .fullscreen ? .fullscreen : .tiled)
+                appStateStore.save(bundleID: bundle, state: SavedAppState(state: st, frame: f))
+            }
+        }
         executor.forget(ref)
         guard let id = idByRef.removeValue(forKey: ref) else { return }
         idsByPid[ref.pid]?.remove(id)
@@ -286,6 +319,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         identity.forget(engineID: id)
         uncooperative.remove(id)
         forgetToggleState(id)
+        stateRestored.remove(id)
         fights[id] = nil
         lastTargets[id] = nil
         lastStates[id] = nil
@@ -361,13 +395,16 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 // pulled into this Space when the engine already holds it elsewhere.
                 if w.membership == .inferred, let owner = engine.space(of: id), owner != snap.space { continue }
                 idsByPid[w.ref.pid, default: []].insert(id)
+                restoreSavedStateIfNeeded(id: id, ref: w.ref, platform: w.state, frame: w.frame)
                 var state = Self.tileState(w.state)
                 if state == .tiled, uncooperative.contains(id) { state = .floating }
                 if state == .tiled, floatsAsSmall(id: id, frame: w.frame) { state = .floating }
                 if state == .tiled, ruleFloat.contains(w.ref.pid) { state = .floating } // rules.float
                 // The ⌥⇧F override (Coordinator+Toggle) wins over size and fight floating.
                 state = resolveFloatOverride(id: id, platform: w.state, frame: w.frame, current: state)
+                let oldState = lastStates[id]
                 lastStates[id] = state
+                noteWindowStateChanged(id: id, oldState: oldState, newState: state, frame: w.frame)
                 seen.insert(id)
                 entries.append(Engine.WindowEntry(id: id, state: engineState(id: id, state: state, platform: w.state),
                                                   frame: Self.sanitized(w.frame), minSize: w.minSize ?? .zero))
@@ -390,6 +427,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             }
             keepLimboGhosts(space: snap.space, display: display.id, seen: &seen, entries: &entries)
             if snap.unresolved.isEmpty && snap.unresponsivePids.isEmpty { unresolvedRetries = 0 } else { retryUnresolved() }
+            if let f = snap.focused { trackedFocusedRef = f }
             let focused = snap.focused.flatMap { idByRef[$0] }
             do {
                 let plan = try engine.reconcile(display: display.id, space: snap.space, usable: snap.usable,
@@ -467,8 +505,46 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                       target.id != deps.spaces.activeSpace(display: display) {
                 // macOS is about to animate; a throw posted during the animation would be dropped.
                 transitions.noteTransition(at: deps.clock.now())
+                notify(.spaceSwitched(toSpace: n))
             }
         }
+    }
+
+    /// Resolves the focused window to move, falling back from AX focused application to
+    /// frontmost application and the coordinator's tracked focus ref.
+    func resolveFocusedWindow() -> (pid: pid_t, window: WindowRef)? {
+        // 1. Standard AX focused application + window
+        if let pid = try? deps.ax.focusedApplication() {
+            if let w = try? deps.ax.focusedWindow(pid: pid) {
+                trackedFocusedRef = w
+                return (pid, w)
+            }
+            // Fallback: the app's first on-screen window
+            if let w = (try? deps.ax.windows(pid: pid))?.first(where: { (try? deps.ax.bool(.minimized, of: $0)) != true }) {
+                trackedFocusedRef = w
+                return (pid, w)
+            }
+        }
+        // 2. Fallback to NSWorkspace frontmostApplication
+        if let frontmost = NSWorkspace.shared.frontmostApplication {
+            let pid = frontmost.processIdentifier
+            if let w = try? deps.ax.focusedWindow(pid: pid) {
+                trackedFocusedRef = w
+                return (pid, w)
+            }
+            if let w = (try? deps.ax.windows(pid: pid))?.first(where: { (try? deps.ax.bool(.minimized, of: $0)) != true }) {
+                trackedFocusedRef = w
+                return (pid, w)
+            }
+        }
+        // 3. Fallback to Coordinator's tracked focused window ref in the active Space
+        if let tracked = trackedFocusedRef,
+           let id = idByRef[tracked],
+           let space = engine.space(of: id),
+           activeSpaces.contains(space) {
+            return (tracked.pid, tracked)
+        }
+        return nil
     }
 
     /// ⌥⇧N: throw the focused window to Desktop N with the drag trick (focus follows).
@@ -477,8 +553,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             // A press while another throw runs is queued (last one wins), never lost: real E2E
             // (throw-rapid) showed a second ⌥⇧N 200 ms after the first vanished without any event.
             guard !throwInFlight else { pendingThrow = n; return }
-            guard let pid = try? deps.ax.focusedApplication(),
-                  let window = try? deps.ax.focusedWindow(pid: pid) else {
+            guard let (pid, window) = resolveFocusedWindow() else {
                 EventLog.shared.emit("throw", ["n": n, "result": "noFocusedWindow"])
                 return
             }
@@ -489,6 +564,22 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             activity += 1
             throwInFlight = true
             let sourceSpace = idByRef[window].flatMap { engine.space(of: $0) }
+            let fromSpace: Int? = {
+                let displays = deps.displays.displays()
+                if let src = sourceSpace,
+                   let d = displays.first(where: { deps.spaces.activeSpace(display: $0.id) == src }),
+                   let s = deps.spaces.spaces(display: d.id).first(where: { $0.id == src && $0.kind == .user }) {
+                    return s.index
+                }
+                let mainDisplay = displays.first(where: { $0.isMain }) ?? displays.first
+                if let d = mainDisplay {
+                    let active = deps.spaces.activeSpace(display: d.id)
+                    if let s = deps.spaces.spaces(display: d.id).first(where: { $0.id == active && $0.kind == .user }) {
+                        return s.index
+                    }
+                }
+                return nil
+            }()
             moverQueue.async { [self] in
                 let result = mover.move(window, toSpace: n)
                 queue.async { [self] in
@@ -504,6 +595,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                            let plan = try? engine.relayout(space: src) {
                             apply(plan)
                         }
+                        let app = appDisplayName(for: window)
+                        notify(.windowThrown(app: app, fromSpace: fromSpace, toSpace: n))
                     case .alreadyThere:
                         break
                     case .transitionInFlight:
@@ -540,6 +633,11 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     private func currentDisplay() -> DisplayID? {
         if let pid = try? deps.ax.focusedApplication(), let w = try? deps.ax.focusedWindow(pid: pid),
            let frame = try? deps.ax.frame(of: w), let d = deps.displays.display(for: frame) {
+            return d.id
+        }
+        if let tracked = trackedFocusedRef,
+           let frame = try? deps.ax.frame(of: tracked),
+           let d = deps.displays.display(for: frame) {
             return d.id
         }
         return deps.displays.displays().first(where: { $0.isMain })?.id ?? deps.displays.displays().first?.id
@@ -660,6 +758,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     func testFightCount(_ id: UInt64) -> Int { queue.sync { fights[id]?.count ?? 0 } }
     func testFloatOverride() -> [UInt64: Bool] { queue.sync { floatOverride } }
     func testFirstSeenFrame(_ id: UInt64) -> CGRect? { queue.sync { firstSeenFrame[id] } }
+    func testStateRestored() -> Set<UInt64> { queue.sync { stateRestored } }
     func testActiveSpaces() -> Set<UInt64> { queue.sync { activeSpaces } }
     func testDump(space: UInt64) -> String { queue.sync { engine.debugDump(space: space) } }
     func testWaitForExecutor() -> Bool { executor.waitUntilIdle(timeout: 5) }

@@ -47,7 +47,8 @@ final class Harness {
     let c: Coordinator
     let spaceIDs: [SpaceID]
 
-    init(spaces: Int = 3, config: String? = nil, tuning: Coordinator.Tuning = Coordinator.Tuning(),
+    init(spaces: Int = 3, config: String? = nil, appStateStore: AppStateStore? = nil,
+         tuning: Coordinator.Tuning = Coordinator.Tuning(),
          nativeShortcuts: NativeSwitchShortcuts? = nil) {
         desk = FakeDesktop()
         spaceIDs = desk.addDisplay(1, frame: mainFrame, visibleFrame: mainVisible, isMain: true, userSpaces: spaces)
@@ -60,7 +61,9 @@ final class Harness {
             ax: desk.ax, windowServer: desk.windowServer, spaces: desk.spaces, displays: desk.displays,
             apps: desk.apps, systemState: system, poster: desk.poster, hotkeys: hotkeys, spaceKeys: spaceKeys,
             nativeShortcuts: nativeShortcuts, clock: desk.clock, makeEvents: nil, onMain: { $0() })
-        c = Coordinator(deps: deps, configStore: ConfigStore(path: configURL), tuning: tuning)
+        let stateURL = dir.appendingPathComponent("state.json")
+        let store = appStateStore ?? AppStateStore(path: stateURL)
+        c = Coordinator(deps: deps, configStore: ConfigStore(path: configURL), appStateStore: store, tuning: tuning)
         c.delegate = recorder
         desk.eventHandler = { [weak c] e in
             guard let c else { return }

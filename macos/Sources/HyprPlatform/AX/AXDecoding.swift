@@ -92,17 +92,18 @@ public enum AXDecoding {
     /// `AXWindow`, else its `kAXWindow` attribute, else the first `AXWindow` among its
     /// `kAXParent` ancestors (at most `maxDepth` levels; stops at the application).
     /// Generic over the element type so it can be tested with plain values.
-    public static func resolveWindow<E>(_ start: E, maxDepth: Int = 6, role: (E) -> String?,
+    public static func resolveWindow<E>(_ start: E, maxDepth: Int = 25, role: (E) -> String?,
                                         windowAttribute: (E) -> E?, parent: (E) -> E?,
                                         windowID: (E) -> CGWindowID?) -> (id: CGWindowID, isSelf: Bool)? {
         if role(start) == kAXWindowRole as String, let id = windowID(start) { return (id, true) }
-        if let w = windowAttribute(start), role(w) == kAXWindowRole as String, let id = windowID(w) { return (id, false) }
+        if let w = windowAttribute(start), (role(w) == nil || role(w) == kAXWindowRole as String), let id = windowID(w) { return (id, false) }
         var node = start
         for _ in 0..<maxDepth {
             guard let p = parent(node) else { return nil }
             let r = role(p)
             if r == kAXApplicationRole as String { return nil }
             if r == kAXWindowRole as String, let id = windowID(p) { return (id, false) }
+            if let w = windowAttribute(p), (role(w) == nil || role(w) == kAXWindowRole as String), let id = windowID(w) { return (id, false) }
             node = p
         }
         return nil

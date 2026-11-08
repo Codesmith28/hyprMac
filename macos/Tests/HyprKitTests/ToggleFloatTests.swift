@@ -180,4 +180,29 @@ import Testing
         toggle(h)
         #expect(h.frame(b) == mainVisible)
     }
+
+    @Test func toggleFloatPostsWindowStateToggledNotices() {
+        let h = started()
+        let a = h.open(1)
+        h.desk.focus(a)
+        toggle(h)
+        #expect(h.recorder.notices.contains(.windowStateToggled(app: "com.example.editor", state: .floating)))
+
+        h.desk.focus(a)
+        toggle(h)
+        #expect(h.recorder.notices.contains(.windowStateToggled(app: "com.example.editor", state: .tiled)))
+    }
+
+    @Test func toggleFloatUsesAppNameWhenAvailable() {
+        let h = started()
+        h.desk.addApp(pid: 200, bundleID: "com.mitchellh.ghostty", name: "Ghostty")
+        let w = h.open(10, pid: 200)
+        h.desk.focus(w)
+        toggle(h)
+        #expect(h.recorder.notices.contains(.windowStateToggled(app: "Ghostty", state: .floating)))
+
+        h.desk.focus(w)
+        toggle(h)
+        #expect(h.recorder.notices.contains(.windowStateToggled(app: "Ghostty", state: .tiled)))
+    }
 }
