@@ -11,11 +11,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### 🚀 Added
 - 🧭 **Native Navigation**: Directional focus (`⌥⇧H/J/K/L`, `⌥⇧Arrows`) and window swap (`⌥⇧⌘H/J/K/L`, `⌥⇧⌘Arrows`).
 - ⌨️ **Configurable Keybindings**: Expose all navigation, prefix, and action keys in `init.lua`.
+- 📐 **Spatial Initial Tiling**: Preserve physical on-screen arrangement (left-to-right, top-to-bottom) of pre-existing windows on startup.
 - 🎯 **Center Window**: `⌥⇧C` shortcut to center active window on current display.
 - 🖱️ **Cursor Warp**: Auto-center cursor onto newly focused windows.
 - 🪟 **Drag-to-Swap**: Drag and drop tiled windows onto neighbors to swap layout slots.
 - 💾 **State Persistence**: Retain tiled/floating states and exact window dimensions across app relaunch.
-- 🔔 **OSD HUD Notifications**: Native AppKit overlay for window states, workspace switches, and throws.
+- 🔔 **OSD HUD Notifications**: Native AppKit overlay for window states, workspace switches, and directional throws.
 - 🎛️ **OSD Configuration**: Toggle HUD notifications via `osd_popup` flag in `init.lua`.
 - 📋 **Window Rules**: Configurable `rules.float` and `rules.ignore` app filtering lists.
 - ⚡ **`make update` Command**: Rebuild, reinstall, and restart background daemon in one step.
@@ -23,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### 🐛 Fixed
 - ⚡ **Faster Space Throws**: Reduced transition delays by ~60% for snappier workspace throws.
 - 🚦 **Window Throw Reliability**: Dynamic traffic-light gap detection & micro drag-delta fix moving complex windows (Chrome, Arc, Safari, Teams) across spaces (⌥⇧1..9).
+- 🎨 **OSD Visual & Timing Polish**: Debounced switch settle (~0.28s), dynamic fit-content sizing, and 9-slice capsule masks eliminating sharp corner artifacts.
 - 🖱️ **Ghost Click Bug**: Guaranteed cursor release across grab and target positions via `defer`.
 - 🔍 **Electron Window Focus**: Fixed focus activation for apps with read-only AX focus (e.g. Obsidian).
 - 👆 **Gesture Protection**: Require direct on-tile drops for window swaps to prevent native trackpad space swipes from being hijacked.
