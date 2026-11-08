@@ -50,6 +50,9 @@ config = {
         },
 
         -- Applications completely ignored by hyprMac (never managed or moved):
-        ignore = {},
+        ignore = {
+            "com.docker.docker",               -- Docker Desktop
+            "com.mongodb.compass",             -- MongoDB Compass
+        },
     },
 }
