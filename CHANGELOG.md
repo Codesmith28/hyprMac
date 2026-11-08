@@ -6,17 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [0.2.0] - 2026-11-06
+## [0.2.0] - 2026-11-08
 
 ### 🚀 Added
 - **Native Keybindings**: Focus (`⌥⇧H/J/K/L`, `⌥⇧←/↓/↑/→`) and move/swap (`⌥⇧⌘H/J/K/L`, `⌥⇧⌘←/↓/↑/→`) with Vim & Arrow keys.
 - **Configurable Keybindings**: Expose all navigation, prefix, and window keys in `init.lua` for full transparency and native compatibility.
+- **Neovim-Style Key Notation**: Bracketed keys (e.g. `<M-S-f>`, `<C-c>`) and space-separated modifiers (`opt shift`) supported defensively alongside standard tokens.
 - **Center Window**: `⌥⇧C` centers the focused window on its active display.
 - **Warp Cursor on Focus**: Automatically moves mouse pointer to the center of the newly focused window.
 - **Drag-to-Swap**: Dragging a tiled window onto a neighboring tile swaps their layout slots.
 - **State & Dimension Persistence**: Remembers floating/tiled states and exact window dimensions across app relaunch.
-- **Default Floating Apps**: Auto-floats System Settings, Docker Desktop, and MongoDB Compass.
+- **OSD Popup HUD Notifications**: Native non-persistent AppKit HUD overlay displaying window state toggles (Floated / Tiled), workspace switches, and window throws.
+- **Configurable OSD HUD**: Added `osd_popup = true/false` option to `init.lua` to easily toggle visual HUD notifications.
+- **Application Filtering Rules**: Configurable `rules.float` (System Settings, Calculator) and `rules.ignore` (Docker Desktop, MongoDB Compass).
 - **`make update` Target**: Single command to recompile, install, and restart background service.
+
+### 🧹 Maintenance
+- **Lua Unvendoring**: Removed ~28,700 lines of vendored C code from Git tracking, replaced with automated SHA256-verified build-time fetch to keep static binary portability.
+- **LuaLS Global Diagnostic**: Added directive in `init.lua` to cleanly suppress `lowercase-global` for the global configuration table.
 
 ### 🐛 Fixed
 - **Snappy Space Throw**: Reduced routine delay buffers by ~60% (press delay, shift release, and post-switch settle).
