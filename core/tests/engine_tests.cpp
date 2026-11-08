@@ -611,4 +611,70 @@ TEST_CASE("debug_dump output is stable") {
                               "win 0x50000002a 12,12,1416,876\n");
 }
 
+TEST_CASE("spatial sorting preserves side-by-side arrangement regardless of focus/Z-order") {
+    const Rect left_rect{100, 100, 400, 600};
+    const Rect right_rect{600, 100, 400, 600};
+
+    // Case A: Window 1 (left) is frontmost in snapshot
+    {
+        Engine e;
+        const Plan p = reconcile_ok(e, snap_frames(S1, {{1, left_rect}, {2, right_rect}}));
+        CHECK(frame(p, 1).x < frame(p, 2).x);
+        CHECK_RECT(frame(p, 1), 12, 12, 704, 876);
+        CHECK_RECT(frame(p, 2), 724, 12, 704, 876);
+    }
+
+    // Case B: Window 2 (right) is frontmost in snapshot
+    {
+        Engine e;
+        const Plan p = reconcile_ok(e, snap_frames(S1, {{2, right_rect}, {1, left_rect}}));
+        CHECK(frame(p, 1).x < frame(p, 2).x);
+        CHECK_RECT(frame(p, 1), 12, 12, 704, 876);
+        CHECK_RECT(frame(p, 2), 724, 12, 704, 876);
+    }
+}
+
+TEST_CASE("spatial sorting preserves vertically stacked arrangement regardless of focus/Z-order") {
+    const Rect top_rect{100, 100, 600, 300};
+    const Rect bottom_rect{100, 500, 600, 300};
+
+    // Case A: Window 1 (top) is frontmost in snapshot
+    {
+        Engine e;
+        const Plan p = reconcile_ok(e, snap_frames(S1, {{1, top_rect}, {2, bottom_rect}}));
+        CHECK(frame(p, 1).x < frame(p, 2).x);
+        CHECK_RECT(frame(p, 1), 12, 12, 704, 876);
+        CHECK_RECT(frame(p, 2), 724, 12, 704, 876);
+    }
+
+    // Case B: Window 2 (bottom) is frontmost in snapshot
+    {
+        Engine e;
+        const Plan p = reconcile_ok(e, snap_frames(S1, {{2, bottom_rect}, {1, top_rect}}));
+        CHECK(frame(p, 1).x < frame(p, 2).x);
+        CHECK_RECT(frame(p, 1), 12, 12, 704, 876);
+        CHECK_RECT(frame(p, 2), 724, 12, 704, 876);
+    }
+}
+
+TEST_CASE("spatial sorting preserves 3 side-by-side windows regardless of reverse Z-order") {
+    const Rect r1{0, 0, 400, 800};
+    const Rect r2{500, 0, 400, 800};
+    const Rect r3{1000, 0, 400, 800};
+
+    Engine e;
+    // Window 3 frontmost, Window 2 middle, Window 1 backmost
+    const Plan p = reconcile_ok(e, snap_frames(S1, {{3, r3}, {2, r2}, {1, r1}}));
+    CHECK(frame(p, 1).x < frame(p, 2).x);
+    CHECK(frame(p, 2).x <= frame(p, 3).x);
+}
+
+TEST_CASE("spatial sorting preserves existing order when frames are identical") {
+    Engine e;
+    const Plan p = reconcile_ok(e, snap_frames(S1, {{2, {200, 200, 400, 300}}, {1, {200, 200, 400, 300}}}));
+    // Window 1 was backmost, so in existing order it was inserted first (left tile)
+    CHECK_RECT(frame(p, 1), 12, 12, 704, 876);
+    CHECK_RECT(frame(p, 2), 724, 12, 704, 876);
+}
+
 } // TEST_SUITE
