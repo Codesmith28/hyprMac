@@ -32,8 +32,4 @@ config = {
         move_up = prefix .. "+cmd+k",          -- swap/move up (⌥⇧⌘K)
         move_right = prefix .. "+cmd+l",       -- swap/move right (⌥⇧⌘L)
     },
-    rules = {
-        ignore = {},  -- bundle IDs never managed by hyprMac
-        float = {},   -- bundle IDs that always float
-    },
 }
