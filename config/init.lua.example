@@ -40,6 +40,20 @@ config = {
         -- match System Settings ▸ Keyboard ▸ Keyboard Shortcuts ▸ Mission Control; hyprMac
         -- warns when it doesn't. The throw uses the native shortcut's real modifiers.
         switch = "alt",
+
+        -- Window management and navigation shortcuts:
+        -- Native macOS bindings (like opt+cmd+d for Dock hiding) are never touched or overridden.
+        -- Customize or rebind any of these to suit your preferences:
+        prefix = "alt+shift",              -- prefix for navigation operations (default: alt+shift)
+        center_window = "alt+shift+c",     -- center focused window (floats it if tiled)
+        focus_left = "alt+shift+h",        -- focus left window in BSP tree
+        focus_down = "alt+shift+j",        -- focus window below in BSP tree
+        focus_up = "alt+shift+k",          -- focus window above in BSP tree
+        focus_right = "alt+shift+l",       -- focus right window in BSP tree
+        move_left = "alt+shift+cmd+h",     -- swap/move window left in BSP tree
+        move_down = "alt+shift+cmd+j",     -- swap/move window down in BSP tree
+        move_up = "alt+shift+cmd+k",       -- swap/move window up in BSP tree
+        move_right = "alt+shift+cmd+l",    -- swap/move window right in BSP tree
     },
     -- Per-app rules, by bundle id (up to 200 each). Find one with:
     --   osascript -e 'id of app "Calculator"'

@@ -98,19 +98,19 @@ import Testing
         let (desk, w, mover) = setup([])
         #expect(mover.move(w, toSpace: 2) == .moved)
         #expect(mover.lastShiftOutcome == .notHeld)
-        #expect(desk.clock.sleeps.first == 0.05 && desk.clock.sleeps[1] == 0.02)
+        #expect(desk.clock.sleeps.first == mover.configuration.pressDelay && desk.clock.sleeps[1] == mover.configuration.pollInterval)
     }
 
     @Test func waitsForShiftReleaseBeforeOptionN() {
         let (desk, w, mover) = setup([])
-        desk.holdModifiers([.maskShift, .maskAlternate], releaseAt: desk.clock.now() + 0.05 + 0.1)
+        desk.holdModifiers([.maskShift, .maskAlternate], releaseAt: desk.clock.now() + mover.configuration.pressDelay + 0.02)
         var keyAt: TimeInterval?
         desk.poster.onPost = { e in if case .keyDown = e { keyAt = desk.clock.now() } }
         let start = desk.clock.now()
         #expect(mover.move(w, toSpace: 2) == .moved)
         guard case .released(let waited)? = mover.lastShiftOutcome else { Issue.record("not released"); return }
-        #expect(abs(waited - 0.1) < 0.011)
-        #expect(keyAt! - start >= 0.15)
+        #expect(abs(waited - 0.02) < 0.011)
+        #expect(keyAt! - start >= mover.configuration.pressDelay + 0.02 - 0.005)
     }
 
     @Test func postsAnywayAfterShiftTimeout() {
@@ -120,7 +120,7 @@ import Testing
         _ = mover.move(w, toSpace: 2)
         #expect(mover.lastShiftOutcome == .postedWhileHeld)
         #expect(desk.posted.contains(.keyDown(19, .maskAlternate)))
-        #expect(desk.clock.now() - start >= 0.05 + 0.3)
+        #expect(desk.clock.now() - start >= mover.configuration.pressDelay + 0.04)
     }
 
     @Test func postImmediatelyPolicySkipsTheWait() {
@@ -130,7 +130,7 @@ import Testing
         desk.holdModifiers(.maskShift)
         _ = mover.move(w, toSpace: 2)
         #expect(mover.lastShiftOutcome == .postedWhileHeld)
-        #expect(desk.clock.sleeps[1] == 0.02) // straight to polling the Space
+        #expect(desk.clock.sleeps[1] == mover.configuration.pollInterval) // straight to polling the Space
     }
 
     @Test func mouseEventsArePostedWithoutModifiers() {

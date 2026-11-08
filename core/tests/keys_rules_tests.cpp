@@ -57,6 +57,9 @@ bool has(const std::string &hay, const std::string &needle) { return hay.find(ne
 const char *kDefaultJson =
     R"({"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt"},"rules":{"ignore":[],"float":[]}})";
 
+const char *kShippedExampleJson =
+    R"({"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt","prefix":"alt+shift","center_window":"alt+shift+c","focus_left":"alt+shift+h","focus_down":"alt+shift+j","focus_up":"alt+shift+k","focus_right":"alt+shift+l","move_left":"alt+shift+cmd+h","move_down":"alt+shift+cmd+j","move_up":"alt+shift+cmd+k","move_right":"alt+shift+cmd+l"},"rules":{"ignore":[],"float":[]}})";
+
 std::string parse_err(const char *text, bool key) {
     hypr::Chord c;
     return hypr::parse_chord(text, key, c);
@@ -182,7 +185,7 @@ TEST_CASE("the shipped init.lua.example yields the default extras") {
     auto e = extras_of_file(std::string(HYPR_SOURCE_DIR) + "/config/init.lua.example");
     INFO(e.err);
     REQUIRE(e.status == HM_OK);
-    CHECK(e.json == kDefaultJson);
+    CHECK(e.json == kShippedExampleJson);
 }
 
 // ---------- rules ----------

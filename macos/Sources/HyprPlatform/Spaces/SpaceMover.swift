@@ -25,12 +25,12 @@ public final class SpaceMover {
         /// Offset of the "just right of the traffic lights" candidate.
         public var trafficLightsOffset: CGFloat = 80
         /// Pause between mouse-down and the key press.
-        public var pressDelay: TimeInterval = 0.05
-        public var pollInterval: TimeInterval = 0.02
+        public var pressDelay: TimeInterval = 0.02
+        public var pollInterval: TimeInterval = 0.01
         /// How long to wait for the active Space to become the target.
         public var switchTimeout: TimeInterval = 1.0
         /// Extra wait after the Space changed before releasing (animation still running).
-        public var settle: TimeInterval = 0.4
+        public var settle: TimeInterval = 0.12
         /// When no candidate at `titlebarOffset` is usable (e.g. the titlebar is all tab buttons,
         /// as in Ghostty with native tabs), also try the thin band at `thinBandOffset` below the
         /// top edge, where the window itself is hit. Needs live validation: a mouse-down this
@@ -45,7 +45,7 @@ public final class SpaceMover {
         /// Whether to dynamically inspect and target safe titlebar gaps between and around traffic light buttons.
         public var trafficLightsFallback = true
         /// What to do if physical Shift is still held (the user is still on ⌥⇧N) before ⌥N.
-        public var shiftRelease: ShiftReleasePolicy = .waitUpTo(0.3)
+        public var shiftRelease: ShiftReleasePolicy = .waitUpTo(0.04)
         public var shiftPollInterval: TimeInterval = 0.01
         public init() {}
     }

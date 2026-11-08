@@ -386,11 +386,27 @@ int fetch_config(lua_State *L) {
 
 // Grammar + cross-field validation of config.keys. Messages carry their "keys.<name>:" prefix.
 std::string parse_keys(const std::optional<std::string> &t, const std::optional<std::string> &tf,
-                       const std::optional<std::string> &sw, hypr::Keys *out) {
+                       const std::optional<std::string> &sw,
+                       const std::optional<std::string> &pref, const std::optional<std::string> &cw,
+                       const std::optional<std::string> &fl, const std::optional<std::string> &fd,
+                       const std::optional<std::string> &fu, const std::optional<std::string> &fr,
+                       const std::optional<std::string> &ml, const std::optional<std::string> &md,
+                       const std::optional<std::string> &mu, const std::optional<std::string> &mr,
+                       hypr::Keys *out) {
     struct Item { const char *name; const std::optional<std::string> *text; bool key; hypr::Chord *dst; };
     const Item items[] = {{"throw", &t, false, &out->throw_to},
                           {"toggle_float", &tf, true, &out->toggle_float},
-                          {"switch", &sw, false, &out->switch_to}};
+                          {"switch", &sw, false, &out->switch_to},
+                          {"prefix", &pref, false, &out->prefix},
+                          {"center_window", &cw, true, &out->center_window},
+                          {"focus_left", &fl, true, &out->focus_left},
+                          {"focus_down", &fd, true, &out->focus_down},
+                          {"focus_up", &fu, true, &out->focus_up},
+                          {"focus_right", &fr, true, &out->focus_right},
+                          {"move_left", &ml, true, &out->move_left},
+                          {"move_down", &md, true, &out->move_down},
+                          {"move_up", &mu, true, &out->move_up},
+                          {"move_right", &mr, true, &out->move_right}};
     for (const Item &it : items) {
         if (!it.text->has_value()) continue;
         hypr::Chord c;
@@ -432,7 +448,9 @@ hm_status run(const char *src, size_t len, const std::string &path, hm_config *i
     hm_status status = HM_OK;
     hypr::Config cfg;  // missing keys take built-in defaults
     hypr::Extras extras;
-    std::optional<std::string> key_throw, key_toggle, key_switch;
+    std::optional<std::string> key_throw, key_toggle, key_switch, key_prefix, key_center;
+    std::optional<std::string> key_focus_left, key_focus_down, key_focus_up, key_focus_right;
+    std::optional<std::string> key_move_left, key_move_down, key_move_up, key_move_right;
 
     lua_pushcfunction(L, setup_state);
     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
@@ -479,13 +497,21 @@ hm_status run(const char *src, size_t len, const std::string &path, hm_config *i
                 num_field("split_ratio", &cfg.split_ratio),
                 table_field("float", {num_field("min_width", &cfg.float_min_w), num_field("min_height", &cfg.float_min_h)}),
                 table_field("keys", {str_field("throw", &key_throw), str_field("toggle_float", &key_toggle),
-                                     str_field("switch", &key_switch)}),
+                                     str_field("switch", &key_switch),
+                                     str_field("prefix", &key_prefix), str_field("center_window", &key_center),
+                                     str_field("focus_left", &key_focus_left), str_field("focus_down", &key_focus_down),
+                                     str_field("focus_up", &key_focus_up), str_field("focus_right", &key_focus_right),
+                                     str_field("move_left", &key_move_left), str_field("move_down", &key_move_down),
+                                     str_field("move_up", &key_move_up), str_field("move_right", &key_move_right)}),
                 table_field("rules", {list_field("ignore", &extras.rules.ignore), list_field("float", &extras.rules.float_)}),
             };
             message = check_table(L, "config", schema);
         }
     }
-    if (message.empty()) message = parse_keys(key_throw, key_toggle, key_switch, &extras.keys);
+    if (message.empty())
+        message = parse_keys(key_throw, key_toggle, key_switch, key_prefix, key_center, key_focus_left,
+                             key_focus_down, key_focus_up, key_focus_right, key_move_left, key_move_down,
+                             key_move_up, key_move_right, &extras.keys);
     if (message.empty()) message = hypr::validate(cfg);
     if (!message.empty()) {
         write_err(err, err_cap, path + ": " + message);

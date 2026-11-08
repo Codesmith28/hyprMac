@@ -84,7 +84,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     let discovery: WindowDiscovery
     let executor: GeometryExecutor
     let mover: SpaceMover
-    private let transitions = SpaceTransitionGuard(settle: 0.5)
+    private let transitions = SpaceTransitionGuard(settle: 0.25)
     private var events: PlatformEvents?
 
     var userPaused = false

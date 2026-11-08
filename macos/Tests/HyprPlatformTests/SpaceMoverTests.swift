@@ -61,9 +61,9 @@ import Testing
         #expect(desk.spaces.activeSpace(display: 1) == target.id)
         #expect(desk.cursorPosition == CGPoint(x: 1000, y: 800))
         let sleeps = desk.clock.sleeps
-        #expect(sleeps.first == 0.05)
-        #expect(sleeps.last == 0.4) // settle before mouse-up
-        #expect(sleeps.dropFirst().dropLast().allSatisfy { $0 == 0.02 })
+        #expect(sleeps.first == mover.configuration.pressDelay)
+        #expect(sleeps.last == mover.configuration.settle) // settle before mouse-up
+        #expect(sleeps.dropFirst().dropLast().allSatisfy { $0 == mover.configuration.pollInterval })
     }
 
     @Test func noSuchSpaceReportsCount() {

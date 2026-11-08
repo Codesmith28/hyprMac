@@ -42,8 +42,35 @@ public struct Config: Equatable {
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let k = root["keys"] as? [String: String],
               let t = k["throw"], let f = k["toggle_float"], let s = k["switch"],
-              let keys = KeyBindings(throw: t, toggleFloat: f, switch: s),
-              let r = root["rules"] as? [String: Any],
+              var keys = KeyBindings(throw: t, toggleFloat: f, switch: s)
+        else { return nil }
+
+        if let prefStr = k["prefix"], let pref = KeyModifiers(parsing: prefStr) {
+            keys.prefix = pref
+        }
+        if let cwStr = k["center_window"], let cw = KeySpec(parsing: cwStr) {
+            keys.centerWindow = cw
+        }
+
+        var customFocus: [(direction: Direction, spec: KeySpec)] = []
+        if let fl = k["focus_left"].flatMap(KeySpec.init(parsing:)) { customFocus.append((.left, fl)) }
+        if let fd = k["focus_down"].flatMap(KeySpec.init(parsing:)) { customFocus.append((.down, fd)) }
+        if let fu = k["focus_up"].flatMap(KeySpec.init(parsing:)) { customFocus.append((.up, fu)) }
+        if let fr = k["focus_right"].flatMap(KeySpec.init(parsing:)) { customFocus.append((.right, fr)) }
+        if !customFocus.isEmpty {
+            keys.focusKeys = customFocus
+        }
+
+        var customMove: [(direction: Direction, spec: KeySpec)] = []
+        if let ml = k["move_left"].flatMap(KeySpec.init(parsing:)) { customMove.append((.left, ml)) }
+        if let md = k["move_down"].flatMap(KeySpec.init(parsing:)) { customMove.append((.down, md)) }
+        if let mu = k["move_up"].flatMap(KeySpec.init(parsing:)) { customMove.append((.up, mu)) }
+        if let mr = k["move_right"].flatMap(KeySpec.init(parsing:)) { customMove.append((.right, mr)) }
+        if !customMove.isEmpty {
+            keys.moveKeys = customMove
+        }
+
+        guard let r = root["rules"] as? [String: Any],
               let ignore = r["ignore"] as? [String], let float = r["float"] as? [String]
         else { return nil }
         return (keys, AppRules(ignore: ignore, float: float))

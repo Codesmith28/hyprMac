@@ -134,6 +134,46 @@ std::string extras_to_json(const Extras &e) {
     json_string(out, format_chord(e.keys.toggle_float));
     out += ",\"switch\":";
     json_string(out, format_chord(e.keys.switch_to));
+    if (e.keys.prefix.mods != 0) {
+        out += ",\"prefix\":";
+        json_string(out, format_chord(e.keys.prefix));
+    }
+    if (!e.keys.center_window.key.empty()) {
+        out += ",\"center_window\":";
+        json_string(out, format_chord(e.keys.center_window));
+    }
+    if (!e.keys.focus_left.key.empty()) {
+        out += ",\"focus_left\":";
+        json_string(out, format_chord(e.keys.focus_left));
+    }
+    if (!e.keys.focus_down.key.empty()) {
+        out += ",\"focus_down\":";
+        json_string(out, format_chord(e.keys.focus_down));
+    }
+    if (!e.keys.focus_up.key.empty()) {
+        out += ",\"focus_up\":";
+        json_string(out, format_chord(e.keys.focus_up));
+    }
+    if (!e.keys.focus_right.key.empty()) {
+        out += ",\"focus_right\":";
+        json_string(out, format_chord(e.keys.focus_right));
+    }
+    if (!e.keys.move_left.key.empty()) {
+        out += ",\"move_left\":";
+        json_string(out, format_chord(e.keys.move_left));
+    }
+    if (!e.keys.move_down.key.empty()) {
+        out += ",\"move_down\":";
+        json_string(out, format_chord(e.keys.move_down));
+    }
+    if (!e.keys.move_up.key.empty()) {
+        out += ",\"move_up\":";
+        json_string(out, format_chord(e.keys.move_up));
+    }
+    if (!e.keys.move_right.key.empty()) {
+        out += ",\"move_right\":";
+        json_string(out, format_chord(e.keys.move_right));
+    }
     out += "},\"rules\":{\"ignore\":";
     json_list(out, e.rules.ignore);
     out += ",\"float\":";
