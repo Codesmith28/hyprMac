@@ -58,7 +58,7 @@ const char *kDefaultJson =
     R"({"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt"},"rules":{"ignore":[],"float":[]}})";
 
 const char *kShippedExampleJson =
-    R"({"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt","center_window":"alt+shift+c","focus_left":"alt+shift+h","focus_down":"alt+shift+j","focus_up":"alt+shift+k","focus_right":"alt+shift+l","move_left":"alt+shift+cmd+h","move_down":"alt+shift+cmd+j","move_up":"alt+shift+cmd+k","move_right":"alt+shift+cmd+l"},"rules":{"ignore":[],"float":[]}})";
+    R"({"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt","center_window":"alt+shift+c","focus_left":"alt+shift+h","focus_down":"alt+shift+j","focus_up":"alt+shift+k","focus_right":"alt+shift+l","move_left":"alt+shift+cmd+h","move_down":"alt+shift+cmd+j","move_up":"alt+shift+cmd+k","move_right":"alt+shift+cmd+l"},"rules":{"ignore":[],"float":["com.apple.systempreferences","com.apple.calculator"]}})";
 
 std::string parse_err(const char *text, bool key) {
     hypr::Chord c;

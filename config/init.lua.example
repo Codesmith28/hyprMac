@@ -10,11 +10,16 @@ config = {
         inner = 8,
         outer = 12,
     },
+
     split_ratio = 0.5,
+
+    -- Small applications (whose initial dimensions are small by default) are set to float by default.
+    -- Windows smaller than min_width x min_height float automatically instead of tiling.
     float = {
         min_width = 400,
         min_height = 300,
     },
+
     keys = {
         -- Native desktop switch modifiers (System Settings ▸ Keyboard Shortcuts ▸ Mission Control)
         switch = "alt",
@@ -23,13 +28,27 @@ config = {
         throw = prefix,                        -- + 1–9: throw window to Desktop N (⌥⇧1..9)
         toggle_float = prefix .. "+f",         -- tile / float focused window (⌥⇧F)
         center_window = prefix .. "+c",        -- center focused window (⌥⇧C)
+
         focus_left = prefix .. "+h",           -- focus left (⌥⇧H)
         focus_down = prefix .. "+j",           -- focus down (⌥⇧J)
         focus_up = prefix .. "+k",             -- focus up (⌥⇧K)
         focus_right = prefix .. "+l",          -- focus right (⌥⇧L)
+
         move_left = prefix .. "+cmd+h",        -- swap/move left (⌥⇧⌘H)
         move_down = prefix .. "+cmd+j",        -- swap/move down (⌥⇧⌘J)
         move_up = prefix .. "+cmd+k",          -- swap/move up (⌥⇧⌘K)
         move_right = prefix .. "+cmd+l",       -- swap/move right (⌥⇧⌘L)
+    },
+
+    -- Per-app rules by bundle ID (find with: osascript -e 'id of app "Calculator"')
+    rules = {
+        -- Applications set to float by default (⌥⇧F can still tile them):
+        float = {
+            "com.apple.systempreferences",     -- macOS System Settings
+            "com.apple.calculator",            -- Calculator
+        },
+
+        -- Applications completely ignored by hyprMac (never managed or moved):
+        ignore = {},
     },
 }
