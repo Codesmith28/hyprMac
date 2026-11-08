@@ -27,6 +27,25 @@ public final class OSDNotifier {
         display(title: title, icon: icon)
     }
 
+    /// Shows the OSD notification when a window is centered on the display.
+    public func showCentered(app: String?) {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in
+                self?.showCentered(app: app)
+            }
+            return
+        }
+
+        let title: String
+        if let app = app?.trimmingCharacters(in: .whitespacesAndNewlines), !app.isEmpty {
+            title = "\(app): Centered"
+        } else {
+            title = "Centered"
+        }
+        let icon = Self.centeredIcon()
+        display(title: title, icon: icon)
+    }
+
     /// Shows the OSD notification when switching to Desktop N immediately and synchronously.
     public func showSpaceSwitch(toSpace: Int) {
         if !Thread.isMainThread {
@@ -114,6 +133,20 @@ public final class OSDNotifier {
         let fallbackName = state == .floating ? "square.on.square" : "square.grid.2x2"
         let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
             ?? NSImage(systemSymbolName: fallbackName, accessibilityDescription: nil)
+        if #available(macOS 12.0, *), let image {
+            let config = NSImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
+            return image.withSymbolConfiguration(config)
+        }
+        return image
+    }
+
+    /// Returns the SF Symbol icon for centering a window.
+    public static func centeredIcon() -> NSImage? {
+        let symbolName = "viewfinder"
+        let fallbackName = "scope"
+        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+            ?? NSImage(systemSymbolName: fallbackName, accessibilityDescription: nil)
+            ?? NSImage(systemSymbolName: "target", accessibilityDescription: nil)
         if #available(macOS 12.0, *), let image {
             let config = NSImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
             return image.withSymbolConfiguration(config)

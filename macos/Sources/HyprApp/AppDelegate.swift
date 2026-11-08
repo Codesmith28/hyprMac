@@ -179,6 +179,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
             if controller.osdPopup {
                 osdNotifier.show(app: app, state: state)
             }
+        case let .windowCentered(app):
+            if controller.osdPopup {
+                osdNotifier.showCentered(app: app)
+            }
         case let .spaceSwitched(toSpace):
             if controller.osdPopup {
                 osdNotifier.showSpaceSwitch(toSpace: toSpace)

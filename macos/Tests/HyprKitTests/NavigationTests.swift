@@ -91,6 +91,22 @@ import Testing
         #expect(h.frame(a) == centred)
         let toggleNotices = h.recorder.notices.filter { if case .windowStateToggled = $0 { return true }; return false }
         #expect(toggleNotices.count == 1)
+        #expect(h.recorder.notices.contains(.windowCentered(app: "com.example.editor")))
+    }
+
+    @Test func centerAlreadyFloatingWindowPreservesExactDimensions() {
+        let h = started()
+        let a = h.open(1, frame: rect(50, 50, 950, 620))
+        h.hotkeys.pressToggleFloat()
+        h.settle()
+        #expect(h.frame(a)?.size == CGSize(width: 950, height: 620))
+
+        h.hotkeys.pressCenterWindow()
+        h.settle()
+
+        // Centered coordinates on display visibleFrame (0, 25, 1440, 875)
+        #expect(h.frame(a) == rect(245, 152.5, 950, 620))
+        #expect(h.recorder.notices.contains(.windowCentered(app: "com.example.editor")))
     }
 
     @Test func focusDirectionUsesRaiseAndSwitchesFocus() {

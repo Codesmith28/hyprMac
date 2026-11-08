@@ -95,7 +95,7 @@ extension Coordinator {
         switch state {
         case .tiled:
             floatOverride[id] = true
-            let frame = calculateCenteredFrame(for: window, id: id)
+            let frame = calculateCenteredFrame(for: window, id: id, isAlreadyFloating: false)
             reconcileNow()
             if let frame {
                 firstSeenFrame[id] = frame
@@ -104,33 +104,42 @@ extension Coordinator {
                     appStateStore.save(bundleID: bundle, state: SavedAppState(state: .floating, frame: frame))
                 }
             }
+            let app = appDisplayName(for: window)
             EventLog.shared.emit("center_window", ["window": Int(window.windowID), "state": "floating"])
-            notify(.windowStateToggled(app: appDisplayName(for: window), state: .floating))
+            notify(.windowStateToggled(app: app, state: .floating))
+            notify(.windowCentered(app: app))
         case .floating:
-            guard let frame = calculateCenteredFrame(for: window, id: id) else { return }
+            guard let frame = calculateCenteredFrame(for: window, id: id, isAlreadyFloating: true) else { return }
             firstSeenFrame[id] = frame
             executor.place(window, frame: frame)
             if let bundle = bundleID(for: window) {
                 appStateStore.save(bundleID: bundle, state: SavedAppState(state: .floating, frame: frame))
             }
+            let app = appDisplayName(for: window)
             EventLog.shared.emit("center_window", ["window": Int(window.windowID), "state": "floating"])
+            notify(.windowCentered(app: app))
         case .minimized, .fullscreen, .hidden:
             return
         }
     }
 
-    func calculateCenteredFrame(for window: HyprPlatform.WindowRef, id: UInt64) -> CGRect? {
+    func calculateCenteredFrame(for window: HyprPlatform.WindowRef, id: UInt64, isAlreadyFloating: Bool = false) -> CGRect? {
+        let currentFrame = try? deps.ax.frame(of: window)
         let size: CGSize
-        if let original = firstSeenFrame[id]?.size, original.width > 0, original.height > 0 {
+        if isAlreadyFloating, let current = currentFrame?.size, current.width > 0, current.height > 0 {
+            // When already floating, strictly preserve its exact current dimensions so its internal shape/layout never distorts
+            size = current
+        } else if let bundle = bundleID(for: window), let saved = appStateStore.savedState(for: bundle)?.frame?.size, saved.width > 0, saved.height > 0 {
+            size = saved
+        } else if let original = firstSeenFrame[id]?.size, original.width > 0, original.height > 0 {
             size = original
-        } else if let current = (try? deps.ax.frame(of: window))?.size, current.width > 0, current.height > 0 {
+        } else if let current = currentFrame?.size, current.width > 0, current.height > 0 {
             size = current
         } else {
             size = CGSize(width: 800, height: 600)
         }
-        let current = try? deps.ax.frame(of: window)
         let displays = deps.displays.displays()
-        let display = current.flatMap { deps.displays.display(for: $0) }
+        let display = currentFrame.flatMap { deps.displays.display(for: $0) }
             ?? displays.first(where: { $0.isMain }) ?? displays.first
         guard let usable = display?.visibleFrame, usable.width > 0, usable.height > 0 else { return nil }
         let w = min(size.width, usable.width), h = min(size.height, usable.height)

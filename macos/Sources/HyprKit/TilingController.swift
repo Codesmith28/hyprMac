@@ -35,6 +35,8 @@ public enum TilingNotice: Equatable {
     case switchShortcutMismatch(configured: String, native: [String])
     /// Active application window state toggled between floating and tiled.
     case windowStateToggled(app: String?, state: WindowToggleState)
+    /// Focused window centered on the active display.
+    case windowCentered(app: String?)
     /// Switched to Desktop / Workspace N.
     case spaceSwitched(toSpace: Int)
     /// Focused window thrown to Desktop / Workspace N.
