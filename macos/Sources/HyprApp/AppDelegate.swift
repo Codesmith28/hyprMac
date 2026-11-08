@@ -183,9 +183,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
             if controller.osdPopup {
                 osdNotifier.showSpaceSwitch(toSpace: toSpace)
             }
-        case let .windowThrown(app, toSpace):
+        case let .windowThrown(app, fromSpace, toSpace):
             if controller.osdPopup {
-                osdNotifier.showSpaceThrow(app: app, toSpace: toSpace)
+                osdNotifier.showSpaceThrow(app: app, fromSpace: fromSpace, toSpace: toSpace)
             }
         }
         refreshMenu()

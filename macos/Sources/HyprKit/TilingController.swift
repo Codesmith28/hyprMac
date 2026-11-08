@@ -38,7 +38,7 @@ public enum TilingNotice: Equatable {
     /// Switched to Desktop / Workspace N.
     case spaceSwitched(toSpace: Int)
     /// Focused window thrown to Desktop / Workspace N.
-    case windowThrown(app: String?, toSpace: Int)
+    case windowThrown(app: String?, fromSpace: Int?, toSpace: Int)
 }
 
 public protocol TilingControllerDelegate: AnyObject {

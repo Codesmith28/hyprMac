@@ -1,13 +1,20 @@
 import AppKit
 import HyprKit
 
-/// Displays a brief, non-persistent HUD / OSD overlay panel when window state changes (floated / tiled).
+/// Displays a brief, non-persistent HUD / OSD overlay panel when window state changes (floated / tiled),
+/// workspace switches, or windows are thrown between desktops.
 public final class OSDNotifier {
     private var panel: NSPanel?
     private var visualEffectView: NSVisualEffectView?
     private var imageView: NSImageView?
     private var label: NSTextField?
+    private var stackView: NSStackView?
     private var dismissWorkItem: DispatchWorkItem?
+    private var debounceWorkItem: DispatchWorkItem?
+
+    /// Settle/debounce delay for workspace switching so the popup doesn't appear
+    /// on the current desktop during slide animations, and rapid switches settle on the final workspace.
+    public var debounceDelay: TimeInterval = 0.28
 
     public init() {}
 
@@ -20,12 +27,15 @@ public final class OSDNotifier {
             return
         }
 
+        debounceWorkItem?.cancel()
+        debounceWorkItem = nil
+
         let title = Self.formatTitle(app: app, state: state)
         let icon = Self.icon(for: state)
         display(title: title, icon: icon)
     }
 
-    /// Shows the OSD notification when switching to Desktop N.
+    /// Shows the OSD notification when switching to Desktop N after a settle/debounce delay.
     public func showSpaceSwitch(toSpace: Int) {
         if !Thread.isMainThread {
             DispatchQueue.main.async { [weak self] in
@@ -34,19 +44,28 @@ public final class OSDNotifier {
             return
         }
 
-        let title = "Desktop \(toSpace)"
-        let icon = Self.spaceIcon()
-        display(title: title, icon: icon)
+        debounceWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            let title = "Desktop \(toSpace)"
+            let icon = Self.spaceIcon()
+            self.display(title: title, icon: icon)
+        }
+        debounceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + debounceDelay, execute: workItem)
     }
 
     /// Shows the OSD notification when throwing a window to Desktop N.
-    public func showSpaceThrow(app: String?, toSpace: Int) {
+    public func showSpaceThrow(app: String?, fromSpace: Int? = nil, toSpace: Int) {
         if !Thread.isMainThread {
             DispatchQueue.main.async { [weak self] in
-                self?.showSpaceThrow(app: app, toSpace: toSpace)
+                self?.showSpaceThrow(app: app, fromSpace: fromSpace, toSpace: toSpace)
             }
             return
         }
+
+        debounceWorkItem?.cancel()
+        debounceWorkItem = nil
 
         let title: String
         if let app = app?.trimmingCharacters(in: .whitespacesAndNewlines), !app.isEmpty {
@@ -54,7 +73,7 @@ public final class OSDNotifier {
         } else {
             title = "Desktop \(toSpace)"
         }
-        let icon = Self.throwIcon()
+        let icon = Self.throwIcon(fromSpace: fromSpace, toSpace: toSpace)
         display(title: title, icon: icon)
     }
 
@@ -72,9 +91,18 @@ public final class OSDNotifier {
     }
 
     /// Returns the icon for throwing a window to a space.
-    public static func throwIcon() -> NSImage? {
-        let symbolName = "arrow.right.to.line"
-        let fallbackName = "arrow.forward.square"
+    /// Direction is based on `fromSpace` vs `toSpace`:
+    /// If `toSpace < fromSpace`, left arrow ("arrow.left.to.line");
+    /// otherwise right arrow ("arrow.right.to.line").
+    public static func throwIcon(fromSpace: Int? = nil, toSpace: Int? = nil) -> NSImage? {
+        let isLeft: Bool
+        if let fromSpace, let toSpace {
+            isLeft = toSpace < fromSpace
+        } else {
+            isLeft = false
+        }
+        let symbolName = isLeft ? "arrow.left.to.line" : "arrow.right.to.line"
+        let fallbackName = isLeft ? "arrow.backward.square" : "arrow.forward.square"
         let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
             ?? NSImage(systemSymbolName: fallbackName, accessibilityDescription: nil)
         if #available(macOS 12.0, *), let image {
@@ -82,6 +110,10 @@ public final class OSDNotifier {
             return image.withSymbolConfiguration(config)
         }
         return image
+    }
+
+    public static func throwIcon() -> NSImage? {
+        throwIcon(fromSpace: nil, toSpace: nil)
     }
 
     /// Formats the notification text: e.g. "Ghostty: Floated" or "Floated" / "Tiled".
@@ -106,11 +138,28 @@ public final class OSDNotifier {
         return image
     }
 
+    /// Generates a 9-slice resizable rounded rectangle mask image matching the corner radius.
+    /// Setting this on `NSVisualEffectView.maskImage` ensures WindowServer compositor clips
+    /// the blur material cleanly without rectangular bleed at the rounded corners.
+    public static func makeCapsuleMaskImage(cornerRadius: CGFloat) -> NSImage {
+        let edge = cornerRadius * 2.0
+        let size = NSSize(width: edge, height: edge)
+        let image = NSImage(size: size, flipped: false) { rect in
+            let path = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
+            NSColor.black.setFill()
+            path.fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: cornerRadius, left: cornerRadius, bottom: cornerRadius, right: cornerRadius)
+        image.resizingMode = .stretch
+        return image
+    }
+
     private func setupPanelIfNeeded() -> NSPanel {
         if let panel { return panel }
 
         let p = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 200, height: 52),
+            contentRect: NSRect(x: 0, y: 0, width: 140, height: 44),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -126,12 +175,11 @@ public final class OSDNotifier {
         p.hidesOnDeactivate = false
         p.alphaValue = 0.0
 
-        let effect = NSVisualEffectView(frame: p.contentView?.bounds ?? NSRect(x: 0, y: 0, width: 200, height: 52))
+        let effect = NSVisualEffectView(frame: p.contentView?.bounds ?? NSRect(x: 0, y: 0, width: 140, height: 44))
         effect.material = .hudWindow
         effect.state = .active
         effect.blendingMode = .behindWindow
         effect.wantsLayer = true
-        effect.layer?.cornerRadius = 18
         effect.layer?.masksToBounds = true
         effect.layer?.borderWidth = 0.5
         effect.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.2).cgColor
@@ -153,30 +201,31 @@ public final class OSDNotifier {
         textLabel.maximumNumberOfLines = 1
         textLabel.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            textLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 280)
+            textLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 320)
         ])
 
         let stack = NSStackView(views: [iconView, textLabel])
         stack.orientation = .horizontal
         stack.spacing = 10
         stack.alignment = .centerY
-        stack.edgeInsets = NSEdgeInsets(top: 10, left: 18, bottom: 10, right: 20)
+        stack.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         effect.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: effect.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: effect.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: effect.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: effect.bottomAnchor)
+            stack.centerXAnchor.constraint(equalTo: effect.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: effect.centerYAnchor),
         ])
 
         p.contentView = effect
+        p.contentView?.wantsLayer = true
+        p.contentView?.layer?.masksToBounds = true
 
         self.panel = p
         self.visualEffectView = effect
         self.imageView = iconView
         self.label = textLabel
+        self.stackView = stack
         return p
     }
 
@@ -201,14 +250,38 @@ public final class OSDNotifier {
         dismissWorkItem = nil
 
         label?.stringValue = title
+        label?.invalidateIntrinsicContentSize()
         imageView?.image = icon
+        imageView?.invalidateIntrinsicContentSize()
+        stackView?.layoutSubtreeIfNeeded()
 
-        // Sizing: based on stack fitting size with pill constraints
-        let stackFitting = (panel.contentView?.subviews.first as? NSStackView)?.fittingSize ?? NSSize(width: 200, height: 52)
-        let width = max(180.0, min(380.0, ceil(stackFitting.width)))
-        let height: CGFloat = 52.0
+        // Sizing: dynamically computed from stack fitting size plus padding (horizontal: 18pt each side, vertical: 10pt top/bottom)
+        let paddingH: CGFloat = 18.0
+        let paddingV: CGFloat = 10.0
+
+        let stackFitting = stackView?.fittingSize ?? NSSize(width: 80, height: 24)
+        let height = ceil(stackFitting.height + (paddingV * 2.0))
+        let width = max(height, ceil(stackFitting.width + (paddingH * 2.0)))
+        let cornerRadius = height / 2.0
+
+        // Rounded corners: 9-slice mask image + layer cornerRadius & masksToBounds on effect & contentView
+        if let effect = visualEffectView {
+            effect.wantsLayer = true
+            effect.layer?.cornerRadius = cornerRadius
+            effect.layer?.masksToBounds = true
+            effect.maskImage = Self.makeCapsuleMaskImage(cornerRadius: cornerRadius)
+        }
+
+        if let contentView = panel.contentView {
+            contentView.wantsLayer = true
+            contentView.layer?.cornerRadius = cornerRadius
+            contentView.layer?.masksToBounds = true
+        }
+
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+
         let panelSize = NSSize(width: width, height: height)
-
         let targetRect = targetFrame(for: panelSize)
         panel.setFrame(targetRect, display: true)
         panel.invalidateShadow()
