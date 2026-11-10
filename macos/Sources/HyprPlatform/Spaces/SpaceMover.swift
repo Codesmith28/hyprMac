@@ -24,8 +24,8 @@ public final class SpaceMover {
         public var titlebarOffset: CGFloat = 8
         /// Offset of the "just right of the traffic lights" candidate.
         public var trafficLightsOffset: CGFloat = 80
-        /// Pause between mouse-down and the key press.
-        public var pressDelay: TimeInterval = 0.02
+        /// Pause between mouse-down and the key press (allows custom-titlebar apps to initialize drag).
+        public var pressDelay: TimeInterval = 0.04
         public var pollInterval: TimeInterval = 0.01
         /// How long to wait for the active Space to become the target.
         public var switchTimeout: TimeInterval = 1.0
@@ -335,7 +335,10 @@ public final class SpaceMover {
         let saved = poster.cursorLocation()
         poster.post(.mouseMove(grab))
         poster.post(.leftMouseDown(grab))
-        poster.post(.leftMouseDragged(CGPoint(x: grab.x + 1, y: grab.y)))
+        let maxDelta: CGFloat = 12
+        let dragDelta: CGFloat = (grab.x + maxDelta < frame.maxX - 6) ? maxDelta : -maxDelta
+        let dragPoint = CGPoint(x: grab.x + dragDelta, y: grab.y)
+        poster.post(.leftMouseDragged(dragPoint))
         poster.post(.leftMouseDragged(grab))
 
         var mouseReleased = false
@@ -348,6 +351,9 @@ public final class SpaceMover {
                 poster.post(.leftMouseUp(curr))
             }
             poster.post(.warpCursor(saved))
+            if poster.isButtonHeld(.left) {
+                poster.post(.leftMouseUp(saved))
+            }
         }
         defer { ensureMouseUp() }
 
@@ -368,6 +374,13 @@ public final class SpaceMover {
         }
         transitions?.noteTransition(at: clock.now())
         clock.sleep(configuration.settle)
+        if spaces.isNativeSpacesAvailable {
+            let winSpaces = spaces.spaces(of: window.windowID)
+            if !winSpaces.isEmpty && !winSpaces.contains(target.id) {
+                Log.mover.error("throw: window \(window.description) failed to travel with space switch (still on \(winSpaces))")
+                return .timedOut
+            }
+        }
         return .moved
     }
 }

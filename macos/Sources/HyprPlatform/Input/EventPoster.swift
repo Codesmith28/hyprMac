@@ -18,7 +18,13 @@ public protocol EventPoster: AnyObject {
     func cursorLocation() -> CGPoint
     /// Modifier keys physically held right now (`CGEventSource.flagsState(.hidSystemState)`).
     func physicalModifierFlags() -> CGEventFlags
+    /// Checks if a mouse button is physically or synthetically held down.
+    func isButtonHeld(_ button: CGMouseButton) -> Bool
     func post(_ event: SyntheticEvent)
+}
+
+public extension EventPoster {
+    func isButtonHeld(_ button: CGMouseButton = .left) -> Bool { false }
 }
 
 /// Posts at `.cghidEventTap` (verified to drive the native Space switch on macOS 27.2) and
@@ -37,6 +43,11 @@ public final class SystemEventPoster: EventPoster {
     public func cursorLocation() -> CGPoint { CGEvent(source: nil)?.location ?? .zero }
 
     public func physicalModifierFlags() -> CGEventFlags { CGEventSource.flagsState(.hidSystemState) }
+
+    public func isButtonHeld(_ button: CGMouseButton = .left) -> Bool {
+        CGEventSource.buttonState(.combinedSessionState, button: button) ||
+        CGEventSource.buttonState(.hidSystemState, button: button)
+    }
 
     public func post(_ event: SyntheticEvent) {
         let cg: CGEvent?

@@ -50,9 +50,10 @@ import Testing
         let target = try #require(desk.spaces.userSpace(index: 2, display: 1))
         #expect(mover.move(w, toSpace: 2) == .moved)
         let grab = CGPoint(x: 300, y: 108)
+        let dragPoint = CGPoint(x: 312, y: 108)
         #expect(desk.posted == [
             .mouseMove(grab), .leftMouseDown(grab),
-            .leftMouseDragged(CGPoint(x: grab.x + 1, y: grab.y)),
+            .leftMouseDragged(dragPoint),
             .leftMouseDragged(grab),
             .keyDown(19, .maskAlternate), .keyUp(19, .maskAlternate),
             .leftMouseUp(grab), .warpCursor(CGPoint(x: 1000, y: 800)),
@@ -248,8 +249,36 @@ import Testing
         #expect(grab?.y == frame.minY + 1) // grabbed via 1 pt strip above tabs
         #expect(mover.move(w, toSpace: 2) == .moved)
         #expect(desk.space(of: w) == desk.spaces.userSpace(index: 2, display: 1)?.id)
-        #expect(desk.posted.contains(.leftMouseDragged(CGPoint(x: grab!.x + 1, y: grab!.y))))
+        #expect(desk.posted.contains(.leftMouseDragged(CGPoint(x: grab!.x + 12, y: grab!.y))))
         #expect(desk.posted.contains(.leftMouseDragged(grab!)))
+    }
+
+    @Test func stuckMouseButtonIsReleasedAsFailSafe() {
+        let (desk, w, mover) = setup()
+        // Hook into onPost: if leftMouseUp(grab) is posted, keep mouseIsDown = true to simulate
+        // WindowServer dropping the mouse up or getting desynced
+        var simulateDrop = true
+        desk.poster.onPost = { event in
+            if case .leftMouseUp = event, simulateDrop {
+                desk.locked { desk.mouseIsDown = true }
+                simulateDrop = false
+            }
+        }
+        #expect(mover.move(w, toSpace: 2) == .moved)
+        // ensureMouseUp() detects poster.isButtonHeld(.left) and posts emergency release at saved cursor
+        #expect(desk.posted.suffix(2) == [.warpCursor(CGPoint(x: 1000, y: 800)), .leftMouseUp(CGPoint(x: 1000, y: 800))])
+    }
+
+    @Test func windowFailingToTravelWithSpaceSwitchReportsTimeout() {
+        let (desk, w, mover) = setup()
+        // Override spaces provider for this window so it appears to stay on Space 1
+        desk.spaces.spacesOverride = { wid in
+            if wid == w.windowID { return [desk.spaces.userSpace(index: 1, display: 1)!.id] }
+            return nil
+        }
+        #expect(mover.move(w, toSpace: 2) == .timedOut)
+        // Mouse is still cleanly released
+        #expect(desk.posted.suffix(2) == [.leftMouseUp(CGPoint(x: 300, y: 108)), .warpCursor(CGPoint(x: 1000, y: 800))])
     }
 }
 

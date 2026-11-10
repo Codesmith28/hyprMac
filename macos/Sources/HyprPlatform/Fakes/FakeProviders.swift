@@ -21,6 +21,10 @@ public final class FakeWindowServer: WindowServerQuery {
 /// `CGSCopySpacesForWindows`). With `desk.spacesUnavailable` it behaves like the SkyLight fallback.
 public final class FakeSpaceProvider: SpaceProvider {
     let desk: FakeDesktop
+    public var spacesOverride: ((CGWindowID) -> [SpaceID]?)? {
+        get { desk.locked { desk.spacesOfWindowOverride } }
+        set { desk.locked { desk.spacesOfWindowOverride = newValue } }
+    }
     init(_ desk: FakeDesktop) { self.desk = desk }
 
     public var isNativeSpacesAvailable: Bool { desk.locked { !desk.spacesUnavailable } }
@@ -42,6 +46,7 @@ public final class FakeSpaceProvider: SpaceProvider {
 
     public func spaces(of window: CGWindowID) -> [SpaceID] {
         desk.locked {
+            if let custom = desk.spacesOfWindowOverride?(window) { return custom }
             guard !desk.spacesUnavailable,
                   let w = desk.windowTable.values.first(where: { $0.ref.windowID == window }), !w.minimized,
                   !w.inTransition else { return [] }
@@ -85,6 +90,10 @@ public final class FakeEventPoster: EventPoster {
             if let at = desk.heldModifiersReleaseAt, desk.clock.now() >= at { return [] }
             return desk.heldModifiers
         }
+    }
+
+    public func isButtonHeld(_ button: CGMouseButton = .left) -> Bool {
+        desk.locked { button == .left && desk.mouseIsDown }
     }
 
     public func setCursor(_ p: CGPoint) { desk.locked { desk.cursor = p } }
