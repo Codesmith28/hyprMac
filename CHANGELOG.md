@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.1] - 2026-11-10
+
+### 🐛 Fixed
+- 🪟 **Custom-Titlebar Throw**: Added 12 pt drag excursion and 40 ms press delay allowing GPUI, Electron, and custom-titlebar apps (e.g. Herdr) to reliably throw across Desktops.
+- 👆 **Gesture Protection & Recovery**: Added automatic mouse-up fail-safe and space-arrival verification in `SpaceMover` to prevent WindowServer drag desyncs and protect native trackpad swipe gestures.
+- 📦 **Lua Dependency Build**: Fixed `mk/deps.mk` to check both `.fetched` and `lua.h`, preventing missing `lua.hpp` errors on `make update` / `make install`.
+
+---
+
 ## [0.2.0] - 2026-11-08
 
 ### 🚀 Added

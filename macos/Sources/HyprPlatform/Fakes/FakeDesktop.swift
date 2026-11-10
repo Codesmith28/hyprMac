@@ -178,6 +178,7 @@ public final class FakeDesktop: @unchecked Sendable {
     var axFocusedApplicationOverride: (() -> pid_t?)?
     var axFocusedWindowOverride: ((pid_t) -> WindowRef?)?
     var posterOnPost: ((SyntheticEvent) -> Void)?
+    var spacesOfWindowOverride: ((CGWindowID) -> [SpaceID]?)?
 
     // MARK: locking / events
 

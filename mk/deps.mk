@@ -3,7 +3,7 @@ LUA_DIR := third_party/lua-5.4.7
 
 # Fetch on-demand before source wildcard expansion unless running clean or help targets
 ifeq ($(filter clean clean-deps distclean help,$(MAKECMDGOALS)),)
-  ifeq ($(shell test -f $(LUA_DIR)/.fetched && echo 1),)
+  ifeq ($(shell test -f $(LUA_DIR)/.fetched && test -f $(LUA_DIR)/lua.h && echo 1),)
     _FETCH_STATUS := $(shell ./scripts/fetch_lua.sh $(LUA_DIR) >&2; echo $$?)
     ifneq ($(_FETCH_STATUS),0)
       $(error Failed to fetch Lua dependency. Check your network or run 'make deps'.)
