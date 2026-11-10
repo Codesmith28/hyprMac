@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.2] - 2026-11-10
+
+### 🐛 Fixed
+- 🛡️ **Single-Instance Enforcement**: Prevent duplicate instances from starting simultaneously on login (e.g. LaunchAgent + Login Items) using atomic kernel file locking (`flock`) and LaunchServices checks.
+
+---
+
 ## [0.2.1] - 2026-11-10
 
 ### 🐛 Fixed
