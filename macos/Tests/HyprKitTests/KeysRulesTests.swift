@@ -26,6 +26,18 @@ config = { keys = { throw = "ctrl+alt", toggle_float = "ctrl+alt+t", switch = "c
         #expect(Config.parseExtras(json: "nope") == nil)
     }
 
+    /// Letter keys configured in init.lua keep their arrow keys (with the same modifiers).
+    @Test func configuredLetterKeysKeepArrows() throws {
+        let json = #"{"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt","focus_left":"alt+shift+h","focus_down":"alt+shift+j","focus_up":"alt+shift+k","focus_right":"alt+shift+l","move_left":"alt+shift+cmd+h"},"rules":{"ignore":[],"float":[]}}"#
+        let keys = try #require(Config.parseExtras(json: json)).keys
+        #expect(keys.focusKeys.map { "\($0.direction.rawValue):\($0.spec.key)" }
+            == ["left:h", "down:j", "up:k", "right:l", "left:left", "down:down", "up:up", "right:right"])
+        #expect(keys.focusKeys.contains { $0.direction == .left && $0.spec.key == "left" && $0.spec.modifiers == [.option, .shift] })
+        #expect(keys.focusKeys.count == 8)
+        #expect(keys.moveKeys.contains { $0.direction == .left && $0.spec.key == "left" && $0.spec.modifiers == [.option, .shift, .command] })
+        #expect(keys.moveKeys.count == 2)
+    }
+
     @Test func defaultsWhenAbsent() {
         let (s, dir) = store("config = { gaps = { inner = 3 } }\n")
         defer { try? FileManager.default.removeItem(at: dir) }

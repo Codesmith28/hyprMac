@@ -68,7 +68,7 @@ struct CheatsheetCatalogTests {
         guard case .loaded = store.load() else { Issue.record("init.lua did not load"); return }
         let keys = store.current.keys
         #expect(entry(.toggleFloat, keys)?.keys == [["⌃", "⌥", "G"]])
-        #expect(entry(.focus, keys)?.keys == [["⌃", "⌥", "A/S/W/D"]])
+        #expect(entry(.focus, keys)?.keys == [["⌃", "⌥", "A/S/W/D"], ["⌃", "⌥", "←/↓/↑/→"]])
         #expect(CheatsheetCatalog.extras(for: keys).map(\.keys) == [["⌃", "⌥", "Z"]])
     }
 }
