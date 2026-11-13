@@ -71,7 +71,7 @@ config = {
 }
 ```
 
-- Reload from the menu (**Reload Configuration**) or with `pkill -HUP -x hyprMac`.
+- Saving the file reloads it. You can also reload from the menu (**Reload Configuration**) or with `pkill -HUP -x hyprMac`. Check a file with `hyprMac --check-config [path]`.
 - A file with an error is rejected as a whole. hyprMac keeps the old settings and tells you the file, line and problem.
 - The schema is strict. Unknown keys and wrong types are errors. The Lua sandbox has no `io`, `os`, `require` or `load`, and it has memory and instruction limits.
 

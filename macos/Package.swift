@@ -11,6 +11,7 @@ let package = Package(
         .executable(name: "hyprMac", targets: ["HyprApp"]),
         .executable(name: "hyprmac-fixture", targets: ["FixtureApp"]),
         .executable(name: "hyprmac-e2e", targets: ["HyprE2E"]),
+        .executable(name: "hyprmacctl", targets: ["HyprCtl"]),
     ],
     targets: [
         // C API of the C++ core (core/include/hypr/hypr_core.h), linked from build/release/libhyprcore.a
@@ -23,10 +24,18 @@ let package = Package(
         .testTarget(name: "HyprPlatformTests", dependencies: ["HyprPlatform"],
                     path: "Tests/HyprPlatformTests", swiftSettings: v5),
 
+        // Wire format, socket path and client of the control socket (Foundation only; shared by the app and hyprmacctl).
+        .target(name: "HyprControl", path: "Sources/HyprCtl/Shared", swiftSettings: v5),
+        .testTarget(name: "HyprControlTests", dependencies: ["HyprControl"],
+                    path: "Tests/HyprControlTests", swiftSettings: v5),
+        // `hyprmacctl`: tiny command-line client for a running hyprMac.
+        .executableTarget(name: "HyprCtl", dependencies: ["HyprControl"],
+                          path: "Sources/HyprCtl/Tool", swiftSettings: v5),
+
         // Event coordinator: platform events -> engine -> geometry executor.
-        .target(name: "HyprKit", dependencies: ["CHyprCore", "HyprPlatform"],
+        .target(name: "HyprKit", dependencies: ["CHyprCore", "HyprPlatform", "HyprControl"],
                 path: "Sources/HyprKit", swiftSettings: v5),
-        .testTarget(name: "HyprKitTests", dependencies: ["HyprKit", "HyprPlatform"],
+        .testTarget(name: "HyprKitTests", dependencies: ["HyprKit", "HyprPlatform", "HyprControl"],
                     path: "Tests/HyprKitTests", swiftSettings: v5),
 
         // Menu bar app shell.

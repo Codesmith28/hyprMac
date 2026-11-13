@@ -48,7 +48,7 @@ Stage Manager moves and groups windows on its own, which fights the tiler. While
 ## "Displays have separate Spaces" is required
 With this setting on (the macOS default), each display has its own Spaces, and hyprMac tiles each display from its own active Space. With it off, macOS reports one shared set of Spaces for all displays. Per-display numbering and throws then become unreliable.
 
-hyprMac reads the setting but doesn't warn when it's off, and install doesn't check it. Keep it on.
+With more than one display and the setting off, hyprMac shows a notice once per run. Install doesn't check it. Turn it on in System Settings ▸ Desktop & Dock ▸ Mission Control, then log out.
 
 ## Fullscreen detection varies by app
 A window counts as fullscreen when its `AXFullScreen` attribute says so. Native fullscreen (the green button, ⌃⌘F) sets it reliably. Some apps don't:

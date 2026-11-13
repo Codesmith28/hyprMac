@@ -75,6 +75,7 @@ The harness launches `hyprMac.app/Contents/MacOS/hyprMac --config <file> --event
 | `plan_applied` | each layout written (`space`, `revision`, `count`) |
 | `missing_space` | ⌥N for a Desktop that doesn't exist |
 | `throw` | each ⌥⇧N attempt, with `result` (`moved`, `alreadyThere`, `noSuchSpace`, `refusedFullscreen`, `noGrabPoint`, `timedOut`, `transitionInFlight`, `failed`, `noFocusedWindow`) |
+| `separate_spaces_off` | 2+ displays while "Displays have separate Spaces" is off (once per run) |
 | `floated` | with `reason` `fights` or `small` |
 | `stopped` | clean shutdown |
 
