@@ -202,7 +202,7 @@ expect_rc() { # description expected
     if [ "$RC" != "$2" ]; then bad "$1: exit $RC, expected $2"; show_out; fi
 }
 STATE_DIR_REL="Library/Application Support/hyprMac/install"
-MUTATING='^(defaults (write|delete|import)|launchctl (bootstrap|bootout|kill)|tccutil|lsregister -[fu]|open|killall|activateSettings|pkill -(TERM|KILL))'
+MUTATING='^(defaults (write|delete|import)|launchctl (bootstrap|bootout|kill|enable|disable)|tccutil|lsregister -[fu]|open|killall|activateSettings|pkill -(TERM|KILL))'
 
 # Clean install + uninstall with the zero-diff checks every scenario shares.
 roundtrip() { # label
@@ -293,6 +293,24 @@ t_uninstall_without_install() {
     contains "says nothing to undo" "$OUT" "nothing to undo"
     check "no mutating calls" test -z "$(grep -E "$MUTATING" "$FAKE_STATE/calls.log")"
     same_fp "no-op uninstall" "$fp"
+}
+
+t_login_item_disabled() {
+    # The app's "Launch at Login" toggle runs `launchctl disable`; uninstall must undo it.
+    local fp="$S/fp.before"
+    sys_fp >"$fp"
+    inst; expect_rc "install" 0
+    "$LAUNCHCTL" disable "gui/$UID_VAL/$BID"
+    check "label disabled" grep -qx "$BID" "$FAKE_STATE/launchd.disabled"
+    : >"$FAKE_STATE/calls.log"
+    uninst; expect_rc "uninstall" 0
+    check "enabled again" test -z "$(grep -x "$BID" "$FAKE_STATE/launchd.disabled")"
+    local en bo
+    en="$(grep -n "^launchctl enable gui/$UID_VAL/$BID" "$FAKE_STATE/calls.log" | head -1 | cut -d: -f1)"
+    bo="$(grep -n "^launchctl bootout gui/$UID_VAL/$BID" "$FAKE_STATE/calls.log" | head -1 | cut -d: -f1)"
+    check "enable call logged" test -n "$en"
+    check "enable runs before the agent is booted out" test "${en:-99}" -lt "${bo:-0}"
+    same_fp "login item roundtrip" "$fp"
 }
 
 t_hotkey_preexisting() {
@@ -855,6 +873,7 @@ tap "26 H2 interrupted uninstall is journaled and resumes safely" t_h2_interrupt
 tap "27 M4 -dict-add / defaults delete with merging import" t_m4_dict_add_and_merge_import
 tap "28 M9 no snapshot means exit 3 UNVERIFIED" t_m9_unverified_exit_3
 tap "29 M8 refuses root, empty HOME, HOME=/, missing HOME" t_m8_refuse_root_and_bad_home
+tap "30 launch-at-login disable is undone (launchctl enable) before the agent is removed" t_login_item_disabled
 echo "1..$N"
 if [ "$FAILED" -gt 0 ]; then
     echo "# FAILED $FAILED of $N:$FAILED_NAMES"
