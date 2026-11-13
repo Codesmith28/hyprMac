@@ -40,11 +40,6 @@ struct ShortcutListTests {
         #expect(!rows.contains { $0.label.hasPrefix("Switch") })
     }
 
-    @Test func textAlignsChords() {
-        let text = ShortcutList.text(for: [ShortcutRow(label: "A", chord: "⌥1"), ShortcutRow(label: "B", chord: "⌥⇧F")])
-        #expect(text == "⌥1    A\n⌥⇧F   B")
-    }
-
     @Test func boundOptInActionsAppearAndUnboundOnesDoNot() throws {
         var keys = KeyBindings.defaults
         #expect(!ShortcutList.rows(for: keys).contains { $0.label == "Zoom the focused window" })

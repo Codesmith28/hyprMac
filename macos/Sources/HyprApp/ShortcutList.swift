@@ -1,12 +1,12 @@
 import HyprPlatform
 
-/// One row of the Keyboard Shortcuts dialog.
+/// One row of the shortcuts list.
 struct ShortcutRow: Equatable {
     let label: String
     let chord: String
 }
 
-/// Builds the Keyboard Shortcuts rows from the live `KeyBindings`. Each action is one small function
+/// Builds the shortcut rows from the live `KeyBindings`. Each action is one small function
 /// returning its rows (none when unbound), so a new action only appends to `rows(for:)`.
 enum ShortcutList {
     static func rows(for keys: KeyBindings) -> [ShortcutRow] {
@@ -19,13 +19,6 @@ enum ShortcutList {
         rows += move(keys)
         rows += actions(keys)
         return rows
-    }
-
-    /// Dialog body: one "chord  label" line per row, chords aligned.
-    static func text(for rows: [ShortcutRow]) -> String {
-        let width = rows.map(\.chord.count).max() ?? 0
-        return rows.map { $0.chord + String(repeating: " ", count: width - $0.chord.count + 3) + $0.label }
-            .joined(separator: "\n")
     }
 
     // MARK: actions
@@ -64,7 +57,7 @@ enum ShortcutList {
         }
     }
 
-    private static func label(for action: KeyAction) -> String {
+    static func label(for action: KeyAction) -> String {
         switch action {
         case .resizeLeft: "Resize the focused tile left"
         case .resizeDown: "Resize the focused tile down"

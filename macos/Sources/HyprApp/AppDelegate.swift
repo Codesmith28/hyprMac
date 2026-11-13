@@ -26,12 +26,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Tiling
     private let login = LoginItem()
     /// Set when tiling starts after a permission wait: shows a one-time "Tiling started" OSD.
     private var announceStart = false
+    private lazy var cheatsheet = CheatsheetController(
+        entries: { [weak self] in CheatsheetCatalog.entries(for: self?.keyBindings ?? .defaults) },
+        extras: { [weak self] in CheatsheetCatalog.extras(for: self?.keyBindings ?? .defaults) })
+    /// Registered apart from the tiling hotkeys, so it works while paused or before Accessibility is granted.
+    private lazy var shortcutsHotkey = ShortcutsHotkey { [weak self] in self?.cheatsheet.toggle() }
 
     init(options: AppOptions) { self.options = options }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         EventLog.shared.emit("started", ["version": Engine.version])
         buildMenu()
+        shortcutsHotkey.start(KeyBindings.defaults.showShortcuts)
         installSignalHandlers()
         notifier.requestAuthorization()
         notifier.onAction = { [weak self] in self?.perform($0) }
@@ -47,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Tiling
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        shortcutsHotkey.stop()
         services?.stop()
         controller?.stop()
         EventLog.shared.emit("stopped")
@@ -195,7 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Tiling
     @objc private func flipSplit() { controller?.rotateFocusedSplit() }
     @objc private func reloadConfig() { controller?.reloadConfig() }
     @objc private func quit() { NSApp.terminate(nil) }
-    @objc private func showShortcuts() { Onboarding.showShortcuts(rows: ShortcutList.rows(for: keyBindings)) }
+    @objc private func showShortcuts() { cheatsheet.show() }
 
     @objc private func toggleOSD() {
         settings.osdPopupOverride = !osdEnabled

@@ -18,10 +18,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - 🎛️ **Menu**: Status, Launch at Login, OSD toggle, Reveal Configuration and Copy Log Command; pause is remembered.
 - 🔑 **Stable Signing**: Opt-in `make sign-identity` keeps the Accessibility grant across upgrades.
 - 📦 **CI & Release**: GitHub Actions, tag-driven releases and a Homebrew cask template.
+- 🎞️ **Shortcut Cheatsheet**: Minimal modal with a looping animation per shortcut, opened with `⌥⇧/` or from the menu and closed with `Esc`.
 
 ### 🔄 Changed
 - 🧹 **Menu Shortcuts**: Removed the ⌘, ⌘R and ⌘Q hints, which could never fire.
-- ⌨️ **Shortcuts Dialog**: Now built from your live config.
+- ⌨️ **Shortcuts Dialog**: Now the animated cheatsheet, built from your live config.
 - 🔔 **Notices**: Clicking one opens the right Settings pane; missing-Desktop and throw errors show in the OSD; warns when "Displays have separate Spaces" is off.
 - 📖 **Docs**: Corrected the shortcut table and documented every config key.
 
