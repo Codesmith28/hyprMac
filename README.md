@@ -8,6 +8,10 @@ The layout engine is C++20 behind a C API, the macOS layer is Swift, and the con
 
 ![hyprMac tiling new windows across native Spaces](demo/demo.gif)
 
+**Shortcut cheatsheet.** Press ⌥⇧/ (or **Keyboard Shortcuts…** in the menu) to see every shortcut, with your `init.lua` bindings.
+
+![hyprMac shortcut cheatsheet tutorial](demo/hyprMac_tutorial.gif)
+
 ## Features
 - **Tiling.** A new window splits the focused tile along its longer side and takes the second half.
 - **Gaps.** 8 pt between tiles, 12 pt at the screen edges (menu bar and Dock excluded).
