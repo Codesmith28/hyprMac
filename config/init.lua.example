@@ -48,7 +48,7 @@ config = {
         toggle_float = prefix .. "+f",         -- tile / float focused window (⌥⇧F)
         center_window = prefix .. "+c",        -- center focused window (⌥⇧C)
 
-        -- Setting any focus_* / move_* key replaces that group's defaults (arrow keys included)
+        -- Each arrow key stays bound next to its letter key, with the same modifiers (⌥⇧← ↓ ↑ →).
         focus_left = prefix .. "+h",           -- focus left (⌥⇧H)
         focus_down = prefix .. "+j",           -- focus down (⌥⇧J)
         focus_up = prefix .. "+k",             -- focus up (⌥⇧K)

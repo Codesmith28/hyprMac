@@ -87,7 +87,7 @@ public struct Config: Equatable {
         if let fu = k["focus_up"].flatMap(KeySpec.init(parsing:)) { customFocus.append((.up, fu)) }
         if let fr = k["focus_right"].flatMap(KeySpec.init(parsing:)) { customFocus.append((.right, fr)) }
         if !customFocus.isEmpty {
-            keys.focusKeys = customFocus
+            keys.focusKeys = withArrows(customFocus)
         }
 
         var customMove: [(direction: Direction, spec: KeySpec)] = []
@@ -96,7 +96,7 @@ public struct Config: Equatable {
         if let mu = k["move_up"].flatMap(KeySpec.init(parsing:)) { customMove.append((.up, mu)) }
         if let mr = k["move_right"].flatMap(KeySpec.init(parsing:)) { customMove.append((.right, mr)) }
         if !customMove.isEmpty {
-            keys.moveKeys = customMove
+            keys.moveKeys = withArrows(customMove)
         }
 
         for action in KeyAction.allCases {
@@ -109,6 +109,18 @@ public struct Config: Equatable {
         let osd = root["osd_popup"] as? Bool ?? true
         return (keys, AppRules(ignore: ignore, float: float), osd)
     }
+    /// Keeps each configured direction's arrow key bound next to its letter key, with the same modifiers
+    /// (`focus_left = "alt+shift+h"` also binds ⌥⇧←). Skipped when that arrow is already in the list.
+    static func withArrows(_ list: [(direction: Direction, spec: KeySpec)]) -> [(direction: Direction, spec: KeySpec)] {
+        var out = list
+        for item in list {
+            guard let arrow = KeySpec(modifiers: item.spec.modifiers, key: item.direction.rawValue),
+                  !out.contains(where: { $0.spec == arrow }) else { continue }
+            out.append((item.direction, arrow))
+        }
+        return out
+    }
+
     /// Reads the v0.3.0 options (title rules, `rules.desktop`, `smart_gaps`, `focus_follows_mouse`,
     /// `displays`) from the extras JSON. Absent keys keep today's behaviour; the core validated them.
     mutating func applyV3Options(json: String) {

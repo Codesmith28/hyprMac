@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 🐛 Fixed
 - 🎨 **OSD Border**: Corner radius now matches the block, with no gap.
+- ⌨️ **Arrow Keys**: Stay bound when `focus_*` / `move_*` are set to letter keys, so H/J/K/L and ←/↓/↑/→ both work.
 
 ---
 
