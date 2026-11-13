@@ -24,6 +24,8 @@ std::string validate(const Config &c) {
     };
     if (auto e = check_float("float.min_width", c.float_min_w); !e.empty()) return e;
     if (auto e = check_float("float.min_height", c.float_min_h); !e.empty()) return e;
+    if (!std::isfinite(c.resize_step) || c.resize_step < kMinResizeStep || c.resize_step > kMaxResizeStep)
+        return "resize_step must be within [1, 25]";
     return {};
 }
 

@@ -51,6 +51,7 @@ typedef struct hm_config {
     double split_ratio; /* ratio given to the FIRST child of a new split; default 0.5, range [0.1, 0.9] */
     double float_min_w; /* windows first seen narrower than this float; default 400, range [0, 2000], 0 = off */
     double float_min_h; /* windows first seen shorter than this float; default 300, range [0, 2000], 0 = off */
+    double resize_step; /* percent of a split moved per keyboard resize; default 5, range [1, 25] */
 } hm_config;
 
 /* Fill *out with built-in defaults. */
@@ -168,6 +169,50 @@ hm_status hm_engine_swap(hm_engine *engine, hm_window_id a, hm_window_id b, hm_p
  * ignored. Returns the full plan for the window's space. HM_ERR_UNKNOWN_WINDOW if the window is not
  * a tiled leaf; HM_ERR_INVALID_ARGUMENT for a non-finite rect. */
 hm_status hm_engine_resize(hm_engine *engine, hm_window_id window, hm_rect desired, hm_plan *out);
+
+/* Keyboard actions (all unbound by default; see config/init.lua.example). Each returns the full
+ * plan for the affected space. HM_ERR_UNKNOWN_WINDOW unless the window is a tiled leaf. */
+
+typedef enum hm_direction {
+    HM_DIR_LEFT = 0,
+    HM_DIR_DOWN = 1,
+    HM_DIR_UP = 2,
+    HM_DIR_RIGHT = 3
+} hm_direction;
+
+/* Move the nearest boundary of `window` in `dir` by config.resize_step percent of that split
+ * (right/down grow the first child, left/up shrink it). The window's own edge in `dir` moves when
+ * a split lies on that side, otherwise its opposite edge does, so the key always moves a boundary
+ * the way it points. Ratios stay within [0.1, 0.9] and subtree minimum sizes are respected; a
+ * blocked step is a successful no-op. Clears zoom. */
+hm_status hm_engine_resize_step(hm_engine *engine, hm_window_id window, hm_direction dir, hm_plan *out);
+
+/* Reset every split ratio of `space` to config.split_ratio. HM_ERR_UNKNOWN_SPACE for unknown
+ * spaces. Clears zoom. */
+hm_status hm_engine_equalize(hm_engine *engine, hm_space_id space, hm_plan *out);
+
+/* Toggle the orientation (side by side <-> stacked) of the split holding `window`, keeping its
+ * ratio. A lone window is a successful no-op. Clears zoom. */
+hm_status hm_engine_rotate_split(hm_engine *engine, hm_window_id window, hm_plan *out);
+
+/* Monocle: toggle zoom for `window`. A zoomed window is placed on the space's whole usable area
+ * minus the outer gap; the other tiles keep their tree frames underneath. Zoom is per space and
+ * clears when the window leaves the tree, when other windows join or the layout is edited
+ * (resize, rotate, equalize, swap), and with hm_engine_clear_zoom. */
+hm_status hm_engine_toggle_zoom(hm_engine *engine, hm_window_id window, hm_plan *out);
+
+/* The zoomed window of `space`, or 0. */
+hm_window_id hm_engine_zoomed_window(const hm_engine *engine, hm_space_id space);
+
+/* Clear zoom in `space` (0 = every space). Produces no plan; relayout afterwards. */
+void hm_engine_clear_zoom(hm_engine *engine, hm_space_id space);
+
+/* Move a tiled window out of its tree into `target_space`'s tree (dwindle insert next to that
+ * space's most recently added tile) and return both plans. HM_ERR_UNKNOWN_SPACE when the target
+ * is not known to the engine yet, HM_ERR_UNKNOWN_WINDOW unless the window is a tiled leaf,
+ * HM_ERR_INVALID_ARGUMENT when it is already in that space. */
+hm_status hm_engine_move_to_space(hm_engine *engine, hm_window_id window, hm_space_id target_space,
+                                  hm_plan *out_target, hm_plan *out_source);
 
 /* Drop a window everywhere, including ghost slots (app terminated). */
 void hm_engine_forget_window(hm_engine *engine, hm_window_id window);

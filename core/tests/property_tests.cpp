@@ -137,6 +137,11 @@ public:
 
     void forget_window(WindowId w) { windows_.erase(w); }
 
+    // The engine moved w to another space's tree (move_display_*).
+    void relocate(WindowId w, SpaceId to) {
+        if (auto it = windows_.find(w); it != windows_.end()) it->second.space = to;
+    }
+
     // A destroyed space: its windows land on another space.
     void destroy_space(SpaceId s) {
         const SpaceId to = s == 1 ? 2 : 1;
@@ -158,6 +163,26 @@ std::set<WindowId> expected_tiled(const Snapshot &s) {
         if (w.state == WindowState::Tiled) tiled.insert(w.id);
     }
     return tiled;
+}
+
+void collect_ratios(const Node *n, std::vector<double> &out) {
+    if (!n || n->is_leaf()) return;
+    out.push_back(n->ratio);
+    collect_ratios(n->child[0].get(), out);
+    collect_ratios(n->child[1].get(), out);
+}
+
+void collect_splits(const Node *n, std::vector<const Node *> &out) {
+    if (!n || n->is_leaf()) return;
+    out.push_back(n);
+    collect_splits(n->child[0].get(), out);
+    collect_splits(n->child[1].get(), out);
+}
+
+std::vector<double> ratios_in(const Engine &e, SpaceId s) {
+    std::vector<double> r;
+    if (const Space *sp = e.model().find_space(s)) collect_ratios(sp->tree.root(), r);
+    return r;
 }
 
 struct Stats {
@@ -234,7 +259,7 @@ TEST_CASE("random operations keep every invariant (C++ engine)") {
                     last_rev = p.revision;
                     check_space(e, sid, p, stats);
                 }
-            } else if (op < 93) {
+            } else if (op < 90) {
                 const WindowId a = world.random_window(), b = world.random_window();
                 const SpaceId sa = e.model().tree_space_of(a), sb = e.model().tree_space_of(b);
                 Plan p;
@@ -248,7 +273,110 @@ TEST_CASE("random operations keep every invariant (C++ engine)") {
                     last_rev = p.revision;
                     check_space(e, sa, p, stats);
                 }
-            } else if (op < 97) {
+            } else if (op < 96) {
+                // Keyboard actions.
+                const WindowId w = world.random_window();
+                const SpaceId sid = e.model().tree_space_of(w);
+                Plan p;
+                switch (world.uniform(0, 4)) {
+                case 0: { // resize_step: at most one boundary moves, and only the way the key points
+                    const Direction d = static_cast<Direction>(world.uniform(0, 3));
+                    const std::vector<double> before = ratios_in(e, sid);
+                    const LayoutResult drawn_before = e.layout_of(sid);
+                    const hm_status st = e.resize_step(w, d, p);
+                    REQUIRE(st == (sid ? HM_OK : HM_ERR_UNKNOWN_WINDOW));
+                    if (!sid) break;
+                    last_rev = p.revision;
+                    const std::vector<double> after = ratios_in(e, sid);
+                    REQUIRE(after.size() == before.size());
+                    const LayoutResult drawn_after = e.layout_of(sid);
+                    std::vector<const Node *> splits;
+                    collect_splits(e.model().find_space(sid)->tree.root(), splits);
+                    int changed = 0;
+                    for (std::size_t i = 0; i < after.size(); ++i) {
+                        REQUIRE(after[i] >= kMinRatio - 1e-12);
+                        REQUIRE(after[i] <= kMaxRatio + 1e-12);
+                        if (after[i] == before[i]) continue;
+                        ++changed;
+                        // The boundary as drawn moves the way the key points, by at most one step of that split.
+                        const Node *n = splits[i];
+                        const Rect b0 = bbox(n->child[0].get(), drawn_before), a0 = bbox(n->child[0].get(), drawn_after);
+                        const Rect whole = bbox(n, drawn_before);
+                        const bool vertical = n->orientation == Orientation::Vertical;
+                        const double moved = (vertical ? a0.w - b0.w : a0.h - b0.h);
+                        const bool increases = d == Direction::Right || d == Direction::Down;
+                        REQUIRE((increases ? moved >= -1e-6 : moved <= 1e-6));
+                        REQUIRE(std::fabs(moved) <= (vertical ? whole.w : whole.h) * e.config().resize_step / 100.0 + 1e-6);
+                    }
+                    REQUIRE(changed <= 1);
+                    check_space(e, sid, p, stats);
+                    break;
+                }
+                case 1: { // equalize
+                    const SpaceId target = world.random_space();
+                    const bool known = e.model().find_space(target) != nullptr;
+                    REQUIRE(e.equalize(target, p) == (known ? HM_OK : HM_ERR_UNKNOWN_SPACE));
+                    if (!known) break;
+                    last_rev = p.revision;
+                    for (double r : ratios_in(e, target)) REQUIRE(r == e.config().split_ratio);
+                    check_space(e, target, p, stats);
+                    break;
+                }
+                case 2: { // rotate_split twice restores the layout
+                    const hm_status st = e.rotate_split(w, p);
+                    REQUIRE(st == (sid ? HM_OK : HM_ERR_UNKNOWN_WINDOW));
+                    if (!sid) break;
+                    check_space(e, sid, p, stats);
+                    const LayoutResult first = e.layout_of(sid);
+                    REQUIRE(e.rotate_split(w, p) == HM_OK); // two more flips are the identity
+                    REQUIRE(e.rotate_split(w, p) == HM_OK);
+                    REQUIRE(e.layout_of(sid).placements.size() == first.placements.size());
+                    for (std::size_t i = 0; i < first.placements.size(); ++i)
+                        REQUIRE(e.layout_of(sid).placements[i].frame == first.placements[i].frame);
+                    last_rev = p.revision;
+                    check_space(e, sid, p, stats);
+                    break;
+                }
+                case 3: { // zoom: the zoomed window gets the root rectangle, the rest keeps its frame
+                    const hm_status st = e.toggle_zoom(w, p);
+                    REQUIRE(st == (sid ? HM_OK : HM_ERR_UNKNOWN_WINDOW));
+                    if (!sid) break;
+                    last_rev = p.revision;
+                    const LayoutResult l = e.layout_of(sid);
+                    const WindowId z = e.zoomed_window(sid);
+                    REQUIRE((z == 0) == (l.placements.size() < 2));
+                    REQUIRE(p.placements.size() == l.placements.size());
+                    for (std::size_t i = 0; i < l.placements.size(); ++i) {
+                        REQUIRE(p.placements[i].id == l.placements[i].id);
+                        REQUIRE(p.placements[i].frame == (p.placements[i].id == z ? l.root : l.placements[i].frame));
+                    }
+                    e.clear_zoom(0); // the plain-layout checks of later steps expect no overlay
+                    break;
+                }
+                case 4: { // move_to_space
+                    const SpaceId target = world.random_space();
+                    const bool known = e.model().find_space(target) != nullptr;
+                    Plan to, from;
+                    const hm_status st = e.move_to_space(w, target, to, from);
+                    if (!sid) {
+                        REQUIRE(st == HM_ERR_UNKNOWN_WINDOW);
+                    } else if (sid == target) {
+                        REQUIRE(st == HM_ERR_INVALID_ARGUMENT);
+                    } else if (!known) {
+                        REQUIRE(st == HM_ERR_UNKNOWN_SPACE);
+                    } else {
+                        REQUIRE(st == HM_OK);
+                        REQUIRE(e.model().tree_space_of(w) == target);
+                        REQUIRE(to.revision > last_rev);
+                        last_rev = from.revision;
+                        world.relocate(w, target);
+                        check_space(e, target, to, stats);
+                        check_space(e, sid, from, stats);
+                    }
+                    break;
+                }
+                }
+            } else if (op < 98) {
                 const WindowId w = world.random_window();
                 world.forget_window(w);
                 e.forget_window(w);
@@ -343,12 +471,37 @@ TEST_CASE("random operations through the C API leak nothing") {
             const WindowId w = world.random_window();
             const hm_status st = hm_engine_report_min_size(e, w, world.real(0, 1200), world.real(0, 900));
             REQUIRE(st == (hm_engine_space_of(e, w) ? HM_OK : HM_ERR_UNKNOWN_WINDOW));
-        } else if (op < 94) {
+        } else if (op < 91) {
             hm_plan p{};
             const hm_status st = hm_engine_swap(e, world.random_window(), world.random_window(), &p);
             REQUIRE((st == HM_OK || st == HM_ERR_UNKNOWN_WINDOW || st == HM_ERR_INVALID_ARGUMENT));
             if (st == HM_OK) check_plan(p, p.space, usable_of[p.space]);
             hm_plan_free(&p);
+        } else if (op < 95) {
+            // Keyboard actions: statuses follow engine knowledge, plans never leak.
+            const WindowId w = world.random_window();
+            const bool tiled = hm_engine_space_of(e, w) != 0;
+            hm_plan p{}, q{};
+            hm_status st = HM_OK;
+            const int kind = world.uniform(0, 4);
+            switch (kind) {
+            case 0: st = hm_engine_resize_step(e, w, static_cast<hm_direction>(world.uniform(0, 3)), &p); break;
+            case 1: st = hm_engine_equalize(e, world.random_space(), &p); break;
+            case 2: st = hm_engine_rotate_split(e, w, &p); break;
+            case 3:
+                st = hm_engine_toggle_zoom(e, w, &p);
+                hm_engine_clear_zoom(e, 0);
+                break;
+            case 4: st = hm_engine_move_to_space(e, w, world.random_space(), &p, &q); break;
+            }
+            REQUIRE((st == HM_OK || st == HM_ERR_UNKNOWN_WINDOW || st == HM_ERR_UNKNOWN_SPACE ||
+                     st == HM_ERR_INVALID_ARGUMENT));
+            if (st == HM_OK) {
+                REQUIRE((tiled || kind == 1));
+                last_rev = std::max({last_rev, p.revision, q.revision});
+            }
+            hm_plan_free(&p);
+            hm_plan_free(&q);
         } else if (op < 97) {
             const WindowId w = world.random_window();
             world.forget_window(w);

@@ -23,6 +23,7 @@ struct Space {
     Rect usable;
     LayoutTree tree;
     WindowId last_inserted = 0; // most recently inserted window (may have left since)
+    WindowId zoomed = 0;        // monocle window (Engine validates it against the tree before use)
 };
 
 // Where a window sat when it was removed into a ghost slot.
