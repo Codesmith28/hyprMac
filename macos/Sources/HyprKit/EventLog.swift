@@ -33,15 +33,25 @@ public final class EventLog {
 public struct AppOptions: Equatable {
     public var configPath: String?
     public var eventLogPath: String?
+    /// `--check-config [path]`: validate a config, print the result and exit.
+    public var checkConfig = false
+    public var checkConfigPath: String?
 
     public init(arguments: [String]) {
-        var it = arguments.dropFirst().makeIterator()
-        while let a = it.next() {
-            switch a {
-            case "--config": configPath = it.next()
-            case "--event-log": eventLogPath = it.next()
-            default: continue // ignore -psn_* and unknown flags
+        let args = Array(arguments.dropFirst())
+        var i = 0
+        func next() -> String? { i += 1; return i < args.count ? args[i] : nil }
+        while i < args.count {
+            switch args[i] {
+            case "--config": configPath = next()
+            case "--event-log": eventLogPath = next()
+            case "--check-config":
+                checkConfig = true
+                // The path is optional: only a following non-flag argument counts.
+                if i + 1 < args.count, !args[i + 1].hasPrefix("-") { checkConfigPath = next() }
+            default: break // ignore -psn_* and unknown flags
             }
+            i += 1
         }
     }
 }
