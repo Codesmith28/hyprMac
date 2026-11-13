@@ -5,7 +5,7 @@ import HyprKit
 /// workspace switches, or windows are thrown between desktops.
 public final class OSDNotifier {
     private var panel: NSPanel?
-    private var visualEffectView: NSVisualEffectView?
+    private var visualEffectView: OSDEffectView?
     private var imageView: NSImageView?
     private var label: NSTextField?
     private var stackView: NSStackView?
@@ -191,14 +191,10 @@ public final class OSDNotifier {
         p.hidesOnDeactivate = false
         p.alphaValue = 0.0
 
-        let effect = NSVisualEffectView(frame: p.contentView?.bounds ?? NSRect(x: 0, y: 0, width: 140, height: 44))
+        let effect = OSDEffectView(frame: p.contentView?.bounds ?? NSRect(x: 0, y: 0, width: 140, height: 44))
         effect.material = .hudWindow
         effect.state = .active
         effect.blendingMode = .behindWindow
-        effect.wantsLayer = true
-        effect.layer?.masksToBounds = true
-        effect.layer?.borderWidth = 0.5
-        effect.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.2).cgColor
 
         let iconView = NSImageView()
         iconView.imageScaling = .scaleProportionallyDown
@@ -234,8 +230,6 @@ public final class OSDNotifier {
         ])
 
         p.contentView = effect
-        p.contentView?.wantsLayer = true
-        p.contentView?.layer?.masksToBounds = true
 
         self.panel = p
         self.visualEffectView = effect
@@ -280,19 +274,8 @@ public final class OSDNotifier {
         let width = max(height, ceil(stackFitting.width + (paddingH * 2.0)))
         let cornerRadius = height / 2.0
 
-        // Rounded corners: 9-slice mask image + layer cornerRadius & masksToBounds on effect & contentView
-        if let effect = visualEffectView {
-            effect.wantsLayer = true
-            effect.layer?.cornerRadius = cornerRadius
-            effect.layer?.masksToBounds = true
-            effect.maskImage = Self.makeCapsuleMaskImage(cornerRadius: cornerRadius)
-        }
-
-        if let contentView = panel.contentView {
-            contentView.wantsLayer = true
-            contentView.layer?.cornerRadius = cornerRadius
-            contentView.layer?.masksToBounds = true
-        }
+        // Rounded corners: the 9-slice mask image is the only clip; the view strokes its own border.
+        visualEffectView?.cornerRadius = cornerRadius
 
         panel.isOpaque = false
         panel.backgroundColor = .clear
