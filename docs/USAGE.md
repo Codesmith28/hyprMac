@@ -12,6 +12,7 @@ hyprMac lives in the menu bar (the 2×2 grid icon). It has no Dock icon. After `
 | ⌥⇧C | Center the focused window. If tiled, floats and centers it at its original size. |
 | ⌥⇧H / J / K / L or ⌥⇧← / ↓ / ↑ / → | Move focus in the BSP tree (left, down, up, right). |
 | ⌥⇧⌘H / J / K / L or ⌥⇧⌘← / ↓ / ↑ / → | Move/swap the focused window in the BSP tree (left, down, up, right). Focus follows the moved window. |
+| ⌥⇧/ | Open the shortcuts cheatsheet. Press it again, or Esc, to close. Works even while tiling is paused. Not configurable. |
 | *unbound* `resize_left` / `down` / `up` / `right` | Move the nearest split boundary that way by `resize_step` percent. |
 | *unbound* `equalize` | Reset every split in this Space to `split_ratio`. |
 | *unbound* `rotate_split` | Flip the focused tile's split between side by side and stacked. |
@@ -19,7 +20,7 @@ hyprMac lives in the menu bar (the 2×2 grid icon). It has no Dock icon. After `
 | *unbound* `move_display_next` / `prev` | Move the focused window to the next / previous display (left to right, wrapping), into that display's current Space. |
 | *unbound* `toggle_pause` | Pause or resume tiling, like the menu item. |
 
-These are the built-in defaults. The rows marked *unbound* have no shortcut until you set one under `keys`; `config/init.lua.example` has suggested ⌥⇧ bindings. You can change them under [keys](#keys-and-app-rules). The example config lists the H/J/K/L keys explicitly, so arrow keys only work if you leave the `focus_*` / `move_*` keys out. The menu's **Keyboard Shortcuts…** lists your active shortcuts.
+These are the built-in defaults. The rows marked *unbound* have no shortcut until you set one under `keys`; `config/init.lua.example` has suggested ⌥⇧ bindings. You can change them under [keys](#keys-and-app-rules). The example config lists the H/J/K/L keys explicitly, so arrow keys only work if you leave the `focus_*` / `move_*` keys out. The menu's **Keyboard Shortcuts…** (or ⌥⇧/) opens an animated cheatsheet of your active shortcuts.
 
 New windows split the focused window along its longer side and take the second half. Close, minimize, hide or fullscreen a window and the rest reflow. When it comes back, it gets its old tile.
 
@@ -49,7 +50,7 @@ The log line is `{"event":"user_resize",...}`.
 | **Open Configuration…** | Opens `~/.config/hyprmac/init.lua`, creating it from the example if needed. |
 | **Reveal Configuration in Finder** | Shows the config file in Finder. |
 | **Reload Configuration** | Re-reads the config and re-lays out. |
-| **Keyboard Shortcuts…** | Lists your current shortcuts, including any you changed under `keys`. |
+| **Keyboard Shortcuts…** | Opens the cheatsheet (also ⌥⇧/): your current shortcuts with a short animation each, including any you changed under `keys`. Esc closes it. |
 | **Copy Log Command** | Copies a `log stream` command that shows hyprMac's log. |
 | **Status** | ✓/✗ for Accessibility, Input Monitoring, Stage Manager off, and `keys.switch` matching a macOS Desktop shortcut. |
 | **Grant Input Monitoring…** | Shown only while Input Monitoring is missing. Asks for it and opens the pane. |

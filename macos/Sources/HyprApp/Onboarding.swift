@@ -25,17 +25,4 @@ enum Onboarding {
             }
         }
     }
-
-    static func showShortcuts(rows: [ShortcutRow]) {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "hyprMac shortcuts"
-        alert.informativeText = ShortcutList.text(for: rows) + """
-
-
-        Desktops are your macOS Spaces. Add or remove them in Mission Control.
-        Fullscreen windows are never tiled.
-        """
-        alert.runModal()
-    }
 }

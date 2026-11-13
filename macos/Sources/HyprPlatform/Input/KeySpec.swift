@@ -196,6 +196,9 @@ public struct KeyBindings: Equatable, Sendable {
         toggleFloat: KeySpec(modifiers: [.option, .shift], key: "f")!,
         switchModifiers: [.option])
 
+    /// Opens the shortcuts cheatsheet: prefix + `/` (⌥⇧/, the key labelled "?"). Not configurable.
+    public var showShortcuts: KeySpec { KeySpec(modifiers: prefix, key: "slash")! }
+
     /// From the canonical strings of `hm_config_load_extras`.
     public init?(throw t: String, toggleFloat f: String, switch s: String) {
         guard let t = KeyModifiers(parsing: t), let f = KeySpec(parsing: f), let s = KeyModifiers(parsing: s) else { return nil }
