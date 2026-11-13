@@ -51,13 +51,16 @@ hyprMac asks to show notifications the first time it runs. If you say no, the sa
 | **Tiling paused: Stage Manager is on** | Turn Stage Manager off. Tiling resumes by itself. Right after install this shows until you toggle Stage Manager once or log out. |
 | **Some shortcuts are unavailable** | Another app already owns one of your configured shortcuts. Change it under `keys`. |
 | **Desktop switch shortcut mismatch** | `keys.switch` doesn't match any enabled "Switch to Desktop N" shortcut in macOS. Make them match. |
+| **Turn on “Displays have separate Spaces”** | Several displays are connected but the setting is off. Turn it on in System Settings ▸ Desktop & Dock ▸ Mission Control, then log out. Shown once per run. |
 | **Rectangle is running** | Rectangle also moves windows. Quit it if windows jump around. hyprMac shows this once per run and never touches Rectangle. |
 | **Accessibility permission was removed** | hyprMac stopped tiling. Turn it back on and tiling resumes. |
 
 ## Configuration and reloading
 The config is `~/.config/hyprmac/init.lua`. The keys and their ranges are in the [README](../README.md#configuration) and in the file's comments.
 
-To apply an edit, use the menu's **Reload Configuration**, or run `pkill -HUP -x hyprMac`. A plain `pkill -x hyprMac` quits.
+Saving the file reloads it automatically (about 0.3 s after the last write). You can also use the menu's **Reload Configuration**, `hyprmacctl reload`, or `pkill -HUP -x hyprMac`. A plain `pkill -x hyprMac` quits. A file with an error keeps the previous settings and shows the usual notification.
+
+To check a file without running the app: `hyprMac --check-config [path]` prints `OK` or `file:line: message` and exits 0 or 1. Without a path it checks `--config`, then `~/.config/hyprmac/init.lua`. It never starts the app or touches your shortcuts.
 
 ### Keys and app rules
 
@@ -81,6 +84,22 @@ config = {
 - **Rules** take bundle ids (`osascript -e 'id of app "Calculator"'`), up to 200 per list. `float` adds to the built-in list. An app in `ignore` is skipped entirely, including by the throw and toggle shortcuts.
 
 If the config has an error, nothing changes. hyprMac keeps the last good settings and tells you what's wrong. A missing file means the defaults.
+
+## Command line
+`hyprmacctl` talks to the running app. It lives inside the bundle and isn't linked anywhere else:
+
+```sh
+~/Applications/hyprMac.app/Contents/MacOS/hyprmacctl status
+```
+
+| Command | What it does |
+|---|---|
+| `status` | Prints JSON: `version`, `paused`, `displays`, `spaces`, `config`. |
+| `retile` | Same as **Retile All Windows**. |
+| `pause` / `resume` / `toggle-pause` | Stops or restarts tiling. |
+| `reload` | Same as **Reload Configuration**. |
+
+Exit status: 0 ok, 1 refused or failed, 2 bad usage, 3 hyprMac isn't running. The socket is `$TMPDIR/dev.codesmith28.hyprmac.sock` (mode 0600, local only, removed on quit).
 
 ## Logs
 
