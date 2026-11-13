@@ -13,6 +13,7 @@ The layout engine is C++20 behind a C API, the macOS layer is Swift, and the con
 - **Gaps.** 8 pt between tiles, 12 pt at the screen edges (menu bar and Dock excluded).
 - **Native Spaces.** ⌥1–⌥9 are still macOS's own "Switch to Desktop N". hyprMac only listens, so it can tell you when a Desktop doesn't exist.
 - **Throwing windows.** ⌥⇧1–⌥⇧9 move the focused window to Desktop N. macOS has no public API for that, so hyprMac uses a drag trick. See [limitations](docs/LIMITATIONS.md#moving-windows-between-spaces).
+- **Navigate.** ⌥⇧H/J/K/L (or arrows) move focus, ⌥⇧⌘H/J/K/L move the window, ⌥⇧C centers it, ⌥⇧F floats or tiles it.
 - **Same spot back.** Fullscreen, minimized or hidden windows return to their tile.
 - **Per display.** Each display tiles from its own active Space.
 - **Floating.** Dialogs, sheets, panels and popovers are never tiled. Small windows float, like in Krohnkite, and so do non-resizable windows, Archive Utility and Calculator. A window that keeps resizing itself away from its tile is floated instead of fought.
@@ -66,7 +67,13 @@ config = {
     },
     split_ratio = 0.5, -- share of a split given to the existing window (0.1 – 0.9)
     float = { min_width = 400, min_height = 300 }, -- smaller windows float (0 – 2000, 0 = off)
-    keys = { throw = "alt+shift", toggle_float = "alt+shift+f", switch = "alt" }, -- shortcuts
+    osd_popup = true,  -- brief on-screen popup on window and Desktop actions
+    keys = {           -- shortcuts (defaults shown)
+        throw = "alt+shift", toggle_float = "alt+shift+f", switch = "alt",
+        center_window = "alt+shift+c",
+        focus_left = "alt+shift+h", focus_down = "alt+shift+j", focus_up = "alt+shift+k", focus_right = "alt+shift+l",
+        move_left = "alt+shift+cmd+h", move_down = "alt+shift+cmd+j", move_up = "alt+shift+cmd+k", move_right = "alt+shift+cmd+l",
+    },
     rules = { ignore = {}, float = {} },           -- bundle ids: never managed / always floating
 }
 ```
