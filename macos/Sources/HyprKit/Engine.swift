@@ -95,6 +95,14 @@ public final class Engine {
         try check(hm_engine_set_config(handle, &c))
     }
 
+    /// `config.smart_gaps`: one tiled window on a Space → zero inner and outer gap.
+    public func setSmartGaps(_ on: Bool) { hm_engine_set_smart_gaps(handle, on ? 1 : 0) }
+
+    /// Per-display gap override; a nil side keeps the global gap, both nil removes the override.
+    public func setDisplayGaps(display: UInt32, inner: Double?, outer: Double?) {
+        _ = hm_engine_set_display_gaps(handle, display, inner ?? -1, outer ?? -1)
+    }
+
     public func reconcile(display: UInt32, space: UInt64, usable: CGRect, focused: UInt64?,
                           windows: [WindowEntry]) throws -> Plan {
         let infos = windows.map { w in

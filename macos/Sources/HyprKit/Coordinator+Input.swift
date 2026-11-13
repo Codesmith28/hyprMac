@@ -53,6 +53,12 @@ extension Coordinator {
     /// (unlike the built-in float list, which ⌥⇧F never overrides).
     func applyRules(_ rules: AppRules) {
         discovery.configuration.ignoreBundleIDs = Set(rules.ignore)
+        let titles = TitleMatcher(rules.ignoreTitle)
+        if titles != discovery.configuration.ignoreTitles { discovery.resetTitleDecisions() }
+        discovery.configuration.ignoreTitles = titles
+        if !titles.rejected.isEmpty || !rules.floatTitle.isEmpty && !rules.floatTitleMatcher.rejected.isEmpty {
+            logger.error("rules: title pattern(s) the system regex engine rejected: \((titles.rejected + rules.floatTitleMatcher.rejected).joined(separator: ", "), privacy: .public)")
+        }
     }
 
     /// Running apps whose bundle id is in `rules.float`.
@@ -70,5 +76,12 @@ extension Coordinator {
         guard !ignore.isEmpty, let app = deps.apps.runningApplications().first(where: { $0.pid == pid }),
               let bundle = app.bundleID else { return false }
         return ignore.contains(bundle)
+    }
+
+    /// True when `window`'s current title matches `rules.ignore_title` (hotkeys never move it).
+    func isIgnoredByTitle(_ window: HyprPlatform.WindowRef) -> Bool {
+        let matcher = discovery.configuration.ignoreTitles
+        guard !matcher.isEmpty, let title = (try? deps.ax.facts(of: window))?.title, !title.isEmpty else { return false }
+        return matcher.matches(title)
     }
 }

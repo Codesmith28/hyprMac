@@ -17,6 +17,8 @@ public struct DiscoveredWindow: Equatable, Sendable {
     public var frame: CGRect
     public var minSize: CGSize?
     public var membership: SpaceMembership
+    /// AX title at discovery time (nil when unreadable).
+    public var title: String?
 }
 
 /// One (display, Space) as currently visible.
@@ -50,6 +52,8 @@ public final class WindowDiscovery {
         public var floatBundleIDs = WindowEligibility.defaultFloatBundleIDs
         /// `rules.ignore`: apps that are never managed (never tiled, never moved).
         public var ignoreBundleIDs: Set<String> = []
+        /// `rules.ignore_title`: windows whose first non-empty title matches are never managed.
+        public var ignoreTitles = TitleMatcher()
         public init() {}
     }
 
@@ -59,6 +63,8 @@ public final class WindowDiscovery {
     private let displays: DisplayProvider
     private let apps: AppProvider
     public var configuration: Configuration
+    /// Sticky `ignore_title` decision per window (made once, from the first non-empty title).
+    private var titleIgnored: [WindowRef: Bool] = [:]
 
     public init(ax: AXBackend, windowServer: WindowServerQuery, spaces: SpaceProvider,
                 displays: DisplayProvider, apps: AppProvider, configuration: Configuration = Configuration()) {
@@ -108,6 +114,7 @@ public final class WindowDiscovery {
                 } catch {
                     continue // gone or unreadable: not a window we can manage
                 }
+                if titleIsIgnored(ref: ref, title: facts.title) { continue }
                 let on = onscreen[ref.windowID]?.1
                 guard let state = WindowEligibility.evaluate(
                     facts, onscreen: on, app: app, ownBundleID: configuration.ownBundleID,
@@ -116,7 +123,7 @@ public final class WindowDiscovery {
                 guard let membership = membership(ref: ref, state: state, isOnscreen: on != nil,
                                                   space: space, displaySpaces: displaySpaces) else { continue }
                 found.append(DiscoveredWindow(ref: ref, state: state, frame: facts.frame,
-                                              minSize: facts.minSize, membership: membership))
+                                              minSize: facts.minSize, membership: membership, title: facts.title))
             }
         }
 
@@ -132,6 +139,20 @@ public final class WindowDiscovery {
                                  focused: focused, windows: found, unresolved: unresolved,
                                  unresponsivePids: unresponsive)
     }
+
+    /// `rules.ignore_title`, decided once per window from the first non-empty title it shows.
+    private func titleIsIgnored(ref: WindowRef, title: String?) -> Bool {
+        guard !configuration.ignoreTitles.isEmpty else { return false }
+        if let decided = titleIgnored[ref] { return decided }
+        guard let title, !title.isEmpty else { return false }
+        if titleIgnored.count > 4096 { titleIgnored.removeAll() } // bounded; decisions are re-made lazily
+        let hit = configuration.ignoreTitles.matches(title)
+        titleIgnored[ref] = hit
+        return hit
+    }
+
+    /// Forgets sticky title decisions (config reload with different patterns).
+    public func resetTitleDecisions() { titleIgnored.removeAll() }
 
     private func membership(ref: WindowRef, state: WindowState, isOnscreen: Bool,
                             space: SpaceID, displaySpaces: [SpaceInfo]) -> SpaceMembership? {
