@@ -4,7 +4,8 @@
 #   scripts/install.sh [--dry-run | --preflight]
 #
 # --preflight is strictly read-only: it reports what an install would change
-# on this Mac using only defaults read/export, launchctl print and test -e.
+# on this Mac using only defaults read/export, launchctl print, security
+# find-identity and test -e.
 #
 # Every change is first appended to the manifest
 # (~/Library/Application Support/hyprMac/install/manifest); uninstall.sh
@@ -28,7 +29,8 @@ usage: $(basename "$0") [--dry-run | --preflight]
 Installs $APP_NAME.app to ~/Applications, adds the ⌥8/⌥9 "Switch to Desktop"
 shortcuts (only if unbound), turns Stage Manager off, installs a LaunchAgent and
 asks for Accessibility access. Everything is recorded so 'make uninstall'
-restores the previous state exactly.
+restores the previous state exactly. If you created the optional local signing
+identity ('make sign-identity'), the installed app is signed with it.
 
   --dry-run    print every action without performing it
   --preflight  read-only report of what would change on this Mac
@@ -84,6 +86,17 @@ json_type() {
     esac
 }
 
+# One line on the optional local signing identity (read-only: security find-identity).
+preflight_signing() {
+    local h
+    h="$(sign_identity_hash)"
+    if [ -n "$h" ]; then
+        pf "signing identity" "\"$SIGN_IDENTITY_NAME\" present → the app is signed with it (Accessibility grant survives upgrades)"
+    else
+        pf "signing identity" "none → ad-hoc signature (make sign-identity is optional; see docs/LIMITATIONS.md)"
+    fi
+}
+
 # Already installed: an install only replaces the bundle; report that and
 # what uninstall would put back, from the manifest.
 preflight_installed() {
@@ -94,6 +107,7 @@ preflight_installed() {
     else
         pf "LaunchAgent service" "$AGENT_TARGET not loaded → would be bootstrapped"
     fi
+    preflight_signing
     pf "other settings" "unchanged by an upgrade; recorded originals that uninstall restores:"
     load_manifest || { manifest_problem; return 1; }
     for line in ${MANIFEST_LINES[@]+"${MANIFEST_LINES[@]}"}; do
@@ -107,6 +121,7 @@ preflight_installed() {
             config_dir_preexisting) if [ "$rest" = 1 ]; then pf "" "~/.config/hyprmac: pre-existing → kept"; fi ;;
             config_dir_created) pf "" "~/.config/hyprmac: created by install → removed (unless KEEP_CONFIG=1)" ;;
             residue_preexisting) pf "" "$(tilde "$rest"): pre-existing → restored from backup" ;;
+            signing_identity_created) pf "" "\"$SIGN_IDENTITY_NAME\": created while installed → removed on uninstall" ;;
         esac
     done
 }
@@ -187,6 +202,7 @@ do_preflight() {
     else
         pf "activateSettings" "MISSING → you would have to log out for ⌥8/⌥9 to work"
     fi
+    preflight_signing
     pf "Accessibility" "would run: tccutil reset Accessibility $BUNDLE_ID, then open System Settings (TCC itself is not readable)"
 
     local p any=0
@@ -349,21 +365,38 @@ do_upgrade() {
     if ! is_dry && "$LAUNCHCTL" print "$AGENT_TARGET" >/dev/null 2>&1; then
         run "$LAUNCHCTL" bootout "$AGENT_TARGET" || warn "launchctl bootout failed (continuing)"
     fi
+    # With the local signing identity the designated requirement is the same for every build:
+    # when the installed app already carries it, the Accessibility grant stays valid.
+    local sid keep_tcc=0
+    sid="$(sign_identity_hash)"
+    if [ -n "$sid" ] && [ -d "$APP_DEST" ] && bundle_signed_with "$APP_DEST" "$sid"; then keep_tcc=1; fi
     if [ -e "$APP_DEST" ]; then run rm -rf "$APP_DEST"; fi
     run /usr/bin/ditto "$APP_SRC" "$APP_DEST"
+    sign_installed_app
     run "$LSREGISTER" -f "$APP_DEST"
-    # Ad-hoc signing: macOS ties the Accessibility grant to the old build's code hash, so the
-    # toggle in System Settings still looks "on" but no longer applies. Reset it so the new
-    # build gets a clean prompt (the manifest's tcc_reset from the first install still covers
-    # uninstall).
-    step upgrade_tcc "resetting Accessibility for the new build (re-enable it when asked)"
-    run "$TCCUTIL" reset Accessibility "$BUNDLE_ID" || warn "tccutil reset failed (continuing)"
+    if [ "$keep_tcc" = 1 ] && ! is_dry && bundle_signed_with "$APP_DEST" "$sid"; then
+        step upgrade_tcc "keeping the Accessibility grant (same signing identity as the installed build)"
+    else
+        # Ad-hoc signing: macOS ties the Accessibility grant to the old build's code hash, so the
+        # toggle in System Settings still looks "on" but no longer applies. Reset it so the new
+        # build gets a clean prompt (the manifest's tcc_reset from the first install still covers
+        # uninstall).
+        keep_tcc=0
+        step upgrade_tcc "resetting Accessibility for the new build (re-enable it when asked)"
+        run "$TCCUTIL" reset Accessibility "$BUNDLE_ID" || warn "tccutil reset failed (continuing)"
+    fi
     if manifest_has "launchagent_loaded" && [ -f "$AGENT_PLIST" ]; then
         step upgrade_agent "reloading the LaunchAgent"
         run "$LAUNCHCTL" bootstrap "gui/$UID_VAL" "$AGENT_PLIST"
     fi
-    run "$OPEN" "$ACCESSIBILITY_URL" || warn "could not open System Settings"
-    if is_dry; then info "dry run: nothing was changed"; else ok "hyprMac upgraded — re-enable hyprMac under Accessibility (remove any old hyprMac entry first)"; fi
+    if [ "$keep_tcc" = 0 ]; then run "$OPEN" "$ACCESSIBILITY_URL" || warn "could not open System Settings"; fi
+    if is_dry; then
+        info "dry run: nothing was changed"
+    elif [ "$keep_tcc" = 1 ]; then
+        ok "hyprMac upgraded; the Accessibility grant still applies (signed with \"$SIGN_IDENTITY_NAME\")"
+    else
+        ok "hyprMac upgraded — re-enable hyprMac under Accessibility (remove any old hyprMac entry first)"
+    fi
 }
 
 # ------------------------------------------------------------- fresh install --
@@ -443,6 +476,7 @@ EOF
     fi
     record "app_installed"
     run /usr/bin/ditto "$APP_SRC" "$APP_DEST"
+    sign_installed_app
 
     step lsregister "registering with LaunchServices"
     record "lsregister"

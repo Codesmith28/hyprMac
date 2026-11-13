@@ -64,16 +64,19 @@ Such windows are tiled, or float if they're borderless or non-resizable. They do
 - **Unresponsive apps.** Each Accessibility request waits at most about a quarter of a second. An app that doesn't answer is skipped for that round and retried soon after. Its windows keep their tiles, and other apps keep tiling. Each pass over a hung app costs a fraction of a second, so tiling can feel a bit slower while one is hung.
 
 ## Accessibility permission resets on reinstall
-hyprMac is **ad-hoc signed** (no Developer ID). macOS ties the Accessibility grant to the exact signature, and that changes with every build.
+By default hyprMac is **ad-hoc signed** (no Developer ID). macOS ties the Accessibility grant to the exact signature, and that changes with every build.
 - A **fresh** `make install` resets the entry and opens the settings pane. Grant it once.
-- **Upgrading** replaces the app but doesn't reset the entry. If tiling doesn't start, remove hyprMac from the list with "−" and add it again, or toggle it off and on.
+- **Upgrading** resets the entry again, because the new build no longer matches the old grant. Grant it again when System Settings opens.
+- **Opt-in fix:** `make sign-identity` creates a self-signed code-signing certificate, "hyprMac Local Signing", in your **login keychain** (the key is not exportable). While it exists, `make app` and `make install` sign with it. Its signature is the same on every build, so after one more grant the permission survives upgrades. If hyprMac is already installed, run `make update` afterwards.
+- The certificate isn't trusted by macOS and only gives the app a stable identity. macOS may ask for your login password the first time `codesign` uses the key: choose Always Allow.
+- `make sign-identity-remove` deletes it. `make uninstall` removes it only if it was created while hyprMac was installed. One that existed before install stays. Deleting and recreating the certificate changes the identity, so you grant Accessibility once more.
 - **Input Monitoring** powers the "Desktop N doesn't exist" notice. Install doesn't ask for it. Without it, switching and throwing still work. The log says `space key observer unavailable`.
 
 ## Hotkeys already taken by another app
 ⌥⇧1–9 are registered with the Carbon hotkey API. macOS only rejects a duplicate **within the same app**. If another app or a macOS shortcut already uses ⌥⇧N, hyprMac's registration still succeeds, and macOS picks whoever gets the key. hyprMac can't detect that clash. If a throw does nothing, look for another app or a System Settings shortcut using ⌥⇧1–9.
 
 ## What verify-rollback cannot see
-`make verify-rollback` and the check at the end of `make uninstall` compare fingerprints of what install changes: hotkeys 125 and 126, the Stage Manager key, the notification settings entry, whether the LaunchAgent is loaded, the LaunchServices records for `~/Applications/hyprMac.app`, the app bundle and agent contents, and the config, state and residue paths.
+`make verify-rollback` and the check at the end of `make uninstall` compare fingerprints of what install changes: hotkeys 125 and 126, the Stage Manager key, the notification settings entry, whether the LaunchAgent is loaded, the LaunchServices records for `~/Applications/hyprMac.app`, the app bundle and agent contents, whether the local signing identity exists, and the config, state and residue paths.
 
 Some things are out of reach:
 - **Background Task Management.** The LaunchAgent makes macOS record a login item (`sfltool dumpbtm` shows it). A user script can't read that database, so macOS may keep a stale entry after uninstall.

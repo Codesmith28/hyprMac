@@ -9,11 +9,11 @@ hyprMac lives in the menu bar (the 2×2 grid icon). It has no Dock icon. After `
 | ⌥1 … ⌥9 | Switch to Desktop N. macOS does this. hyprMac only listens, to warn you when Desktop N doesn't exist. |
 | ⌥⇧1 … ⌥⇧9 | Move the focused window to Desktop N. You follow it, and it keeps focus. |
 | ⌥⇧F | Float or tile the focused window. Floating restores the size hyprMac first saw, centred. The choice sticks until you toggle again or close the window. Fullscreen windows are ignored. |
-| ⌃⌥C | Center the focused window. If tiled, floats and centers it at its original size. |
-| ⌃⌥H / J / K / L or ⌃⌥← / ↓ / ↑ / → | Move focus in the BSP tree (left, down, up, right). |
-| ⌃⌥⇧H / J / K / L or ⌃⌥⇧← / ↓ / ↑ / → | Move/swap the focused window in the BSP tree (left, down, up, right). Focus follows the moved window. |
+| ⌥⇧C | Center the focused window. If tiled, floats and centers it at its original size. |
+| ⌥⇧H / J / K / L or ⌥⇧← / ↓ / ↑ / → | Move focus in the BSP tree (left, down, up, right). |
+| ⌥⇧⌘H / J / K / L or ⌥⇧⌘← / ↓ / ↑ / → | Move/swap the focused window in the BSP tree (left, down, up, right). Focus follows the moved window. |
 
-These are the defaults. You can change them under [keys](#keys-and-app-rules). The menu's **Keyboard Shortcuts…** shows the same list.
+These are the built-in defaults. You can change them under [keys](#keys-and-app-rules). The example config lists the H/J/K/L keys explicitly, so arrow keys only work if you leave the `focus_*` / `move_*` keys out. The menu's **Keyboard Shortcuts…** lists only the Desktop shortcuts.
 
 New windows split the focused window along its longer side and take the second half. Close, minimize, hide or fullscreen a window and the rest reflow. When it comes back, it gets its old tile.
 
@@ -56,7 +56,7 @@ hyprMac asks to show notifications the first time it runs. If you say no, the sa
 | **Accessibility permission was removed** | hyprMac stopped tiling. Turn it back on and tiling resumes. |
 
 ## Configuration and reloading
-The config is `~/.config/hyprmac/init.lua`. The keys and their ranges are in the [README](../README.md#configuration) and in the file's comments.
+The config is `~/.config/hyprmac/init.lua`. The keys and their ranges are in the [README](../README.md#configuration) and in the file's comments. `osd_popup = false` turns off the on-screen popup.
 
 Saving the file reloads it automatically (about 0.3 s after the last write). You can also use the menu's **Reload Configuration**, `hyprmacctl reload`, or `pkill -HUP -x hyprMac`. A plain `pkill -x hyprMac` quits. A file with an error keeps the previous settings and shows the usual notification.
 
@@ -66,10 +66,20 @@ To check a file without running the app: `hyprMac --check-config [path]` prints 
 
 ```lua
 config = {
+    osd_popup = true,                     -- brief on-screen popup on window and Desktop actions
     keys = {
         throw        = "alt+shift",       -- modifiers + 1–9: move the focused window to Desktop N
         toggle_float = "alt+shift+f",     -- modifiers + one key: float / tile the focused window
         switch       = "alt",             -- modifiers hyprMac watches for with 1–9 (see below)
+        center_window = "alt+shift+c",    -- center the focused window
+        focus_left  = "alt+shift+h",      -- focus_left / _down / _up / _right: move focus
+        focus_down  = "alt+shift+j",
+        focus_up    = "alt+shift+k",
+        focus_right = "alt+shift+l",
+        move_left   = "alt+shift+cmd+h",  -- move_left / _down / _up / _right: move/swap the window
+        move_down   = "alt+shift+cmd+j",
+        move_up     = "alt+shift+cmd+k",
+        move_right  = "alt+shift+cmd+l",
     },
     rules = {
         ignore = { "com.example.app" },      -- never managed, never moved, no throw or toggle
@@ -79,7 +89,7 @@ config = {
 ```
 
 - **Names** are joined with `+` and are not case-sensitive. Modifiers: `alt` (`opt`, `option`), `shift`, `ctrl` (`control`), `cmd` (`command`). Keys: `a`–`z`, `0`–`9`, `f1`–`f12`, `space`, `tab`, `return`, `escape`, `grave`, `minus`, `equal`, `comma`, `period`, `slash`.
-- `throw` and `switch` are modifiers only. `toggle_float` needs at least one modifier and exactly one key. `throw` must differ from `switch`, and `toggle_float` can't be a throw shortcut like `alt+shift+3`.
+- `throw` and `switch` are modifiers only. `toggle_float`, `center_window`, `focus_*` and `move_*` need at least one modifier and exactly one key. Setting any `focus_*` (or `move_*`) key replaces that group's defaults, so the default arrow keys stop working. `throw` must differ from `switch`, and `toggle_float` can't be a throw shortcut like `alt+shift+3`.
 - **`switch` doesn't switch Desktops.** macOS does that, with the shortcuts under Mission Control. `switch` only tells hyprMac which keys to watch for the missing-Desktop notice. A throw reads the modifiers from macOS's own shortcut (`com.apple.symbolichotkeys`, read only) and uses `switch` only if that can't be read.
 - **Rules** take bundle ids (`osascript -e 'id of app "Calculator"'`), up to 200 per list. `float` adds to the built-in list. An app in `ignore` is skipped entirely, including by the throw and toggle shortcuts.
 
@@ -115,7 +125,7 @@ This shows what hyprMac decided: windows it floated, throws that timed out, hotk
 Check these in order:
 1. **Is tiling paused?** If the icon is dimmed, the menu will say **Resume Tiling**.
 2. **Is Stage Manager on?** Turn it off in Control Center. Right after install, that's expected until you toggle it once or log out.
-3. **Does hyprMac have Accessibility?** System Settings ▸ Privacy & Security ▸ Accessibility. After a rebuild or upgrade, the old grant doesn't match the new signature, even if the switch is on. Remove hyprMac with "−", add `~/Applications/hyprMac.app` again, or toggle it off and on.
+3. **Does hyprMac have Accessibility?** System Settings ▸ Privacy & Security ▸ Accessibility. After a rebuild or upgrade, the old grant doesn't match the new signature, even if the switch is on. Remove hyprMac with "−", add `~/Applications/hyprMac.app` again, or toggle it off and on. To stop this happening on every upgrade, run `make sign-identity` once (see [limitations](LIMITATIONS.md#accessibility-permission-resets-on-reinstall)).
 4. **Is the window one hyprMac leaves alone?** Dialogs, sheets, panels, palettes, non-resizable windows, windows without a close button, Archive Utility and Calculator float on purpose.
 5. **Was it small?** A window smaller than `float.min_width` × `float.min_height` (default 400 × 300) floats when hyprMac first sees it. The log says `"reason":"small"`. That decision sticks. Set a threshold to 0 to turn it off.
 6. **Is it fighting the tile?** A window that resizes itself away from its tile 3 times in 10 seconds gets floated. The log says `floating it`. **Retile All Windows** tries again.

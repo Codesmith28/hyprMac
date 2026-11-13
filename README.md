@@ -13,6 +13,7 @@ The layout engine is C++20 behind a C API, the macOS layer is Swift, and the con
 - **Gaps.** 8 pt between tiles, 12 pt at the screen edges (menu bar and Dock excluded).
 - **Native Spaces.** ⌥1–⌥9 are still macOS's own "Switch to Desktop N". hyprMac only listens, so it can tell you when a Desktop doesn't exist.
 - **Throwing windows.** ⌥⇧1–⌥⇧9 move the focused window to Desktop N. macOS has no public API for that, so hyprMac uses a drag trick. See [limitations](docs/LIMITATIONS.md#moving-windows-between-spaces).
+- **Navigate.** ⌥⇧H/J/K/L (or arrows) move focus, ⌥⇧⌘H/J/K/L move the window, ⌥⇧C centers it, ⌥⇧F floats or tiles it.
 - **Same spot back.** Fullscreen, minimized or hidden windows return to their tile.
 - **Per display.** Each display tiles from its own active Space.
 - **Floating.** Dialogs, sheets, panels and popovers are never tiled. Small windows float, like in Krohnkite, and so do non-resizable windows, Archive Utility and Calculator. A window that keeps resizing itself away from its tile is floated instead of fought.
@@ -46,7 +47,7 @@ After install, System Settings opens to Privacy & Security ▸ Accessibility. Tu
 - **App.** Copies `hyprMac.app` to `~/Applications/`. An existing copy is moved aside and put back on uninstall.
 - **Config.** Creates `~/.config/hyprmac/init.lua` if that folder doesn't exist. Uninstall removes it only if install created it. Keep it with `KEEP_CONFIG=1 make uninstall`.
 - **Login item.** Writes `~/Library/LaunchAgents/dev.codesmith28.hyprmac.plist`.
-- **Accessibility.** Resets hyprMac's entry, so the new signature starts clean.
+- **Accessibility.** Resets hyprMac's entry, so the new signature starts clean. Optional: `make sign-identity` makes a local signing certificate so the grant survives upgrades.
 - **App data.** Backs up existing preferences, caches and notification settings. Uninstall removes hyprMac's data and restores the backups.
 
 Notes:
@@ -66,7 +67,13 @@ config = {
     },
     split_ratio = 0.5, -- share of a split given to the existing window (0.1 – 0.9)
     float = { min_width = 400, min_height = 300 }, -- smaller windows float (0 – 2000, 0 = off)
-    keys = { throw = "alt+shift", toggle_float = "alt+shift+f", switch = "alt" }, -- shortcuts
+    osd_popup = true,  -- brief on-screen popup on window and Desktop actions
+    keys = {           -- shortcuts (defaults shown)
+        throw = "alt+shift", toggle_float = "alt+shift+f", switch = "alt",
+        center_window = "alt+shift+c",
+        focus_left = "alt+shift+h", focus_down = "alt+shift+j", focus_up = "alt+shift+k", focus_right = "alt+shift+l",
+        move_left = "alt+shift+cmd+h", move_down = "alt+shift+cmd+j", move_up = "alt+shift+cmd+k", move_right = "alt+shift+cmd+l",
+    },
     rules = { ignore = {}, float = {} },           -- bundle ids: never managed / always floating
 }
 ```
@@ -106,6 +113,7 @@ hyprMac keeps native Spaces and needs no SIP changes. It can't create or delete 
 | `make test-e2e` | real-Mac end-to-end suite (needs Accessibility; see [testing](docs/TESTING.md)) |
 | `make preflight` | show what install would change, without changing anything |
 | `make install` / `make uninstall` | install or remove, reversibly (`DRY_RUN=1` to only print) |
+| `make sign-identity` | optional: stable local signing identity, so Accessibility survives upgrades (`sign-identity-remove` undoes it) |
 | `make verify-rollback` | compare the current state with the pre-install snapshot |
 | `make bench` | latency benchmark of the core |
 | `make clean` | remove build products |
