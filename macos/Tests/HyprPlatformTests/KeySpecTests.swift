@@ -203,3 +203,47 @@ import Testing
         #expect(desk.posted.contains(.keyDown(19, [.maskControl, .maskShift])))
     }
 }
+
+@Suite struct ShortcutConflictTests {
+    private func entry(_ enabled: Bool, key: Int, mask: UInt64) -> [String: Any] {
+        ["enabled": enabled, "value": ["type": "standard", "parameters": [65535, key, mask]]]
+    }
+
+    @Test func parsesEnabledChordsOnly() {
+        let all: [String: Any] = [
+            "64": entry(true, key: 49, mask: 1_048_576),            // ⌘Space Spotlight
+            "65": entry(false, key: 49, mask: 1_572_864),           // disabled
+            "79": entry(true, key: 123, mask: 8_650_752),           // ⌃← (+fn)
+            "36": entry(true, key: 103, mask: 8_388_608),           // F11: no real modifier
+            "118": entry(true, key: 18, mask: 262_144),             // ⌃1
+            "999": entry(true, key: 65535, mask: 262_144),          // no key
+            "7": ["enabled": true],                                 // malformed
+        ]
+        let chords = SymbolicHotkeys.chords(all)
+        #expect(chords == [
+            SystemChord(modifiers: [.command], keyCode: 49, name: "Spotlight"),
+            SystemChord(modifiers: [.control], keyCode: 123, name: "Move left a space"),
+            SystemChord(modifiers: [.control], keyCode: 18, name: "Switch to Desktop 1"),
+        ])
+    }
+
+    @Test func findsClashesForNewAndExistingChordsButNotThePrefix() {
+        var keys = KeyBindings.defaults
+        keys.actionKeys[.toggleZoom] = KeySpec(parsing: "ctrl+left")
+        keys.actionKeys[.equalize] = KeySpec(parsing: "alt+shift+e")
+        let system = [
+            SystemChord(modifiers: [.option, .shift], keyCode: 3, name: "Spotlight"),     // ⌥⇧F
+            SystemChord(modifiers: [.control], keyCode: 123, name: "Move left a space"),
+            SystemChord(modifiers: [.option, .shift], keyCode: 18, name: "Desktop 1"),    // ⌥⇧1: the throw prefix
+        ]
+        let found = ShortcutConflicts.find(in: keys, system: system)
+        #expect(found.map(\.action) == ["toggle_float", "toggle_zoom"])
+        #expect(found[0].message == "⌥⇧F conflicts with a macOS shortcut (Spotlight)")
+        #expect(found[1].message == "⌃LEFT conflicts with a macOS shortcut (Move left a space)")
+        #expect(ShortcutConflicts.find(in: keys, system: []).isEmpty)
+        keys.suppressedIDs = Set(found.map(\.id))
+        let ids = HotkeyCenter.registrations(for: keys).map(\.id)
+        #expect(!ids.contains(HotkeyCenter.toggleFloatID) && !ids.contains(HotkeyCenter.hotkeyID(for: .toggleZoom)))
+        #expect(ids.contains(HotkeyCenter.hotkeyID(for: .equalize)))
+    }
+}

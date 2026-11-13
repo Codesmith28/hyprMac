@@ -130,13 +130,13 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     var activity = 0
     private var planCount = 0
     /// Engine Space ids shown on some display as of the last reconcile.
-    private var activeSpaces: Set<UInt64> = []
+    var activeSpaces: Set<UInt64> = []
 
     /// Lock-protected mirror of `userPaused || stageManagerPaused`, so `isPaused` never waits for
     /// the coordinator queue (which may be busy with slow AX work) and is safe from any thread.
     private let mirrorLock = NSLock()
     private var pausedMirror = false
-    private func updatePausedMirror() {
+    func updatePausedMirror() {
         mirrorLock.lock(); pausedMirror = userPaused || stageManagerPaused; mirrorLock.unlock()
     }
 
@@ -216,6 +216,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
 
     public func retileAll() {
         queue.async { [self] in
+            engine.clearZoom() // a retile starts from the plain tree layout
             uncooperative.removeAll()
             fights.removeAll()
             scheduleReconcile(after: 0)
@@ -692,7 +693,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         }
     }
 
-    private func stateChanged() {
+    func stateChanged() {
         deliver { [weak self] in
             guard let self else { return }
             self.delegate?.tilingStateChanged(self)

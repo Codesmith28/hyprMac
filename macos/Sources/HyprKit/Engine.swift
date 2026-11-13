@@ -1,6 +1,7 @@
 import CHyprCore
 import CoreGraphics
 import Foundation
+import HyprPlatform
 
 /// Swift wrapper around the C++ engine (`hm_engine`). Not thread-safe: use it from the
 /// coordinator's serial queue only.
@@ -128,6 +129,60 @@ public final class Engine {
         defer { hm_plan_free(&plan) }
         try check(hm_engine_resize(handle, window, hm_rect(desired), &plan))
         return Plan(plan)
+    }
+
+    /// Keyboard resize: moves the nearest boundary in `direction` by `Config.resizeStep` percent.
+    /// Throws `.unknownWindow` unless the window is tiled. A blocked step is a successful no-op.
+    public func resizeStep(window: UInt64, direction: Direction) throws -> Plan {
+        var plan = hm_plan()
+        defer { hm_plan_free(&plan) }
+        let d: hm_direction
+        switch direction {
+        case .left: d = HM_DIR_LEFT
+        case .down: d = HM_DIR_DOWN
+        case .up: d = HM_DIR_UP
+        case .right: d = HM_DIR_RIGHT
+        }
+        try check(hm_engine_resize_step(handle, window, d, &plan))
+        return Plan(plan)
+    }
+
+    /// Resets every split ratio of `space` to `split_ratio`.
+    public func equalize(space: UInt64) throws -> Plan {
+        var plan = hm_plan()
+        defer { hm_plan_free(&plan) }
+        try check(hm_engine_equalize(handle, space, &plan))
+        return Plan(plan)
+    }
+
+    /// Toggles the orientation of the split holding `window`.
+    public func rotateSplit(window: UInt64) throws -> Plan {
+        var plan = hm_plan()
+        defer { hm_plan_free(&plan) }
+        try check(hm_engine_rotate_split(handle, window, &plan))
+        return Plan(plan)
+    }
+
+    /// Toggles monocle for `window`.
+    public func toggleZoom(window: UInt64) throws -> Plan {
+        var plan = hm_plan()
+        defer { hm_plan_free(&plan) }
+        try check(hm_engine_toggle_zoom(handle, window, &plan))
+        return Plan(plan)
+    }
+
+    public func zoomedWindow(space: UInt64) -> UInt64? {
+        let w = hm_engine_zoomed_window(handle, space); return w == 0 ? nil : w
+    }
+    /// Clears zoom in `space` (nil = every space). No plan: relayout afterwards.
+    public func clearZoom(space: UInt64? = nil) { hm_engine_clear_zoom(handle, space ?? 0) }
+
+    /// Moves a tiled window into another known Space's tree; returns (target plan, source plan).
+    public func moveToSpace(window: UInt64, target: UInt64) throws -> (target: Plan, source: Plan) {
+        var to = hm_plan(), from = hm_plan()
+        defer { hm_plan_free(&to); hm_plan_free(&from) }
+        try check(hm_engine_move_to_space(handle, window, target, &to, &from))
+        return (Plan(to), Plan(from))
     }
 
     /// Swaps the tree positions of two tiled windows on the same Space and returns the
