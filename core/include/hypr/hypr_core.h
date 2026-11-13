@@ -94,6 +94,15 @@ void hm_engine_destroy(hm_engine *engine);
  * active space afterwards. */
 hm_status hm_engine_set_config(hm_engine *engine, const hm_config *cfg);
 
+/* Gap policy (v0.3.0, additive): smart_gaps != 0 makes a space with exactly one tiled window use zero
+ * inner and zero outer gap. Takes effect on the next reconcile/relayout. */
+void hm_engine_set_smart_gaps(hm_engine *engine, int smart_gaps);
+
+/* Per-display gap override: a value >= 0 replaces the global inner/outer gap on every space of that
+ * display; a value < 0 keeps the global one (both < 0 removes the override). Values above 200 or NaN
+ * give HM_ERR_CONFIG. Takes effect on the next reconcile/relayout. */
+hm_status hm_engine_set_display_gaps(hm_engine *engine, hm_display_id display, double inner, double outer);
+
 /* Per-window state as observed by the platform layer. */
 typedef enum hm_window_state {
     HM_WINDOW_TILED = 0,      /* eligible for tiling */

@@ -80,8 +80,29 @@ MinSize Engine::min_size(WindowId w) const {
     return {std::max(it->second.hint.w, it->second.reported.w), std::max(it->second.hint.h, it->second.reported.h)};
 }
 
-LayoutResult Engine::layout(const Space &space) const {
-    return compute_layout(space.tree, space.usable, cfg_, [this](WindowId w) { return min_size(w); });
+hm_status Engine::set_display_gaps(DisplayId display, double inner, double outer) {
+    auto ok = [](double v) { return !std::isnan(v) && (v < 0 || v <= kMaxGap); };
+    if (!ok(inner) || !ok(outer)) return HM_ERR_CONFIG;
+    if (inner < 0 && outer < 0)
+        display_gaps_.erase(display);
+    else
+        display_gaps_[display] = {inner, outer};
+    return HM_OK;
+}
+
+Config Engine::effective_config(const Space &space, bool smart) const {
+    Config c = cfg_;
+    if (auto it = display_gaps_.find(space.display); it != display_gaps_.end()) {
+        if (it->second.first >= 0) c.inner_gap = it->second.first;
+        if (it->second.second >= 0) c.outer_gap = it->second.second;
+    }
+    if (smart && smart_gaps_ && space.tree.leaf_count() == 1) c.inner_gap = c.outer_gap = 0;
+    return c;
+}
+
+LayoutResult Engine::layout(const Space &space, bool smart) const {
+    return compute_layout(space.tree, space.usable, effective_config(space, smart),
+                          [this](WindowId w) { return min_size(w); });
 }
 
 LayoutResult Engine::layout_of(SpaceId id) const {
@@ -119,7 +140,7 @@ void Engine::dwindle_insert(Space &space, WindowId w, const Snapshot &s,
         return;
     }
     const WindowId target = choose_target(space, s, pending);
-    const LayoutResult l = layout(space);
+    const LayoutResult l = layout(space, false);
     const Rect r = find_frame(l, target).value_or(l.root);
     model_.split_leaf(space, target, w, dwindle_orientation(r), cfg_.split_ratio, false);
 }
@@ -343,7 +364,7 @@ hm_status Engine::resize(WindowId w, const Rect &desired, Plan &out) {
     }
     std::sort(tasks.begin(), tasks.end(), [](const Task &a, const Task &b) { return a.depth < b.depth; });
 
-    const double g = cfg_.inner_gap;
+    const double g = effective_config(*space, false).inner_gap;
     std::function<MinSize(const Node *)> min_of = [&](const Node *n) -> MinSize {
         if (n->is_leaf()) {
             const MinSize m = min_size(n->window);
