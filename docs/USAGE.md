@@ -30,6 +30,7 @@ Drag a tiled window's edge and let go. hyprMac keeps the new size.
 - Ratios stay between 10 % and 90 %, and within the windows' minimum sizes.
 - An edge on the screen boundary, or a window with no split on that axis, snaps back.
 - Dragging a tiled window by its titlebar and dropping it onto another tile swaps the two tiles in the tree.
+- Holding **⇧** when you let go re-splits instead of swapping. The window lands on the side of the tile under the cursor (left, right, top or bottom), so dropping one of two side-by-side windows on the bottom of the other stacks them, and dropping it on a side puts them side by side again. The middle of a tile still swaps.
 - Dragging a floating window keeps its new position without snapping back.
 - Moving a tiled window within its own tile snaps it back.
 - A window that resizes itself, without the mouse, still counts as a fight.
@@ -41,6 +42,7 @@ The log line is `{"event":"user_resize",...}`.
 | Item | What it does |
 |---|---|
 | **Pause Tiling** / **Resume Tiling** | Stops or restarts tiling. While paused, windows stay where they are, and the icon is dimmed and changes to a pause symbol. Remembered across launches. |
+| **Flip Split of Focused Window** | Flips the focused tile's split between side by side and stacked, same as `rotate_split`, with no shortcut needed. |
 | **Retile All Windows** | Lays out every Space again. Also gives back windows that were floated for fighting their tile. |
 | **OSD Popups** | Checkmark toggle for the small on-screen popups. Remembered in `~/.config/hyprmac/state.json`; until you use it, `osd_popup` in the config decides. |
 | **Launch at Login** | Checkmark toggle. Enabled only when `make install` created the login item. Uses `launchctl enable/disable`. |

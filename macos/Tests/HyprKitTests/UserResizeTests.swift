@@ -81,6 +81,65 @@ import Testing
         #expect(h.frame(b) == leftHalf)
     }
 
+    /// Drags `a` (same size, centre inside `b`'s tile) and drops with the cursor at `drop`.
+    private func drag(_ h: Harness, _ a: Ref, to drop: CGPoint, shift: Bool) {
+        h.desk.holdModifiers(shift ? .maskShift : [])
+        h.send(.userDragBegan(CGPoint(x: 100, y: 45)))
+        h.desk.setFrame(a, rect(800, 37, 704, 851))
+        h.send(.window(.moved, pid: 100, window: a))
+        h.desk.poster.post(.warpCursor(drop))
+        h.send(.userDragEnded(drop))
+    }
+
+    @Test func shiftDropOnTheBottomOfATileStacksThePairAndKeepsItAcrossReconciles() {
+        let h = Harness(); h.start()
+        let a = h.open(1), b = h.open(2)
+        drag(h, a, to: CGPoint(x: 1076, y: 850), shift: true) // bottom edge of the right tile
+        #expect(h.frame(b)!.height < 500 && h.frame(a)!.height < 500)
+        #expect(h.frame(b)!.minY < h.frame(a)!.minY) // b on top, a below
+        #expect(h.frame(a)!.width > 1400 && h.frame(b)!.width > 1400)
+        h.reconcile()
+        #expect(h.frame(b)!.minY < h.frame(a)!.minY)
+        #expect(h.frame(a)!.width > 1400)
+        #expect(h.c.testFightCount(h.id(a)!) == 0)
+    }
+
+    @Test func shiftDropOnTheTopPutsTheDraggedWindowAbove() {
+        let h = Harness(); h.start()
+        let a = h.open(1), b = h.open(2)
+        drag(h, a, to: CGPoint(x: 1076, y: 60), shift: true)
+        #expect(h.frame(a)!.minY < h.frame(b)!.minY)
+        #expect(h.frame(a)!.width > 1400)
+    }
+
+    @Test func shiftDropInTheMiddleOfATileStillSwaps() {
+        let h = Harness(); h.start()
+        let a = h.open(1), b = h.open(2)
+        drag(h, a, to: CGPoint(x: 1076, y: 460), shift: true)
+        #expect(h.frame(a) == rightHalf)
+        #expect(h.frame(b) == leftHalf)
+    }
+
+    @Test func dropWithoutShiftOnAnEdgeStillSwaps() {
+        let h = Harness(); h.start()
+        let a = h.open(1), b = h.open(2)
+        drag(h, a, to: CGPoint(x: 1076, y: 850), shift: false)
+        #expect(h.frame(a) == rightHalf)
+        #expect(h.frame(b) == leftHalf)
+    }
+
+    @Test func dropZonesPickTheNearestSideAndTheMiddleSwaps() {
+        let r = rect(0, 0, 400, 200)
+        #expect(DropZone.side(of: CGPoint(x: 200, y: 100), in: r) == nil)
+        #expect(DropZone.side(of: CGPoint(x: 260, y: 120), in: r) == nil)
+        #expect(DropZone.side(of: CGPoint(x: 10, y: 100), in: r) == .left)
+        #expect(DropZone.side(of: CGPoint(x: 390, y: 100), in: r) == .right)
+        #expect(DropZone.side(of: CGPoint(x: 200, y: 10), in: r) == .up)
+        #expect(DropZone.side(of: CGPoint(x: 200, y: 190), in: r) == .down)
+        #expect(DropZone.side(of: CGPoint(x: 10, y: 10), in: r) == .left) // corner: the wider axis wins
+        #expect(DropZone.side(of: CGPoint(x: 200, y: 10), in: .zero) == nil)
+    }
+
     @Test func draggingFloatingWindowKeepsNewPosition() {
         let h = Harness(); h.start()
         h.c.queue.sync {}

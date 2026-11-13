@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.3.0] - 2026-11-13
 
 ### 🚀 Added
+- ↔️ **Split Direction**: ⇧-drop a tile on another's edge to re-split side by side or stacked, or use **Flip Split** in the menu.
 - ⌨️ **Keyboard Actions**: Resize, equalize, rotate split, zoom, move to display and pause hotkeys, all unbound by default.
 - 🛡️ **Shortcut Conflict Check**: Chords that clash with an enabled macOS shortcut are skipped and reported.
 - 📋 **Rules & Gaps**: Title-based float/ignore rules, `smart_gaps`, per-display gaps, optional focus-follows-mouse, experimental pin-app-to-Desktop.

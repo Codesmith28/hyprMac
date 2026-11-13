@@ -104,6 +104,9 @@ public:
     hm_status resize_step(WindowId w, Direction dir, Plan &out);
     hm_status equalize(SpaceId space, Plan &out);
     hm_status rotate_split(WindowId w, Plan &out);
+    // Re-split: take `w` out of its place and put it beside `target` on `side` (Left/Right = side by side,
+    // Up/Down = stacked); `w` lands on that side of `target`. Same space, both tiled, w != target.
+    hm_status move_beside(WindowId w, WindowId target, Direction side, Plan &out);
     hm_status toggle_zoom(WindowId w, Plan &out);
     // Move a tiled window into another known space's tree; plans for both spaces.
     hm_status move_to_space(WindowId w, SpaceId target, Plan &target_plan, Plan &source_plan);

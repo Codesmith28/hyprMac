@@ -1,4 +1,4 @@
-// Keyboard actions: resize_step, equalize, rotate_split, toggle_zoom, move_to_space.
+// Keyboard actions: resize_step, equalize, rotate_split, move_beside, toggle_zoom, move_to_space.
 #include "engine_support.hpp"
 
 #include "hypr/hypr_core.h"
@@ -228,6 +228,91 @@ TEST_CASE("equalize on an empty space or one window is fine") {
     Plan p;
     CHECK(e.equalize(S, p) == HM_OK);
     CHECK(p.placements.empty());
+}
+
+} // TEST_SUITE
+
+TEST_SUITE("engine: move_beside") {
+
+TEST_CASE("side by side becomes stacked: dropping 1 on the bottom of 2 puts 2 on top") {
+    Engine e;
+    open(e, 2);
+    Plan p;
+    REQUIRE(e.move_beside(1, 2, Direction::Down, p) == HM_OK);
+    CHECK_RECT(frame(p, 2), 12, 12, 1416, 434);
+    CHECK_RECT(frame(p, 1), 12, 454, 1416, 434);
+    CHECK(e.model().find_space(S)->tree.root()->orientation == Orientation::Horizontal);
+    CHECK(e.model().check_invariants());
+}
+
+TEST_CASE("the side picks both the orientation and which child is first") {
+    const struct { Direction side; Orientation o; bool first; } cases[] = {
+        {Direction::Left, Orientation::Vertical, true},  {Direction::Right, Orientation::Vertical, false},
+        {Direction::Up, Orientation::Horizontal, true},  {Direction::Down, Orientation::Horizontal, false},
+    };
+    for (const auto &c : cases) {
+        Engine e;
+        open(e, 2);
+        Plan p;
+        REQUIRE(e.move_beside(1, 2, c.side, p) == HM_OK);
+        const Node *root = e.model().find_space(S)->tree.root();
+        CHECK(root->orientation == c.o);
+        CHECK(root->ratio == doctest::Approx(0.5));
+        CHECK((root->child[c.first ? 0 : 1]->window == 1));
+    }
+}
+
+TEST_CASE("in a bigger tree only the dragged window moves; the rest keeps its shape") {
+    Engine e;
+    open(e, 3); // 1 | (2 / 3)
+    Plan p;
+    REQUIRE(e.move_beside(1, 3, Direction::Right, p) == HM_OK); // 2 / (3 | 1)
+    const Node *root = e.model().find_space(S)->tree.root();
+    CHECK(root->orientation == Orientation::Horizontal);
+    CHECK(root->child[0]->window == 2);
+    CHECK(root->child[1]->orientation == Orientation::Vertical);
+    CHECK(root->child[1]->child[0]->window == 3);
+    CHECK(root->child[1]->child[1]->window == 1);
+    CHECK(frame(p, 3).y == frame(p, 1).y);
+    CHECK(e.model().check_invariants());
+}
+
+TEST_CASE("bad arguments leave the tree alone") {
+    Engine e;
+    open(e, 2);
+    Plan p;
+    CHECK(e.move_beside(0, 2, Direction::Left, p) == HM_ERR_INVALID_ARGUMENT);
+    CHECK(e.move_beside(1, 0, Direction::Left, p) == HM_ERR_INVALID_ARGUMENT);
+    CHECK(e.move_beside(1, 1, Direction::Left, p) == HM_ERR_INVALID_ARGUMENT);
+    CHECK(e.move_beside(1, 9, Direction::Left, p) == HM_ERR_UNKNOWN_WINDOW);
+    CHECK(e.move_beside(9, 2, Direction::Left, p) == HM_ERR_UNKNOWN_WINDOW);
+    CHECK(e.model().find_space(S)->tree.root()->orientation == Orientation::Vertical);
+    CHECK(e.model().check_invariants());
+}
+
+TEST_CASE("windows on different spaces are refused") {
+    Engine e;
+    open(e, 2);
+    open(e, 1, S2, 2, 10);
+    Plan p;
+    CHECK(e.move_beside(1, 10, Direction::Left, p) == HM_ERR_INVALID_ARGUMENT);
+    CHECK(e.model().tree_space_of(1) == S);
+}
+
+TEST_CASE("zoom ends, and the C API rejects a bad side") {
+    Engine e;
+    open(e, 3);
+    Plan p;
+    REQUIRE(e.toggle_zoom(2, p) == HM_OK);
+    REQUIRE(e.move_beside(1, 3, Direction::Down, p) == HM_OK);
+    CHECK(e.zoomed_window(S) == 0);
+
+    hm_engine *h = hm_engine_create(nullptr);
+    REQUIRE(h != nullptr);
+    hm_plan out{};
+    CHECK(hm_engine_move_beside(h, 1, 2, static_cast<hm_direction>(9), &out) == HM_ERR_INVALID_ARGUMENT);
+    CHECK(hm_engine_move_beside(nullptr, 1, 2, HM_DIR_LEFT, &out) == HM_ERR_INVALID_ARGUMENT);
+    hm_engine_destroy(h);
 }
 
 } // TEST_SUITE

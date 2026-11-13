@@ -118,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Tiling
         pauseItem = NSMenuItem(title: "Pause Tiling", action: #selector(togglePause), keyEquivalent: "")
         menu.addItem(pauseItem)
         menu.addItem(NSMenuItem(title: "Retile All Windows", action: #selector(retile), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Flip Split of Focused Window", action: #selector(flipSplit), keyEquivalent: ""))
         menu.addItem(.separator())
         osdItem = NSMenuItem(title: "OSD Popups", action: #selector(toggleOSD), keyEquivalent: "")
         menu.addItem(osdItem)
@@ -191,6 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Tiling
         refreshMenu()
     }
     @objc private func retile() { controller?.retileAll() }
+    @objc private func flipSplit() { controller?.rotateFocusedSplit() }
     @objc private func reloadConfig() { controller?.reloadConfig() }
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func showShortcuts() { Onboarding.showShortcuts(rows: ShortcutList.rows(for: keyBindings)) }

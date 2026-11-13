@@ -164,22 +164,43 @@ hm_status hm_engine_resize(hm_engine *engine, hm_window_id window, hm_rect desir
     });
 }
 
-hm_status hm_engine_resize_step(hm_engine *engine, hm_window_id window, hm_direction dir, hm_plan *out) {
-    if (!engine || !out) return HM_ERR_INVALID_ARGUMENT;
+namespace {
+
+// Out-of-range values (a C caller can pass anything) are rejected rather than cast.
+bool to_direction(const hm_direction &dir, hypr::Direction &out) { // by reference: copying a bad value is UB
     std::underlying_type_t<hm_direction> raw;
     static_assert(sizeof raw == sizeof dir);
     std::memcpy(&raw, &dir, sizeof raw);
-    hypr::Direction d;
     switch (raw) {
-    case HM_DIR_LEFT: d = hypr::Direction::Left; break;
-    case HM_DIR_DOWN: d = hypr::Direction::Down; break;
-    case HM_DIR_UP: d = hypr::Direction::Up; break;
-    case HM_DIR_RIGHT: d = hypr::Direction::Right; break;
-    default: return HM_ERR_INVALID_ARGUMENT;
+    case HM_DIR_LEFT: out = hypr::Direction::Left; return true;
+    case HM_DIR_DOWN: out = hypr::Direction::Down; return true;
+    case HM_DIR_UP: out = hypr::Direction::Up; return true;
+    case HM_DIR_RIGHT: out = hypr::Direction::Right; return true;
+    default: return false;
     }
+}
+
+} // namespace
+
+hm_status hm_engine_resize_step(hm_engine *engine, hm_window_id window, hm_direction dir, hm_plan *out) {
+    if (!engine || !out) return HM_ERR_INVALID_ARGUMENT;
+    hypr::Direction d;
+    if (!to_direction(dir, d)) return HM_ERR_INVALID_ARGUMENT;
     return guarded([&] {
         hypr::Plan plan;
         if (hm_status st = engine->impl.resize_step(window, d, plan); st != HM_OK) return st;
+        return export_plan(plan, out);
+    });
+}
+
+hm_status hm_engine_move_beside(hm_engine *engine, hm_window_id window, hm_window_id target, hm_direction side,
+                                hm_plan *out) {
+    if (!engine || !out) return HM_ERR_INVALID_ARGUMENT;
+    hypr::Direction d;
+    if (!to_direction(side, d)) return HM_ERR_INVALID_ARGUMENT;
+    return guarded([&] {
+        hypr::Plan plan;
+        if (hm_status st = engine->impl.move_beside(window, target, d, plan); st != HM_OK) return st;
         return export_plan(plan, out);
     });
 }

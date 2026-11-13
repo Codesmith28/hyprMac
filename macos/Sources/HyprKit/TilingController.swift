@@ -14,6 +14,8 @@ public protocol TilingController: AnyObject {
     /// Same as the menu item: pause when running, resume when paused (`keys.toggle_pause`).
     func togglePause()
     func retileAll()
+    /// Flips the focused tile's split between side by side and stacked (`keys.rotate_split`, menu).
+    func rotateFocusedSplit()
     func reloadConfig()
 }
 

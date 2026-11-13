@@ -204,6 +204,13 @@ hm_status hm_engine_equalize(hm_engine *engine, hm_space_id space, hm_plan *out)
  * ratio. A lone window is a successful no-op. Clears zoom. */
 hm_status hm_engine_rotate_split(hm_engine *engine, hm_window_id window, hm_plan *out);
 
+/* Re-split: take `window` out of its place and put it beside `target` on `side` (LEFT/RIGHT = side
+ * by side, UP/DOWN = stacked), splitting target's tile at config.split_ratio. Drag-to-resplit.
+ * HM_ERR_UNKNOWN_WINDOW unless both are tiled leaves; HM_ERR_INVALID_ARGUMENT when they are the
+ * same window or on different spaces. Clears zoom. */
+hm_status hm_engine_move_beside(hm_engine *engine, hm_window_id window, hm_window_id target, hm_direction side,
+                                hm_plan *out);
+
 /* Monocle: toggle zoom for `window`. A zoomed window is placed on the space's whole usable area
  * minus the outer gap; the other tiles keep their tree frames underneath. Zoom is per space and
  * clears when the window leaves the tree, when other windows join or the layout is edited

@@ -171,6 +171,23 @@ public final class Engine {
         return Plan(plan)
     }
 
+    /// Re-split: moves `window` out of its place and beside `target`, on `side` of it (left/right =
+    /// side by side, up/down = stacked). Throws `.unknownWindow` unless both are tiled and
+    /// `.invalidArgument` for the same window or different Spaces.
+    public func moveBeside(window: UInt64, target: UInt64, side: Direction) throws -> Plan {
+        var plan = hm_plan()
+        defer { hm_plan_free(&plan) }
+        let d: hm_direction
+        switch side {
+        case .left: d = HM_DIR_LEFT
+        case .down: d = HM_DIR_DOWN
+        case .up: d = HM_DIR_UP
+        case .right: d = HM_DIR_RIGHT
+        }
+        try check(hm_engine_move_beside(handle, window, target, d, &plan))
+        return Plan(plan)
+    }
+
     /// Toggles monocle for `window`.
     public func toggleZoom(window: UInt64) throws -> Plan {
         var plan = hm_plan()

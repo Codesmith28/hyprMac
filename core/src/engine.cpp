@@ -496,6 +496,22 @@ hm_status Engine::rotate_split(WindowId w, Plan &out) {
     return HM_OK;
 }
 
+hm_status Engine::move_beside(WindowId w, WindowId target, Direction side, Plan &out) {
+    if (w == 0 || target == 0 || w == target) return HM_ERR_INVALID_ARGUMENT;
+    const SpaceId sid = model_.tree_space_of(w);
+    if (sid == 0 || model_.tree_space_of(target) == 0) return HM_ERR_UNKNOWN_WINDOW;
+    if (model_.tree_space_of(target) != sid) return HM_ERR_INVALID_ARGUMENT;
+    Space &space = *model_.find_space(sid);
+    space.zoomed = 0;
+    const Orientation o = (side == Direction::Left || side == Direction::Right) ? Orientation::Vertical
+                                                                                : Orientation::Horizontal;
+    const bool first = side == Direction::Left || side == Direction::Up;
+    model_.remove(w, false);
+    model_.split_leaf(space, target, w, o, cfg_.split_ratio, first);
+    make_plan(space, out);
+    return HM_OK;
+}
+
 hm_status Engine::toggle_zoom(WindowId w, Plan &out) {
     if (w == 0) return HM_ERR_INVALID_ARGUMENT;
     const SpaceId sid = model_.tree_space_of(w);

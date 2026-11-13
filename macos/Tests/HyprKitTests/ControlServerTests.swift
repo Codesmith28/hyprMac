@@ -133,6 +133,7 @@ private final class FakeController: TilingController, @unchecked Sendable {
     func start() {}
     func stop() {}
     func setPaused(_ paused: Bool, reason: String?) { calls.append("pause=\(paused)"); isPaused = paused }
+    func rotateFocusedSplit() {}
     func togglePause() { setPaused(!isPaused, reason: "hotkey") }
     func retileAll() { calls.append("retile") }
     func reloadConfig() { calls.append("reload") }
