@@ -80,8 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Tiling
         c.start()
         if settings.paused { c.setPaused(true, reason: "user") }
         services?.stop()
-        services = BackgroundServices(controller: c, configPath: configPath,
-                                      version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? Engine.version)
+        services = BackgroundServices(controller: c, configPath: configPath)
         services?.start()
         refreshMenu()
         if announceStart {

@@ -36,13 +36,11 @@ app: swift-build                               ## assemble + sign build/hyprMac.
 	rm -rf $(APP_BUNDLE); \
 	mkdir -p $(APP_BUNDLE)/Contents/MacOS $(APP_BUNDLE)/Contents/Resources/scripts/lib; \
 	cp $$BIN/hyprMac $(APP_BUNDLE)/Contents/MacOS/hyprMac; \
-	cp $$BIN/hyprmacctl $(APP_BUNDLE)/Contents/MacOS/hyprmacctl; \
 	cp macos/Resources/Info.plist $(APP_BUNDLE)/Contents/Info.plist; \
 	cp config/init.lua.example $(APP_BUNDLE)/Contents/Resources/; \
 	if [ -f macos/Resources/AppIcon.icns ]; then cp macos/Resources/AppIcon.icns $(APP_BUNDLE)/Contents/Resources/; fi; \
 	cp scripts/*.sh $(APP_BUNDLE)/Contents/Resources/scripts/ 2>/dev/null || true; \
 	cp scripts/lib/*.sh $(APP_BUNDLE)/Contents/Resources/scripts/lib/ 2>/dev/null || true; \
-	codesign --force --sign - --options runtime --identifier $(BUNDLE_ID).ctl $(APP_BUNDLE)/Contents/MacOS/hyprmacctl; \
 	scripts/sign_identity.sh sign $(APP_BUNDLE); \
 	echo "built $(APP_BUNDLE)"
 

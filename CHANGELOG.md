@@ -9,16 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.3.0] - 2026-11-13
 
 ### 🚀 Added
-- ↔️ **Split Direction**: ⇧-drop a tile on another's edge to re-split side by side or stacked, or use **Flip Split** in the menu.
+- ↔️ **Split Direction**: ⇧-drop a tile on another's edge to re-split side by side or stacked, or use **Flip Split** in the menu (or bind `rotate_split`).
 - ⌨️ **Keyboard Actions**: Resize, equalize, rotate split, zoom, move to display and pause hotkeys, all unbound by default.
 - 🛡️ **Shortcut Conflict Check**: Chords that clash with an enabled macOS shortcut are skipped and reported.
 - 📋 **Rules & Gaps**: Title-based float/ignore rules, `smart_gaps`, per-display gaps, optional focus-follows-mouse, experimental pin-app-to-Desktop.
 - 🔄 **Config Tools**: Auto-reload on save and `hyprMac --check-config`.
-- 💻 **`hyprmacctl`**: CLI for status, retile, pause, resume and reload.
 - 🎛️ **Menu**: Status, Launch at Login, OSD toggle, Reveal Configuration and Copy Log Command; pause is remembered.
 - 🔑 **Stable Signing**: Opt-in `make sign-identity` keeps the Accessibility grant across upgrades.
 - 📦 **CI & Release**: GitHub Actions, tag-driven releases and a Homebrew cask template.
-- 🎞️ **Shortcut Cheatsheet**: Minimal modal with a looping animation per shortcut, opened with `⌥⇧/` or from the menu and closed with `Esc`.
+- 🎞️ **Shortcut Cheatsheet**: Minimal modal with a looping animation per shortcut, opened with `⌥⇧/` or from the menu and closed with `Esc`. Also lists every opt-in action (unbound ones show the `keys.` entry to set) and the mouse gestures.
 
 ### 🔄 Changed
 - 🧹 **Menu Shortcuts**: Removed the ⌘, ⌘R and ⌘Q hints, which could never fire.
@@ -27,7 +26,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - 📖 **Docs**: Corrected the shortcut table and documented every config key.
 
 ### 🐛 Fixed
-- 🎨 **OSD Border**: Corner radius now matches the block, with no gap.
 - ⌨️ **Arrow Keys**: Stay bound when `focus_*` / `move_*` are set to letter keys, so H/J/K/L and ←/↓/↑/→ both work.
 
 ---

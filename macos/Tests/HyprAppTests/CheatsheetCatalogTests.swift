@@ -20,6 +20,7 @@ struct CheatsheetCatalogTests {
         #expect(entry(.center)?.keys == [["⌥", "⇧", "C"]])
         #expect(entry(.focus)?.keys == [["⌥", "⇧", "H/J/K/L"], ["⌥", "⇧", "←/↓/↑/→"]])
         #expect(entry(.swap)?.keys == [["⌥", "⇧", "⌘", "H/J/K/L"], ["⌥", "⇧", "⌘", "←/↓/↑/→"]])
+        #expect(entry(.reSplit)?.keys == [["⇧", "Drop"]])
         #expect(entry(.help)?.keys == [["⌥", "⇧", "/"]])
     }
 
@@ -41,11 +42,29 @@ struct CheatsheetCatalogTests {
         #expect(entry(.swap, keys) != nil)
     }
 
-    @Test func extrasListOnlyBoundOptInActions() throws {
+    private func extra(_ title: String, _ keys: KeyBindings = .defaults) -> CheatsheetExtra.Binding? {
+        CheatsheetCatalog.extras(for: keys).first { $0.title == title }?.binding
+    }
+
+    /// Nothing is hidden: every opt-in action shows up, unbound ones with the config key to set.
+    @Test func extrasListEveryActionBoundOrNot() throws {
         var keys = KeyBindings.defaults
-        #expect(CheatsheetCatalog.extras(for: keys).isEmpty)
+        let all = CheatsheetCatalog.extras(for: keys)
+        for action in KeyAction.allCases {
+            #expect(all.contains { $0.title == CheatsheetCatalog.shortTitle(for: action) }, "\(action) missing")
+            #expect(all.contains { $0.binding == .unbound(configKey: action.rawValue) })
+        }
+        #expect(extra("Flip split") == .unbound(configKey: "rotate_split"))
+        keys.actionKeys[.rotateSplit] = try #require(KeySpec(parsing: "alt+shift+r"))
         keys.actionKeys[.toggleZoom] = try #require(KeySpec(parsing: "alt+shift+z"))
-        #expect(CheatsheetCatalog.extras(for: keys) == [CheatsheetExtra(title: "Zoom the focused window", keys: ["⌥", "⇧", "Z"])])
+        #expect(extra("Flip split", keys) == .keys(["⌥", "⇧", "R"]))
+        #expect(extra("Zoom window", keys) == .keys(["⌥", "⇧", "Z"]))
+        #expect(extra("Equalize splits", keys) == .unbound(configKey: "equalize"))
+    }
+
+    @Test func extrasIncludeMouseGestures() {
+        #expect(extra("Resize a tile") == .gesture("drag its edge"))
+        #expect(extra("Swap two tiles") == .gesture("drop a titlebar on one"))
     }
 
     @Test func helpShortcutIsPrefixSlash() {
@@ -69,6 +88,6 @@ struct CheatsheetCatalogTests {
         let keys = store.current.keys
         #expect(entry(.toggleFloat, keys)?.keys == [["⌃", "⌥", "G"]])
         #expect(entry(.focus, keys)?.keys == [["⌃", "⌥", "A/S/W/D"], ["⌃", "⌥", "←/↓/↑/→"]])
-        #expect(CheatsheetCatalog.extras(for: keys).map(\.keys) == [["⌃", "⌥", "Z"]])
+        #expect(extra("Zoom window", keys) == .keys(["⌃", "⌥", "Z"]))
     }
 }

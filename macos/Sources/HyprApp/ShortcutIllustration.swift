@@ -42,6 +42,7 @@ private enum Art {
         case .throwWindow: throwWindow(&gc, p)
         case .focus: focus(&gc, p)
         case .swap: swap(&gc, p)
+        case .reSplit: reSplit(&gc, p)
         case .toggleFloat: toggleFloat(&gc, p)
         case .center: center(&gc, p)
         case .help: help(&gc, p)
@@ -152,6 +153,28 @@ private enum Art {
         let other = lerp(bsp[1], bsp[0], t)
         tile(&gc, other)
         hot(&gc, moving)
+    }
+
+    /// A tile is dragged onto the bottom edge of its neighbour; the pair re-splits from side by side to stacked.
+    static func reSplit(_ gc: inout GraphicsContext, _ p: Double) {
+        screenFrame(&gc)
+        let m = seg(p, 0.38, 0.56) - seg(p, 0.78, 0.94)
+        let a = lerp(CGRect(x: 14, y: 10, width: 29, height: 36), CGRect(x: 14, y: 29, width: 60, height: 17), m)
+        let b = lerp(CGRect(x: 47, y: 10, width: 27, height: 36), CGRect(x: 14, y: 10, width: 60, height: 17), m)
+        tile(&gc, b)
+        // Drop zone on the neighbour's bottom edge, lit while the dragged tile hovers there.
+        let drag = seg(p, 0.08, 0.3) * (1 - seg(p, 0.34, 0.4))
+        if drag > 0.01 {
+            var zone = gc
+            zone.opacity = drag
+            zone.fill(round(CGRect(x: 47, y: 37, width: 27, height: 9), 3), with: .color(accent.opacity(0.35)))
+            let from = CGPoint(x: a.midX, y: a.midY), to = CGPoint(x: 60.5, y: 38)
+            let c = CGPoint(x: lerp(from.x, to.x, drag), y: lerp(from.y, to.y, drag))
+            hot(&zone, CGRect(x: c.x - 9, y: c.y - 6, width: 18, height: 12))
+            tile(&gc, a, fill: ink.opacity(0.04), stroke: ink.opacity(0.12))
+        } else {
+            hot(&gc, a)
+        }
     }
 
     /// One tile pops out as a floating window and drops back in.

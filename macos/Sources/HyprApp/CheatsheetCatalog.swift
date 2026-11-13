@@ -4,7 +4,7 @@ import HyprPlatform
 struct CheatsheetEntry: Equatable, Identifiable {
     /// Which animation illustrates the shortcut.
     enum Illustration: String, CaseIterable {
-        case switchDesktop, throwWindow, focus, swap, toggleFloat, center, help
+        case switchDesktop, throwWindow, focus, swap, reSplit, toggleFloat, center, help
     }
 
     var id: Illustration { illustration }
@@ -15,11 +15,19 @@ struct CheatsheetEntry: Equatable, Identifiable {
     let keys: [[String]]
 }
 
-/// A compact, un-animated row for a bound opt-in action (resize, zoom, …).
+/// A compact, un-animated cell: an opt-in action (resize, flip split, zoom, …) or a mouse gesture.
 struct CheatsheetExtra: Equatable, Identifiable {
+    enum Binding: Equatable {
+        /// Bound: the keycaps.
+        case keys([String])
+        /// Ships unbound: the `keys.<name>` entry that binds it in init.lua.
+        case unbound(configKey: String)
+        /// A mouse gesture: how to do it.
+        case gesture(String)
+    }
     var id: String { title }
     let title: String
-    let keys: [String]
+    let binding: Binding
 }
 
 /// What the cheatsheet lists, derived from the live key bindings so it never goes stale.
@@ -45,6 +53,9 @@ enum CheatsheetCatalog {
             list.append(.init(illustration: .swap, title: "Swap windows",
                               detail: "Trade places with the neighbouring tile", keys: move))
         }
+        list.append(.init(illustration: .reSplit, title: "Re-split a tile",
+                          detail: "Drop on a tile's edge: side by side or stacked. Menu: Flip Split",
+                          keys: [["⇧", "Drop"]]))
         list.append(.init(illustration: .toggleFloat, title: "Float / tile",
                           detail: "Pop the window out of the layout, or back in", keys: [caps(keys.toggleFloat)]))
         list.append(.init(illustration: .center, title: "Center window",
@@ -54,10 +65,32 @@ enum CheatsheetCatalog {
         return list
     }
 
-    /// The opt-in actions the user has bound, in `KeyAction` order.
+    /// Every opt-in action in `KeyAction` order (bound ones show their keys, the rest the `keys.<name>`
+    /// to set), then the mouse gestures, so nothing hyprMac can do is missing from the cheatsheet.
     static func extras(for keys: KeyBindings) -> [CheatsheetExtra] {
-        KeyAction.allCases.compactMap { action in
-            keys.actionKeys[action].map { CheatsheetExtra(title: ShortcutList.label(for: action), keys: caps($0)) }
+        let actions = KeyAction.allCases.map { action in
+            CheatsheetExtra(title: shortTitle(for: action),
+                            binding: keys.actionKeys[action].map { .keys(caps($0)) } ?? .unbound(configKey: action.rawValue))
+        }
+        return actions + [
+            CheatsheetExtra(title: "Resize a tile", binding: .gesture("drag its edge")),
+            CheatsheetExtra(title: "Swap two tiles", binding: .gesture("drop a titlebar on one")),
+        ]
+    }
+
+    /// Short names that fit a compact cell.
+    static func shortTitle(for action: KeyAction) -> String {
+        switch action {
+        case .resizeLeft: "Resize left"
+        case .resizeDown: "Resize down"
+        case .resizeUp: "Resize up"
+        case .resizeRight: "Resize right"
+        case .equalize: "Equalize splits"
+        case .rotateSplit: "Flip split"
+        case .toggleZoom: "Zoom window"
+        case .moveDisplayNext: "Next display"
+        case .moveDisplayPrev: "Prev display"
+        case .togglePause: "Pause tiling"
         }
     }
 

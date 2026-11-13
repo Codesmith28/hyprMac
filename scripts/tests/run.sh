@@ -1031,7 +1031,6 @@ t_sign_identity_dry_run_and_make() {
     out="$(env -u DRY_RUN make -s -C "$ROOT" -n app)"
     contains "make app signs through the script" "$out" "scripts/sign_identity.sh sign build/hyprMac.app"
     not_contains "make app does not sign the bundle with codesign directly" "$out" "--identifier dev.codesmith28.hyprmac build/hyprMac.app"
-    contains "make app signs the hyprmacctl helper ad hoc" "$out" "--sign - --options runtime --identifier dev.codesmith28.hyprmac.ctl build/hyprMac.app/Contents/MacOS/hyprmacctl"
 }
 
 # ------------------------------------------------------------------ runner --

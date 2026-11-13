@@ -230,12 +230,14 @@ import Testing
         #expect(cfg.fineGridYOffsets == [1, 2, 4, 8, 14, 20])
         let (_, _, sm) = setup()
         let candidates = sm.fineGridCandidates(for: frame)
+        let minY = frame.minY
+        func has(_ x: CGFloat, _ y: CGFloat) -> Bool { candidates.contains { $0.x == x && $0.y == y } }
         // Check near traffic lights (80 + 10 = 90 -> 190; 80 + 25 = 105 -> 205)
-        #expect(candidates.contains(where: { $0.x == 190 && $0.y == frame.minY + 1 }))
-        #expect(candidates.contains(where: { $0.x == 205 && $0.y == frame.minY + 2 }))
+        #expect(has(190, minY + 1))
+        #expect(has(205, minY + 2))
         // Check near right edge (maxX = 900 - 16 = 884; 884 - 80 = 804; 884 - 40 = 844)
-        #expect(candidates.contains(where: { $0.x == 804 && $0.y == frame.minY + 1 }))
-        #expect(candidates.contains(where: { $0.x == 844 && $0.y == frame.minY + 1 }))
+        #expect(has(804, minY + 1))
+        #expect(has(844, minY + 1))
     }
 
     @Test func browserWindowWithTabsCoveringAllStandardPointsThrowsViaThinTopStrip() {

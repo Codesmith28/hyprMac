@@ -20,7 +20,7 @@ hyprMac lives in the menu bar (the 2×2 grid icon). It has no Dock icon. After `
 | *unbound* `move_display_next` / `prev` | Move the focused window to the next / previous display (left to right, wrapping), into that display's current Space. |
 | *unbound* `toggle_pause` | Pause or resume tiling, like the menu item. |
 
-These are the built-in defaults. The rows marked *unbound* have no shortcut until you set one under `keys`; `config/init.lua.example` has suggested ⌥⇧ bindings. You can change them under [keys](#keys-and-app-rules). The example config lists the H/J/K/L keys explicitly. Each arrow key stays bound next to its letter key, with the same modifiers. The menu's **Keyboard Shortcuts…** (or ⌥⇧/) opens an animated cheatsheet of your active shortcuts.
+These are the built-in defaults. The rows marked *unbound* have no shortcut until you set one under `keys`; `config/init.lua.example` has suggested ⌥⇧ bindings. You can change them under [keys](#keys-and-app-rules). The example config lists the H/J/K/L keys explicitly. Each arrow key stays bound next to its letter key, with the same modifiers. The menu's **Keyboard Shortcuts…** (or ⌥⇧/) opens an animated cheatsheet of your active shortcuts. Its **More** section lists every opt-in action too: bound ones show their keys, unbound ones show the `keys.` entry to set, and the mouse gestures (drag an edge to resize, drop a titlebar to swap, ⇧-drop to re-split) are there as well.
 
 New windows split the focused window along its longer side and take the second half. Close, minimize, hide or fullscreen a window and the rest reflow. When it comes back, it gets its old tile.
 
@@ -76,7 +76,7 @@ hyprMac asks to show notifications the first time it runs. If you say no, the sa
 ## Configuration and reloading
 The config is `~/.config/hyprmac/init.lua`. The keys and their ranges are in the [README](../README.md#configuration) and in the file's comments. `osd_popup = false` turns off the on-screen popup.
 
-Saving the file reloads it automatically (about 0.3 s after the last write). You can also use the menu's **Reload Configuration**, `hyprmacctl reload`, or `pkill -HUP -x hyprMac`. A plain `pkill -x hyprMac` quits. A file with an error keeps the previous settings and shows the usual notification.
+Saving the file reloads it automatically (about 0.3 s after the last write). You can also use the menu's **Reload Configuration** or `pkill -HUP -x hyprMac`. A plain `pkill -x hyprMac` quits. A file with an error keeps the previous settings and shows the usual notification.
 
 To check a file without running the app: `hyprMac --check-config [path]` prints `OK` or `file:line: message` and exits 0 or 1. Without a path it checks `--config`, then `~/.config/hyprmac/init.lua`. It never starts the app or touches your shortcuts.
 
@@ -138,22 +138,6 @@ config = {
 - **`rules.desktop`** (EXPERIMENTAL, empty by default): the first time a new window of the app shows up on another Desktop, hyprMac throws it to Desktop N (1–9) with the same drag trick as ⌥⇧N. That switches Desktops under you. Windows that were already open when hyprMac started, floating or fullscreen windows, ignored apps and windows already on Desktop N are left alone. Each window is tried once. If the throw fails (`noGrabPoint`, `timedOut`), it is logged and not retried.
 
 If the config has an error, nothing changes. hyprMac keeps the last good settings and tells you what's wrong. A missing file means the defaults.
-
-## Command line
-`hyprmacctl` talks to the running app. It lives inside the bundle and isn't linked anywhere else:
-
-```sh
-~/Applications/hyprMac.app/Contents/MacOS/hyprmacctl status
-```
-
-| Command | What it does |
-|---|---|
-| `status` | Prints JSON: `version`, `paused`, `displays`, `spaces`, `config`. |
-| `retile` | Same as **Retile All Windows**. |
-| `pause` / `resume` / `toggle-pause` | Stops or restarts tiling. |
-| `reload` | Same as **Reload Configuration**. |
-
-Exit status: 0 ok, 1 refused or failed, 2 bad usage, 3 hyprMac isn't running. The socket is `$TMPDIR/dev.codesmith28.hyprmac.sock` (mode 0600, local only, removed on quit).
 
 ## Logs
 
