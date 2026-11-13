@@ -127,11 +127,13 @@ private func raw(_ path: String, _ bytes: String) throws -> String {
 private final class FakeController: TilingController, @unchecked Sendable {
     var isPaused = false
     var osdPopup = true
+    var keyBindings = KeyBindings.defaults
     weak var delegate: TilingControllerDelegate?
     var calls: [String] = []
     func start() {}
     func stop() {}
     func setPaused(_ paused: Bool, reason: String?) { calls.append("pause=\(paused)"); isPaused = paused }
+    func togglePause() { setPaused(!isPaused, reason: "hotkey") }
     func retileAll() { calls.append("retile") }
     func reloadConfig() { calls.append("reload") }
 }

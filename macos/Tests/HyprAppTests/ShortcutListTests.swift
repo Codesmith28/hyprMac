@@ -44,4 +44,12 @@ struct ShortcutListTests {
         let text = ShortcutList.text(for: [ShortcutRow(label: "A", chord: "⌥1"), ShortcutRow(label: "B", chord: "⌥⇧F")])
         #expect(text == "⌥1    A\n⌥⇧F   B")
     }
+
+    @Test func boundOptInActionsAppearAndUnboundOnesDoNot() throws {
+        var keys = KeyBindings.defaults
+        #expect(!ShortcutList.rows(for: keys).contains { $0.label == "Zoom the focused window" })
+        keys.actionKeys[.toggleZoom] = try #require(KeySpec(parsing: "alt+shift+z"))
+        let row = try #require(ShortcutList.rows(for: keys).first { $0.label == "Zoom the focused window" })
+        #expect(row.chord == "⌥⇧Z")
+    }
 }

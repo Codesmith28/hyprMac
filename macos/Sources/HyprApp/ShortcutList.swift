@@ -17,6 +17,7 @@ enum ShortcutList {
         rows += centerWindow(keys)
         rows += focus(keys)
         rows += move(keys)
+        rows += actions(keys)
         return rows
     }
 
@@ -54,6 +55,28 @@ enum ShortcutList {
 
     private static func move(_ keys: KeyBindings) -> [ShortcutRow] {
         directional(keys.moveKeys, verb: "Move the window")
+    }
+
+    /// The opt-in actions (unbound ones are omitted, like every other row).
+    private static func actions(_ keys: KeyBindings) -> [ShortcutRow] {
+        KeyAction.allCases.compactMap { action in
+            keys.actionKeys[action].map { ShortcutRow(label: label(for: action), chord: format($0)) }
+        }
+    }
+
+    private static func label(for action: KeyAction) -> String {
+        switch action {
+        case .resizeLeft: "Resize the focused tile left"
+        case .resizeDown: "Resize the focused tile down"
+        case .resizeUp: "Resize the focused tile up"
+        case .resizeRight: "Resize the focused tile right"
+        case .equalize: "Equalize all splits"
+        case .rotateSplit: "Rotate the focused split"
+        case .toggleZoom: "Zoom the focused window"
+        case .moveDisplayNext: "Move the window to the next display"
+        case .moveDisplayPrev: "Move the window to the previous display"
+        case .togglePause: "Pause / resume tiling"
+        }
     }
 
     /// One row per direction; alternative keys for the same direction (h / ←) share the row.
