@@ -1,0 +1,27 @@
+#!/bin/bash
+# Fake codesign: the "signature" is a file inside the bundle, so it survives ditto.
+# Sign:    codesign --force --sign <hash|-> [--options x] [--identifier id] PATH
+# Display: codesign -d -r- PATH   (designated requirement on stdout)
+# FAKE_SIGN_IDENTITY_FAILS=1 makes signing with a real identity fail (ad-hoc still works).
+. "$(dirname "$0")/_lib.sh"
+case "${1:-}" in
+    -d)
+        app="${*: -1}"
+        sig="$app/Contents/_fakesig"
+        [ -f "$sig" ] || { echo "$app: code object is not signed at all" >&2; exit 1; }
+        echo "Executable=$app/Contents/MacOS/hyprMac" >&2
+        id="$(cat "$sig")"
+        if [ "$id" = - ]; then echo 'designated => cdhash H"0123456789abcdef0123456789abcdef01234567"'
+        else echo "designated => identifier \"dev.codesmith28.hyprmac\" and certificate leaf = H\"$(printf '%s' "$id" | tr A-F a-f)\""; fi ;;
+    --force)
+        shift
+        id=""
+        while [ $# -gt 1 ]; do
+            case "$1" in --sign) id="$2"; shift 2 ;; --options | --identifier) shift 2 ;; *) shift ;; esac
+        done
+        app="$1"
+        [ -d "$app/Contents" ] || { echo "$app: bundle format unrecognized" >&2; exit 1; }
+        if [ "$id" != - ] && [ "${FAKE_SIGN_IDENTITY_FAILS:-0}" = 1 ]; then echo "$app: errSecInternalComponent" >&2; exit 1; fi
+        printf '%s' "$id" >"$app/Contents/_fakesig" ;;
+    *) echo "fake codesign: unsupported $*" >&2; exit 64 ;;
+esac

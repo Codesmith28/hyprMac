@@ -31,7 +31,7 @@ swift-build: $(BUILD)/release/libhyprcore.a    ## build all Swift products
 swift-test: $(BUILD)/release/libhyprcore.a     ## run Swift Testing suites (FakeAX, coordinator)
 	swift test --package-path $(SWIFT_PKG) $(SWIFT_LINK) $(SWIFT_TESTING_FLAGS) $(SWIFT_TEST_ARGS)
 
-app: swift-build                               ## assemble + ad-hoc sign build/hyprMac.app
+app: swift-build                               ## assemble + sign build/hyprMac.app (ad-hoc, or the local identity from make sign-identity)
 	@BIN=$$(swift build --package-path $(SWIFT_PKG) -c $(SWIFT_CONF) $(SWIFT_LINK) --show-bin-path); \
 	rm -rf $(APP_BUNDLE); \
 	mkdir -p $(APP_BUNDLE)/Contents/MacOS $(APP_BUNDLE)/Contents/Resources/scripts/lib; \
@@ -41,7 +41,7 @@ app: swift-build                               ## assemble + ad-hoc sign build/h
 	if [ -f macos/Resources/AppIcon.icns ]; then cp macos/Resources/AppIcon.icns $(APP_BUNDLE)/Contents/Resources/; fi; \
 	cp scripts/*.sh $(APP_BUNDLE)/Contents/Resources/scripts/ 2>/dev/null || true; \
 	cp scripts/lib/*.sh $(APP_BUNDLE)/Contents/Resources/scripts/lib/ 2>/dev/null || true; \
-	codesign --force --sign - --options runtime --identifier $(BUNDLE_ID) $(APP_BUNDLE); \
+	scripts/sign_identity.sh sign $(APP_BUNDLE); \
 	echo "built $(APP_BUNDLE)"
 
 run: app                                       ## run the app from build/ (foreground, logs to terminal)

@@ -53,13 +53,16 @@ setup_sandbox() { # name
     export TCCUTIL="$S/bin/tccutil" LSREGISTER="$S/bin/lsregister" ACTIVATE_SETTINGS="$S/bin/activateSettings"
     export OPEN="$S/bin/open" PKILL="$S/bin/pkill" KILLALL="$S/bin/killall"
     export PYTHON="$S/bin/python3"
+    export SECURITY="$S/bin/security" CODESIGN="$S/bin/codesign" OPENSSL="$S/bin/openssl"
     unset HYPR_FAIL_AT FAKE_FAIL KEEP_CONFIG HYPR_WM_APPLY_CMD HYPR_WM_ACTIVE_CMD DRY_RUN HYPR_VERIFY_DIR \
-        HYPR_UNINSTALL_REEXEC FAKE_DEFAULTS_IGNORE_WRITE OSASCRIPT
+        HYPR_UNINSTALL_REEXEC FAKE_DEFAULTS_IGNORE_WRITE OSASCRIPT SIGN_ADHOC FAKE_SIGN_IDENTITY_FAILS
     local d
     for d in Applications "Library/Preferences" "Library/Caches" "Library/HTTPStorages" \
-             "Library/Saved Application State" "Library/Application Support" "Library/Logs/DiagnosticReports"; do
+             "Library/Saved Application State" "Library/Application Support" "Library/Logs/DiagnosticReports" \
+             "Library/Keychains"; do
         mkdir -p "$HOME/$d"
     done
+    : >"$HOME/Library/Keychains/login.keychain-db"
     seed_prefs
     make_fake_app "$S/src/hyprMac.app" 1
     export APP_SRC="$S/src/hyprMac.app"
@@ -141,6 +144,7 @@ sys_fp() {
     echo "launchd: $(sort "$FAKE_STATE/launchd.loaded" 2>/dev/null | tr '\n' ' ')"
     echo "lsregister: $(sort "$FAKE_STATE/lsregister.db" 2>/dev/null | tr '\n' ' ')"
     echo "running: $([ -e "$FAKE_STATE/running" ] && echo yes || echo no)"
+    echo "identities: $(/bin/ls "$FAKE_STATE/identities" 2>/dev/null | tr '\n' ' ')"
 }
 
 same_fp() { # description file-with-earlier-fp
@@ -202,7 +206,7 @@ expect_rc() { # description expected
     if [ "$RC" != "$2" ]; then bad "$1: exit $RC, expected $2"; show_out; fi
 }
 STATE_DIR_REL="Library/Application Support/hyprMac/install"
-MUTATING='^(defaults (write|delete|import)|launchctl (bootstrap|bootout|kill)|tccutil|lsregister -[fu]|open|killall|activateSettings|pkill -(TERM|KILL))'
+MUTATING='^(defaults (write|delete|import)|launchctl (bootstrap|bootout|kill)|tccutil|lsregister -[fu]|open|killall|activateSettings|pkill -(TERM|KILL)|security (import|delete-identity)|codesign --force)'
 
 # Clean install + uninstall with the zero-diff checks every scenario shares.
 roundtrip() { # label
@@ -460,7 +464,7 @@ t_sandbox_guard() {
     # Decoys: /usr/bin/true is a "real system path" but harmless if the guard
     # were broken. Combined with --dry-run for extra safety.
     local v saved
-    for v in DEFAULTS PLUTIL LAUNCHCTL TCCUTIL LSREGISTER ACTIVATE_SETTINGS OPEN PKILL KILLALL PYTHON; do
+    for v in DEFAULTS PLUTIL LAUNCHCTL TCCUTIL LSREGISTER ACTIVATE_SETTINGS OPEN PKILL KILLALL PYTHON SECURITY CODESIGN OPENSSL; do
         saved="${!v}"
         export "$v=/usr/bin/true"
         inst --dry-run
@@ -469,17 +473,20 @@ t_sandbox_guard() {
         uninst --dry-run
         [ "$RC" != 0 ] || bad "uninstall guard accepted $v=/usr/bin/true"
         OUT="$("$SCRIPTS/snapshot.sh" 2>&1)" && bad "snapshot guard accepted $v"
+        OUT="$("$SCRIPTS/sign_identity.sh" create --dry-run 2>&1)" && bad "sign_identity guard accepted $v"
+        contains "sign_identity guard names $v" "$OUT" "$v points at a real system path"
         export "$v=$saved"
     done
     # Real HOME is refused too (all commands are inert no-op shims here).
     mkdir -p "$S/inert"
-    for v in defaults plutil launchctl tccutil lsregister activateSettings open pkill killall python3; do
+    for v in defaults plutil launchctl tccutil lsregister activateSettings open pkill killall python3 security codesign openssl; do
         printf '#!/bin/sh\nexit 1\n' >"$S/inert/$v"; chmod +x "$S/inert/$v"
     done
     OUT="$(HOME="$(eval "printf '%s' ~$(id -un)")" DEFAULTS="$S/inert/defaults" PLUTIL="$S/inert/plutil" \
         LAUNCHCTL="$S/inert/launchctl" TCCUTIL="$S/inert/tccutil" LSREGISTER="$S/inert/lsregister" \
         ACTIVATE_SETTINGS="$S/inert/activateSettings" OPEN="$S/inert/open" \
         PKILL="$S/inert/pkill" KILLALL="$S/inert/killall" PYTHON="$S/inert/python3" \
+        SECURITY="$S/inert/security" CODESIGN="$S/inert/codesign" OPENSSL="$S/inert/openssl" \
         "$SCRIPTS/install.sh" --dry-run 2>&1)" && bad "guard accepted the real HOME"
     contains "guard names HOME" "$OUT" "HOME is the real home directory"
     check "no shim was called" test ! -s "$FAKE_STATE/calls.log"
@@ -693,6 +700,8 @@ t_preflight() {
     sys_calls="$(grep -E '^(defaults|launchctl|tccutil|lsregister|open|pkill|killall|activateSettings) ' "$FAKE_STATE/calls.log" |
         grep -vE '^(defaults (export|read) |launchctl print )')"
     [ -z "$sys_calls" ] || bad "non-read-only calls: $sys_calls"
+    check "security: find-identity only" test -z "$(grep -E '^(security|codesign|openssl) ' "$FAKE_STATE/calls.log" | grep -vE '^security find-identity ')"
+    contains "no identity line" "$OUT" "signing identity"
     check "defaults export only to stdout" test -z "$(grep -E '^defaults export [^ ]+ [^-]' "$FAKE_STATE/calls.log")"
     check "no temp files" test -z "$(/bin/ls -A "$S/tmp")"
     same_fp "preflight" "$fp"
@@ -801,6 +810,211 @@ t_m8_refuse_root_and_bad_home() {
     contains "missing" "$OUT" "HOME does not exist"
 }
 
+# ---------------------------------------------------- signing identity (opt-in) --
+SIGN_ID="$SCRIPTS/sign_identity.sh"
+sid() { OUT="$("$SIGN_ID" "$@" 2>&1)"; RC=$?; [ "${VERBOSE:-0}" = 1 ] && printf '%s\n' "$OUT" | sed 's/^/#   | /'; return 0; }
+id_hash() { "$SIGN_ID" status; }
+calls() { grep -cE "$1" "$FAKE_STATE/calls.log"; }
+fake_sig() { cat "$1/Contents/_fakesig" 2>/dev/null || echo unsigned; }
+# What `make app` does to the build: sign it.
+sign_src() { "$SIGN_ID" sign "$APP_SRC" >/dev/null 2>&1; }
+
+t_sign_identity_lifecycle() {
+    local fp="$S/fp.before" h
+    sys_fp >"$fp"
+    eq "status before" absent "$(id_hash)"
+    sid create; expect_rc "create" 0
+    h="$(id_hash)"
+    case "$h" in [0-9A-F]*) eq "hash is 40 hex" 40 "${#h}" ;; *) bad "no identity after create: $h" ;; esac
+    check "imported non-extractable" grep -qE '^security import .* -x( |$)' "$FAKE_STATE/calls.log"
+    check "into the login keychain only" grep -q "^security import .* -k $HOME/Library/Keychains/login.keychain-db" "$FAKE_STATE/calls.log"
+    check "codesign may use the key" grep -qE "^security import .* -T $S/bin/codesign" "$FAKE_STATE/calls.log"
+    contains "next step hint" "$OUT" "make install"
+    check "no temp files (private key) left" test -z "$(/bin/ls -A "$S/tmp")"
+    # Idempotent.
+    : >"$FAKE_STATE/calls.log"
+    sid create; expect_rc "create again" 0
+    contains "says it exists" "$OUT" "already exists"
+    eq "no second import" 0 "$(calls '^security import')"
+    eq "same identity" "$h" "$(id_hash)"
+    # Remove, twice.
+    sid remove; expect_rc "remove" 0
+    eq "status after remove" absent "$(id_hash)"
+    sid remove; expect_rc "remove again" 0
+    contains "nothing to remove" "$OUT" "nothing to remove"
+    same_fp "create + remove" "$fp"
+}
+
+t_sign_identity_foreign_cert_is_never_deleted() {
+    # A certificate with our name that `make sign-identity` did not make.
+    local h=0123456789ABCDEF0123456789ABCDEF01234567
+    mkdir -p "$FAKE_STATE/identities/$h"
+    printf 'hyprMac Local Signing' >"$FAKE_STATE/identities/$h/name"
+    printf -- '-----BEGIN CERTIFICATE-----\nsubject=CN = hyprMac Local Signing, O = someone else\n-----END CERTIFICATE-----\n' \
+        >"$FAKE_STATE/identities/$h/cert.pem"
+    sid create; expect_rc "create keeps it" 0
+    contains "treated as existing" "$OUT" "already exists"
+    sid remove; expect_rc "remove refuses" 1
+    contains "explains" "$OUT" "was not created by 'make sign-identity'"
+    eq "still there" "$h" "$(id_hash)"
+    eq "no delete call" 0 "$(calls '^security delete-identity')"
+}
+
+t_sign_app_picks_identity_or_adhoc() {
+    local app="$S/src/hyprMac.app" h
+    sid sign "$app"; expect_rc "sign without identity" 0
+    eq "ad-hoc" "-" "$(fake_sig "$app")"
+    check "exact old codesign call" grep -qx "codesign --force --sign - --options runtime --identifier $BID $app" "$FAKE_STATE/calls.log"
+    eq "never asked the keychain to sign" 0 "$(calls '^security (import|delete)')"
+    sid create; h="$(id_hash)"
+    sid sign "$app"; expect_rc "sign with identity" 0
+    eq "signed with the identity" "$h" "$(fake_sig "$app")"
+    contains "says so" "$OUT" "signed hyprMac.app with \"hyprMac Local Signing\""
+    SIGN_ADHOC=1 sid sign "$app"; expect_rc "SIGN_ADHOC" 0
+    eq "SIGN_ADHOC=1 forces ad-hoc" "-" "$(fake_sig "$app")"
+    FAKE_SIGN_IDENTITY_FAILS=1 sid sign "$app"; expect_rc "identity signing fails" 0
+    contains "warns" "$OUT" "falling back to an ad-hoc signature"
+    eq "fell back to ad-hoc" "-" "$(fake_sig "$app")"
+    sid sign "$S/nope.app"; expect_rc "missing app" 1
+    sid frobnicate; expect_rc "unknown command" 1
+}
+
+t_install_without_identity_is_unchanged() {
+    local fp="$S/fp.before"
+    sys_fp >"$fp"
+    inst; expect_rc "install" 0
+    eq "no codesign calls" 0 "$(calls '^codesign')"
+    eq "no security calls but the read-only lookup" 0 "$(grep -E '^security ' "$FAKE_STATE/calls.log" | grep -vcE '^security find-identity ' || true)"
+    eq "bundle untouched (unsigned fake)" unsigned "$(fake_sig "$HOME/Applications/hyprMac.app")"
+    contains "preflight says ad-hoc" "$(inst --preflight; printf '%s' "$OUT")" "none → ad-hoc signature"
+    : >"$FAKE_STATE/calls.log"
+    make_fake_app "$APP_SRC" 2
+    inst; expect_rc "upgrade" 0
+    check "upgrade resets Accessibility as before" grep -q "^tccutil reset Accessibility $BID" "$FAKE_STATE/calls.log"
+    check "upgrade opens System Settings" grep -q "^open x-apple.systempreferences" "$FAKE_STATE/calls.log"
+    eq "no codesign calls" 0 "$(calls '^codesign')"
+    contains "re-enable message" "$OUT" "re-enable hyprMac under Accessibility"
+    uninst; expect_rc "uninstall" 0
+    same_fp "ad-hoc roundtrip" "$fp"
+}
+
+t_install_signs_with_preexisting_identity() {
+    local fp="$S/fp.before" h
+    sid create; h="$(id_hash)"
+    sys_fp >"$fp"
+    inst --preflight
+    contains "preflight shows identity" "$OUT" "present → the app is signed with it"
+    inst; expect_rc "install" 0
+    eq "installed app signed with the identity" "$h" "$(fake_sig "$HOME/Applications/hyprMac.app")"
+    check "manifest has no identity entry" test -z "$(grep signing_identity "$HOME/$STATE_DIR_REL/manifest")"
+    check "snapshot records the identity" grep -q '^signing-identity hyprMac Local Signing present' "$HOME/$STATE_DIR_REL/before.snapshot"
+    uninst; expect_rc "uninstall" 0
+    contains "verified" "$OUT" "rollback verified"
+    eq "identity that existed before install stays" "$h" "$(id_hash)"
+    same_fp "pre-existing identity" "$fp"
+}
+
+t_identity_created_while_installed_is_removed() {
+    local fp="$S/fp.before" h
+    sys_fp >"$fp"
+    inst; expect_rc "install" 0
+    check "snapshot says absent" grep -q '^signing-identity hyprMac Local Signing absent' "$HOME/$STATE_DIR_REL/before.snapshot"
+    sid create; expect_rc "create while installed" 0
+    contains "mentions update" "$OUT" "make update"
+    contains "mentions uninstall" "$OUT" "make uninstall"
+    check "recorded in the manifest" grep -qx "signing_identity_created ;" "$HOME/$STATE_DIR_REL/manifest"
+    h="$(id_hash)"
+    inst --preflight
+    contains "preflight shows the recorded entry" "$OUT" "created while installed → removed on uninstall"
+    # Upgrade now signs the installed app, and (old build was ad-hoc) resets Accessibility one last time.
+    : >"$FAKE_STATE/calls.log"
+    sign_src
+    inst; expect_rc "upgrade" 0
+    eq "installed app signed with the identity" "$h" "$(fake_sig "$HOME/Applications/hyprMac.app")"
+    check "old build was ad-hoc: Accessibility reset" grep -q "^tccutil reset Accessibility $BID" "$FAKE_STATE/calls.log"
+    # A later upgrade keeps the grant.
+    : >"$FAKE_STATE/calls.log"
+    make_fake_app "$APP_SRC" 3; sign_src
+    inst; expect_rc "second upgrade" 0
+    contains "keeps the grant" "$OUT" "the Accessibility grant still applies"
+    eq "no tccutil reset" 0 "$(calls '^tccutil reset')"
+    eq "System Settings not opened" 0 "$(calls '^open ')"
+    eq "signed with the identity" "$h" "$(fake_sig "$HOME/Applications/hyprMac.app")"
+    uninst; expect_rc "uninstall" 0
+    contains "verified" "$OUT" "rollback verified"
+    eq "identity removed again" absent "$(id_hash)"
+    same_fp "identity created while installed" "$fp"
+}
+
+t_upgrade_resigns_unsigned_build_and_tolerates_failure() {
+    local h
+    inst; expect_rc "install (no identity)" 0
+    sid create; h="$(id_hash)"
+    make_fake_app "$APP_SRC" 2            # build made before the identity existed: unsigned
+    inst; expect_rc "upgrade" 0
+    eq "installed copy re-signed" "$h" "$(fake_sig "$HOME/Applications/hyprMac.app")"
+    check "codesign on the installed path" grep -q "^codesign --force --sign $h --options runtime --identifier $BID $HOME/Applications/hyprMac.app" "$FAKE_STATE/calls.log"
+    # codesign failing keeps the install working (ad-hoc/unsigned copy stays).
+    make_fake_app "$APP_SRC" 3
+    FAKE_SIGN_IDENTITY_FAILS=1 inst; expect_rc "upgrade with failing identity signing" 0
+    contains "warns" "$OUT" "keeps its ad-hoc signature"
+    eq "version 3 installed" 3 "$(cat "$HOME/Applications/hyprMac.app/Contents/Resources/version")"
+    uninst; expect_rc "uninstall" 0
+    contains "verified" "$OUT" "rollback verified"
+    eq "identity created by us while installed is removed" absent "$(id_hash)"
+}
+
+t_failure_with_identity_rolls_back() {
+    local s fp h
+    for s in app lsregister launchagent_load done; do
+        setup_sandbox "idfail-$s"
+        sid create; h="$(id_hash)"
+        fp="$S/fp.before"
+        sys_fp >"$fp"
+        export HYPR_FAIL_AT="$s"
+        inst
+        [ "$RC" != 0 ] || bad "[$s] install should fail"
+        contains "[$s] rollback verified" "$OUT" "rollback verified"
+        eq "[$s] pre-existing identity kept" "$h" "$(id_hash)"
+        same_fp "failure at $s with identity" "$fp"
+    done
+}
+
+t_verify_ignores_snapshots_from_older_versions() {
+    inst; expect_rc "install" 0
+    # A before-snapshot written before the signing-identity line existed.
+    grep -v '^signing-identity ' "$HOME/$STATE_DIR_REL/before.snapshot" >"$S/old.snapshot"
+    cp "$S/old.snapshot" "$HOME/$STATE_DIR_REL/before.snapshot"
+    uninst; expect_rc "uninstall against an old snapshot" 0
+    contains "verified" "$OUT" "rollback verified"
+    # The line is compared when the before-snapshot has it.
+    inst; expect_rc "install again" 0
+    sid create; expect_rc "create while installed" 0
+    OUT="$("$SCRIPTS/verify_rollback.sh" 2>&1)"; RC=$?
+    expect_rc "verify sees the identity" 1
+    contains "diff names the identity" "$OUT" "+signing-identity hyprMac Local Signing present"
+}
+
+t_sign_identity_dry_run_and_make() {
+    local fp="$S/fp.before" out
+    sys_fp >"$fp"
+    sid create --dry-run; expect_rc "create --dry-run" 0
+    contains "describes the certificate" "$OUT" "self-signed code-signing certificate"
+    check "no mutating calls" test -z "$(grep -E "$MUTATING" "$FAKE_STATE/calls.log")"
+    eq "no openssl" 0 "$(calls '^openssl')"
+    same_fp "dry run" "$fp"
+    sid create; sid remove --dry-run; expect_rc "remove --dry-run" 0
+    contains "prints the delete" "$OUT" "security delete-identity"
+    check "still there" test "$(id_hash)" != absent
+    out="$(env -u DRY_RUN make -s -C "$ROOT" -n sign-identity DRY_RUN=1)"
+    contains "make sign-identity DRY_RUN=1" "$out" "scripts/sign_identity.sh create --dry-run"
+    out="$(env -u DRY_RUN make -s -C "$ROOT" -n sign-identity-remove)"
+    contains "make sign-identity-remove" "$out" "scripts/sign_identity.sh remove"
+    out="$(env -u DRY_RUN make -s -C "$ROOT" -n app)"
+    contains "make app signs through the script" "$out" "scripts/sign_identity.sh sign build/hyprMac.app"
+    not_contains "make app no longer calls codesign directly" "$out" "codesign --force"
+}
+
 # ------------------------------------------------------------------ runner --
 tap() { # name function
     case "$1" in *"$FILTER"*) ;; *) return 0 ;; esac
@@ -855,6 +1069,16 @@ tap "26 H2 interrupted uninstall is journaled and resumes safely" t_h2_interrupt
 tap "27 M4 -dict-add / defaults delete with merging import" t_m4_dict_add_and_merge_import
 tap "28 M9 no snapshot means exit 3 UNVERIFIED" t_m9_unverified_exit_3
 tap "29 M8 refuses root, empty HOME, HOME=/, missing HOME" t_m8_refuse_root_and_bad_home
+tap "30 sign-identity: create is idempotent, remove undoes it, non-extractable key, login keychain only" t_sign_identity_lifecycle
+tap "31 sign-identity: a same-named certificate we did not make is never deleted" t_sign_identity_foreign_cert_is_never_deleted
+tap "32 make app signing: identity when present, ad-hoc otherwise (and SIGN_ADHOC, failure fallback)" t_sign_app_picks_identity_or_adhoc
+tap "33 without an identity install and upgrade behave exactly as before" t_install_without_identity_is_unchanged
+tap "34 install signs with a pre-existing identity; uninstall leaves it" t_install_signs_with_preexisting_identity
+tap "35 identity created while installed is recorded, keeps the grant on upgrade, removed on uninstall" t_identity_created_while_installed_is_removed
+tap "36 upgrade re-signs an unsigned build; a failing sign does not break it" t_upgrade_resigns_unsigned_build_and_tolerates_failure
+tap "37 failures with an identity present roll back and keep the identity" t_failure_with_identity_rolls_back
+tap "38 verify ignores the signing line of older snapshots, compares it otherwise" t_verify_ignores_snapshots_from_older_versions
+tap "39 sign-identity --dry-run and the make targets" t_sign_identity_dry_run_and_make
 echo "1..$N"
 if [ "$FAILED" -gt 0 ]; then
     echo "# FAILED $FAILED of $N:$FAILED_NAMES"
