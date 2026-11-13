@@ -17,6 +17,9 @@ config = {
 
     split_ratio = 0.5,
 
+    -- Percent of a split moved per keyboard resize press (1–25, default 5)
+    resize_step = 5,
+
     -- Small applications (whose initial dimensions are small by default) are set to float by default.
     -- Windows smaller than min_width x min_height float automatically instead of tiling.
     float = {
@@ -42,6 +45,19 @@ config = {
         move_down = prefix .. "+cmd+j",        -- swap/move down (⌥⇧⌘J)
         move_up = prefix .. "+cmd+k",          -- swap/move up (⌥⇧⌘K)
         move_right = prefix .. "+cmd+l",       -- swap/move right (⌥⇧⌘L)
+
+        -- More actions. All are UNBOUND by default; uncomment to enable (suggested ⌥⇧ keys).
+        -- A chord macOS already uses (System Settings ▸ Keyboard Shortcuts) is skipped with a notice.
+        -- resize_left = prefix .. "+y",          -- move the boundary left / down / up / right by resize_step
+        -- resize_down = prefix .. "+u",
+        -- resize_up = prefix .. "+i",
+        -- resize_right = prefix .. "+o",
+        -- equalize = prefix .. "+e",             -- reset every split in this Space to split_ratio
+        -- rotate_split = prefix .. "+r",         -- flip the focused tile's split (side by side <-> stacked)
+        -- toggle_zoom = prefix .. "+z",          -- focused window fills the Space (monocle), toggle back
+        -- move_display_next = prefix .. "+period", -- move the focused window to the next / previous display
+        -- move_display_prev = prefix .. "+comma",
+        -- toggle_pause = prefix .. "+p",         -- pause / resume tiling (same as the menu item)
     },
 
     -- Per-app rules by bundle ID (find with: osascript -e 'id of app "Calculator"')
