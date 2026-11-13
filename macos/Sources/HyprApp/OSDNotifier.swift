@@ -79,6 +79,17 @@ public final class OSDNotifier {
         display(title: title, icon: icon)
     }
 
+    /// Shows a short plain message (a lightweight notice that would otherwise be a notification).
+    public func showNotice(_ text: String, symbol: String = "exclamationmark.triangle") {
+        if !Thread.isMainThread {
+            DispatchQueue.main.async { [weak self] in self?.showNotice(text, symbol: symbol) }
+            return
+        }
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 18, weight: .semibold))
+        display(title: text, icon: image)
+    }
+
     /// Returns the icon for switching spaces.
     public static func spaceIcon() -> NSImage? {
         let symbolName = "rectangle.stack"
@@ -240,8 +251,8 @@ public final class OSDNotifier {
     }
 
     private func targetFrame(for size: NSSize) -> NSRect {
-        let mouseLocation = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) })
+        // The display of the window acted on (focused window via AX), else the mouse's display.
+        let screen = OSDDisplay.currentScreen()
             ?? NSScreen.main
             ?? NSScreen.screens.first
 

@@ -1,11 +1,12 @@
 import AppKit
 import ApplicationServices
 import HyprKit
+import HyprPlatform
 import os
 
 let log = Logger(subsystem: "dev.codesmith28.hyprmac", category: "app")
 
-final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, TilingControllerDelegate {
     private let options: AppOptions
     private var statusItem: NSStatusItem!
     private var controller: TilingController?
@@ -14,6 +15,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
     private var signalSources: [DispatchSourceSignal] = []
     private var permissionTimer: Timer?
     private var pauseItem: NSMenuItem!
+    private var osdItem: NSMenuItem!
+    private var loginItem: NSMenuItem!
+    private var statusMenu: NSMenu!
+    private var grantInputItem: NSMenuItem!
+    /// Shared with the coordinator so both write the same state.json.
+    private let stateStore = AppStateStore()
+    private lazy var settings = AppSettings(store: stateStore)
+    private let login = LoginItem()
+    /// Set when tiling starts after a permission wait: shows a one-time "Tiling started" OSD.
+    private var announceStart = false
 
     init(options: AppOptions) { self.options = options }
 
@@ -22,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
         buildMenu()
         installSignalHandlers()
         notifier.requestAuthorization()
+        notifier.onAction = { [weak self] in self?.perform($0) }
         if AXIsProcessTrusted() {
             startTiling()
         } else {
@@ -46,17 +58,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
             guard AXIsProcessTrusted() else { return }
             t.invalidate()
             self?.statusItem.button?.appearsDisabled = false
+            self?.announceStart = true
             self?.startTiling()
         }
     }
 
     private func startTiling() {
         let configPath = options.configPath.map { URL(fileURLWithPath: $0) } ?? ConfigStore.defaultPath
-        let c = Coordinator.live(configPath: configPath)
+        let c = Coordinator.live(configPath: configPath, appStateStore: stateStore)
         c.delegate = self
         controller = c
         c.start()
+        if settings.paused { c.setPaused(true, reason: "user") }
         refreshMenu()
+        if announceStart {
+            announceStart = false
+            // The config loads on the coordinator queue; give it a moment so `osd_popup = false` is honoured.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self, self.osdEnabled else { return }
+                self.osdNotifier.showNotice("Tiling started", symbol: "square.split.2x2")
+            }
+        }
     }
 
     /// SIGHUP reloads the config; SIGTERM/SIGINT quit cleanly (tiling stopped,
@@ -91,38 +113,127 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
         menu.addItem(pauseItem)
         menu.addItem(NSMenuItem(title: "Retile All Windows", action: #selector(retile), keyEquivalent: ""))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Open Configuration…", action: #selector(openConfig), keyEquivalent: ","))
-        menu.addItem(NSMenuItem(title: "Reload Configuration", action: #selector(reloadConfig), keyEquivalent: "r"))
-        menu.addItem(NSMenuItem(title: "Keyboard Shortcuts…", action: #selector(showShortcuts), keyEquivalent: ""))
+        osdItem = NSMenuItem(title: "OSD Popups", action: #selector(toggleOSD), keyEquivalent: "")
+        menu.addItem(osdItem)
+        loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLogin), keyEquivalent: "")
+        menu.addItem(loginItem)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit hyprMac", action: #selector(quit), keyEquivalent: "q"))
+        // No key equivalents: an accessory app's menu can never receive them.
+        menu.addItem(NSMenuItem(title: "Open Configuration…", action: #selector(openConfig), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Reveal Configuration in Finder", action: #selector(revealConfig), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Reload Configuration", action: #selector(reloadConfig), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Keyboard Shortcuts…", action: #selector(showShortcuts), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Copy Log Command", action: #selector(copyLogCommand), keyEquivalent: ""))
+        menu.addItem(.separator())
+        let statusParent = NSMenuItem(title: "Status", action: nil, keyEquivalent: "")
+        statusMenu = NSMenu(title: "Status")
+        statusParent.submenu = statusMenu
+        menu.addItem(statusParent)
+        grantInputItem = NSMenuItem(title: "Grant Input Monitoring…", action: #selector(grantInputMonitoring), keyEquivalent: "")
+        menu.addItem(grantInputItem)
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Quit hyprMac", action: #selector(quit), keyEquivalent: ""))
         for item in menu.items { item.target = self }
+        menu.delegate = self
         statusItem.menu = menu
     }
 
+    /// Status rows, login state and the Input Monitoring item are re-read every time the menu opens.
+    func menuNeedsUpdate(_ menu: NSMenu) { refreshMenu() }
+
     private func refreshMenu() {
         pauseItem.title = (controller?.isPaused ?? false) ? "Resume Tiling" : "Pause Tiling"
-        statusItem.button?.appearsDisabled = controller?.isPaused ?? true
+        let paused = controller?.isPaused ?? true
+        statusItem.button?.appearsDisabled = paused
+        updateStatusIcon(paused: paused)
+        osdItem.state = osdEnabled ? .on : .off
+        loginItem.isEnabled = login.isAvailable
+        loginItem.state = login.isAvailable && login.isEnabled ? .on : .off
+        refreshStatusMenu()
+    }
+
+    /// A different symbol while paused, so the state is visible even when the icon isn't dimmed.
+    private func updateStatusIcon(paused: Bool) {
+        let name = paused ? "pause.rectangle" : "square.split.2x2"
+        guard let button = statusItem.button else { return }
+        button.image = NSImage(systemSymbolName: name, accessibilityDescription: "hyprMac")
+            ?? NSImage(systemSymbolName: "square.split.2x2", accessibilityDescription: "hyprMac")
+        button.image?.isTemplate = true
+    }
+
+    private var keyBindings: KeyBindings { controller?.keyBindings ?? .defaults }
+
+    /// The menu's OSD choice, else the config's `osd_popup` (true before tiling has started).
+    private var osdEnabled: Bool { settings.osdEnabled(configDefault: controller?.osdPopup ?? true) }
+
+    private func refreshStatusMenu() {
+        let snapshot = SystemSnapshot.current(keys: keyBindings)
+        statusMenu.removeAllItems()
+        for row in Diagnostics.rows(snapshot) {
+            let item = NSMenuItem(title: row.text, action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            statusMenu.addItem(item)
+        }
+        grantInputItem.isHidden = snapshot.inputMonitoring
     }
 
     @objc private func togglePause() {
         guard let c = controller else { return }
-        c.setPaused(!c.isPaused, reason: "user")
+        let paused = !c.isPaused
+        c.setPaused(paused, reason: "user")
+        settings.paused = paused
         refreshMenu()
     }
     @objc private func retile() { controller?.retileAll() }
     @objc private func reloadConfig() { controller?.reloadConfig() }
     @objc private func quit() { NSApp.terminate(nil) }
-    @objc private func showShortcuts() { Onboarding.showShortcuts() }
+    @objc private func showShortcuts() { Onboarding.showShortcuts(rows: ShortcutList.rows(for: keyBindings)) }
+
+    @objc private func toggleOSD() {
+        settings.osdPopupOverride = !osdEnabled
+        refreshMenu()
+    }
+
+    @objc private func toggleLogin() {
+        if !login.setEnabled(!login.isEnabled) { log.error("launch-at-login toggle failed") }
+        refreshMenu()
+    }
+
+    @objc private func copyLogCommand() {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(AppDelegate.logCommand, forType: .string)
+    }
+    static let logCommand = "log stream --level info --predicate 'subsystem == \"dev.codesmith28.hyprmac\"'"
+
+    @objc private func grantInputMonitoring() {
+        _ = CGRequestListenEventAccess()
+        perform(.inputMonitoring)
+    }
+
+    @objc private func revealConfig() {
+        if let url = ensureConfig() { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+    }
+
+    /// What a notification click opens: a Settings pane, or the config file.
+    private func perform(_ action: NotificationAction) {
+        if let url = action.settingsURL { NSWorkspace.shared.open(url) }
+        else if let url = ensureConfig() { NSWorkspace.shared.open(url) }
+    }
 
     @objc private func openConfig() {
+        if let url = ensureConfig() { NSWorkspace.shared.open(url) }
+    }
+
+    /// The config file, created from the bundled example if missing.
+    private func ensureConfig() -> URL? {
         let path = options.configPath.map { URL(fileURLWithPath: $0) } ?? ConfigStore.defaultPath
         let example = Bundle.main.url(forResource: "init.lua", withExtension: "example")
         do {
-            let url = try ConfigStore(path: path).ensureExists(example: example)
-            NSWorkspace.shared.open(url)
+            return try ConfigStore(path: path).ensureExists(example: example)
         } catch {
             notifier.post(title: "Couldn't create configuration", body: error.localizedDescription)
+            return nil
         }
     }
 
@@ -144,14 +255,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
     private func handle(_ notice: TilingNotice, from controller: TilingController) {
         switch notice {
         case let .missingSpace(n, count):
+            if osdEnabled { osdNotifier.showNotice("Desktop \(n) doesn't exist"); break }
             notifier.post(title: "Desktop \(n) doesn't exist",
                           body: count == 1 ? "You have 1 desktop. Add more in Mission Control."
                                            : "You have \(count) desktops. Add more in Mission Control.",
                           id: "missing-space")
         case let .throwFailed(n, reason):
+            if osdEnabled {
+                log.notice("throw to Desktop \(n) failed: \(reason, privacy: .public)")
+                osdNotifier.showNotice("Couldn't move to Desktop \(n)")
+                break
+            }
             notifier.post(title: "Couldn't move window to Desktop \(n)", body: reason, id: "throw")
         case let .configError(msg):
-            notifier.post(title: "Configuration error — kept previous settings", body: msg, id: "config")
+            notifier.post(title: "Configuration error — kept previous settings", body: msg, id: "config", action: .config)
         case .configLoaded:
             break
         case .stageManagerEnabled:
@@ -163,32 +280,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
         case let .hotkeysUnavailable(what):
             notifier.post(title: "Some shortcuts are unavailable",
                           body: "\(what) — another app may be using them. Change them in init.lua (keys).",
-                          id: "hotkeys")
+                          id: "hotkeys", action: .config)
         case let .switchShortcutMismatch(configured, native):
             let body = native.isEmpty
                 ? "No “Switch to Desktop N” shortcut is enabled in System Settings ▸ Keyboard ▸ Keyboard Shortcuts ▸ Mission Control."
                 : "keys.switch is \(configured), but macOS switches Desktops with \(native.joined(separator: " / ")). Make them match."
-            notifier.post(title: "Desktop switch shortcut mismatch", body: body, id: "switch-shortcut")
+            notifier.post(title: "Desktop switch shortcut mismatch", body: body, id: "switch-shortcut",
+                          action: .keyboardShortcuts)
         case .permissionLost:
             notifier.post(title: "Accessibility permission was removed",
                           body: "hyprMac paused. Re-enable it in System Settings ▸ Privacy & Security ▸ Accessibility.",
-                          id: "permission")
+                          id: "permission", action: .accessibility)
             controller.stop()
             waitForPermission()
         case let .windowStateToggled(app, state):
-            if controller.osdPopup {
+            if osdEnabled {
                 osdNotifier.show(app: app, state: state)
             }
         case let .windowCentered(app):
-            if controller.osdPopup {
+            if osdEnabled {
                 osdNotifier.showCentered(app: app)
             }
         case let .spaceSwitched(toSpace):
-            if controller.osdPopup {
+            if osdEnabled {
                 osdNotifier.showSpaceSwitch(toSpace: toSpace)
             }
         case let .windowThrown(app, fromSpace, toSpace):
-            if controller.osdPopup {
+            if osdEnabled {
                 osdNotifier.showSpaceThrow(app: app, fromSpace: fromSpace, toSpace: toSpace)
             }
         }

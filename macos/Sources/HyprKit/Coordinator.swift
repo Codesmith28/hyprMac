@@ -142,6 +142,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
 
     public var isPaused: Bool { mirrorLock.lock(); defer { mirrorLock.unlock() }; return pausedMirror }
     public var osdPopup: Bool { configStore.current.osdPopup }
+    public var keyBindings: KeyBindings { configStore.current.keys }
 
     public init(deps: Dependencies, configStore: ConfigStore, appStateStore: AppStateStore = AppStateStore(),
                 tuning: Tuning = Tuning()) {
@@ -160,7 +161,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     }
 
     /// Production wiring.
-    public static func live(configPath: URL, statePath: URL = AppStateStore.defaultPath) -> Coordinator {
+    public static func live(configPath: URL, statePath: URL = AppStateStore.defaultPath,
+                            appStateStore: AppStateStore? = nil) -> Coordinator {
         let deps = Dependencies(
             ax: SystemAXBackend(), windowServer: SystemWindowServerQuery(),
             spaces: SkyLightSpaceProvider(), displays: SystemDisplayProvider(), apps: SystemAppProvider(),
@@ -169,7 +171,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             clock: SystemTimeSource(),
             makeEvents: { queue, handler in PlatformEvents(queue: queue, handler: handler) },
             onMain: { block in DispatchQueue.main.async(execute: block) })
-        return Coordinator(deps: deps, configStore: ConfigStore(path: configPath), appStateStore: AppStateStore(path: statePath))
+        return Coordinator(deps: deps, configStore: ConfigStore(path: configPath), appStateStore: appStateStore ?? AppStateStore(path: statePath))
     }
 
     // MARK: TilingController
