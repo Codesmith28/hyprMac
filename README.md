@@ -47,7 +47,7 @@ After install, System Settings opens to Privacy & Security ▸ Accessibility. Tu
 - **App.** Copies `hyprMac.app` to `~/Applications/`. An existing copy is moved aside and put back on uninstall.
 - **Config.** Creates `~/.config/hyprmac/init.lua` if that folder doesn't exist. Uninstall removes it only if install created it. Keep it with `KEEP_CONFIG=1 make uninstall`.
 - **Login item.** Writes `~/Library/LaunchAgents/dev.codesmith28.hyprmac.plist`.
-- **Accessibility.** Resets hyprMac's entry, so the new signature starts clean.
+- **Accessibility.** Resets hyprMac's entry, so the new signature starts clean. Optional: `make sign-identity` makes a local signing certificate so the grant survives upgrades.
 - **App data.** Backs up existing preferences, caches and notification settings. Uninstall removes hyprMac's data and restores the backups.
 
 Notes:
@@ -113,6 +113,7 @@ hyprMac keeps native Spaces and needs no SIP changes. It can't create or delete 
 | `make test-e2e` | real-Mac end-to-end suite (needs Accessibility; see [testing](docs/TESTING.md)) |
 | `make preflight` | show what install would change, without changing anything |
 | `make install` / `make uninstall` | install or remove, reversibly (`DRY_RUN=1` to only print) |
+| `make sign-identity` | optional: stable local signing identity, so Accessibility survives upgrades (`sign-identity-remove` undoes it) |
 | `make verify-rollback` | compare the current state with the pre-install snapshot |
 | `make bench` | latency benchmark of the core |
 | `make clean` | remove build products |
