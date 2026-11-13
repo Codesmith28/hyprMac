@@ -27,8 +27,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Tiling
     /// Set when tiling starts after a permission wait: shows a one-time "Tiling started" OSD.
     private var announceStart = false
     private lazy var cheatsheet = CheatsheetController(
-        entries: { [weak self] in CheatsheetCatalog.entries(for: self?.keyBindings ?? .defaults) },
-        extras: { [weak self] in CheatsheetCatalog.extras(for: self?.keyBindings ?? .defaults) })
+        entries: { [weak self] in CheatsheetCatalog.entries(for: self?.cheatsheetBindings ?? .defaults) },
+        extras: { [weak self] in CheatsheetCatalog.extras(for: self?.cheatsheetBindings ?? .defaults) })
     /// Registered apart from the tiling hotkeys, so it works while paused or before Accessibility is granted.
     private lazy var shortcutsHotkey = ShortcutsHotkey { [weak self] in self?.cheatsheet.toggle() }
 
@@ -176,6 +176,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, Tiling
     }
 
     private var keyBindings: KeyBindings { controller?.keyBindings ?? .defaults }
+
+    /// What the cheatsheet shows: the running config, or — before tiling has started (no Accessibility
+    /// yet) — `init.lua` read straight from disk, so it never shows defaults that don't match the file.
+    private var cheatsheetBindings: KeyBindings {
+        if let controller { return controller.keyBindings }
+        let store = ConfigStore(path: options.configPath.map { URL(fileURLWithPath: $0) } ?? ConfigStore.defaultPath)
+        store.load()
+        return store.current.keys
+    }
 
     /// The menu's OSD choice, else the config's `osd_popup` (true before tiling has started).
     private var osdEnabled: Bool { settings.osdEnabled(configDefault: controller?.osdPopup ?? true) }

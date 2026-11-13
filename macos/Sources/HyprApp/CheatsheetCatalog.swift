@@ -67,8 +67,8 @@ enum CheatsheetCatalog {
     /// Keycaps of a shortcut: its modifiers, then the key.
     static func caps(_ spec: KeySpec) -> [String] { caps(spec.modifiers) + [ShortcutList.keyGlyph(spec.key)] }
 
-    /// Collapses direction bindings into "⌥⇧ H J K L" / "⌥⇧ ← ↓ ↑ →" when they share modifiers,
-    /// else lists each binding on its own.
+    /// Collapses direction bindings into one keycap per family, "⌥⇧ [H/J/K/L]" and "⌥⇧ [←/↓/↑/→]"
+    /// (press any one), when they share modifiers; else lists each binding on its own.
     static func directional(_ items: [(direction: Direction, spec: KeySpec)]) -> [[String]] {
         let order: [Direction] = [.left, .down, .up, .right]
         let sorted = items.sorted { (order.firstIndex(of: $0.direction) ?? 0) < (order.firstIndex(of: $1.direction) ?? 0) }
@@ -78,7 +78,7 @@ enum CheatsheetCatalog {
             let group = sorted.filter { arrows.contains($0.spec.key) == isArrow }
             guard let first = group.first else { continue }
             if group.allSatisfy({ $0.spec.modifiers == first.spec.modifiers }) {
-                result.append(caps(first.spec.modifiers) + group.map { ShortcutList.keyGlyph($0.spec.key) })
+                result.append(caps(first.spec.modifiers) + [group.map { ShortcutList.keyGlyph($0.spec.key) }.joined(separator: "/")])
             } else {
                 result += group.map { caps($0.spec) }
             }
