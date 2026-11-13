@@ -59,14 +59,15 @@ config = {
         move_up = prefix .. "+cmd+k",          -- swap/move up (⌥⇧⌘K)
         move_right = prefix .. "+cmd+l",       -- swap/move right (⌥⇧⌘L)
 
-        -- More actions. All are UNBOUND by default; uncomment to enable (suggested ⌥⇧ keys).
+        rotate_split = prefix .. "+r",         -- flip the focused tile's split, side by side <-> stacked (⌥⇧R)
+
+        -- More actions. All are UNBOUND by default (except rotate_split above); uncomment to enable (suggested ⌥⇧ keys).
         -- A chord macOS already uses (System Settings ▸ Keyboard Shortcuts) is skipped with a notice.
         -- resize_left = prefix .. "+y",          -- move the boundary left / down / up / right by resize_step
         -- resize_down = prefix .. "+u",
         -- resize_up = prefix .. "+i",
         -- resize_right = prefix .. "+o",
         -- equalize = prefix .. "+e",             -- reset every split in this Space to split_ratio
-        -- rotate_split = prefix .. "+r",         -- flip the focused tile's split (side by side <-> stacked)
         -- toggle_zoom = prefix .. "+z",          -- focused window fills the Space (monocle), toggle back
         -- move_display_next = prefix .. "+period", -- move the focused window to the next / previous display
         -- move_display_prev = prefix .. "+comma",

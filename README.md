@@ -22,7 +22,7 @@ The layout engine is C++20 behind a C API, the macOS layer is Swift, and the con
 - **Per display.** Each display tiles from its own active Space.
 - **Floating.** Dialogs, sheets, panels and popovers are never tiled. Small windows float, like in Krohnkite, and so do non-resizable windows, Archive Utility and Calculator. A window that keeps resizing itself away from its tile is floated instead of fought.
 - **Resize by hand.** Drag a tile's edge and the split follows. See [usage](docs/USAGE.md#resizing-by-hand).
-- **Change a split.** ⇧-drop a window on the side of another tile to re-split, or use **Flip Split** in the menu.
+- **Change a split.** ⇧-drop a window on the side of another tile to re-split, or press ⌥⇧R (**Flip Split** in the menu).
 
 ## Requirements
 - macOS 14 or later. Tested on macOS 27.2, Apple silicon.
@@ -79,7 +79,8 @@ config = {
         center_window = "alt+shift+c",
         focus_left = "alt+shift+h", focus_down = "alt+shift+j", focus_up = "alt+shift+k", focus_right = "alt+shift+l",
         move_left = "alt+shift+cmd+h", move_down = "alt+shift+cmd+j", move_up = "alt+shift+cmd+k", move_right = "alt+shift+cmd+l",
-        -- unbound by default (set under keys): resize_left/down/up/right, equalize, rotate_split, toggle_zoom, move_display_next/prev, toggle_pause
+        rotate_split = "alt+shift+r",
+        -- unbound by default (set under keys): resize_left/down/up/right, equalize, toggle_zoom, move_display_next/prev, toggle_pause
     },
     rules = { ignore = {}, float = {} },           -- bundle ids: never managed / always floating
     smart_gaps = false,           -- one tiled window on a Space: zero gaps

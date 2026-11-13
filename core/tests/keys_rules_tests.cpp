@@ -56,10 +56,10 @@ Extras extras(const std::string &lua) {
 bool has(const std::string &hay, const std::string &needle) { return hay.find(needle) != std::string::npos; }
 
 const char *kDefaultJson =
-    R"({"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt"},"rules":{"ignore":[],"float":[]},"osd_popup":true})";
+    R"({"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt","rotate_split":"alt+shift+r"},"rules":{"ignore":[],"float":[]},"osd_popup":true})";
 
 const char *kShippedExampleJson =
-    R"({"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt","center_window":"alt+shift+c","focus_left":"alt+shift+h","focus_down":"alt+shift+j","focus_up":"alt+shift+k","focus_right":"alt+shift+l","move_left":"alt+shift+cmd+h","move_down":"alt+shift+cmd+j","move_up":"alt+shift+cmd+k","move_right":"alt+shift+cmd+l"},"rules":{"ignore":["com.docker.docker","com.mongodb.compass"],"float":["com.apple.systempreferences","com.apple.calculator"]},"osd_popup":true})";
+    R"({"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt","center_window":"alt+shift+c","focus_left":"alt+shift+h","focus_down":"alt+shift+j","focus_up":"alt+shift+k","focus_right":"alt+shift+l","move_left":"alt+shift+cmd+h","move_down":"alt+shift+cmd+j","move_up":"alt+shift+cmd+k","move_right":"alt+shift+cmd+l","rotate_split":"alt+shift+r"},"rules":{"ignore":["com.docker.docker","com.mongodb.compass"],"float":["com.apple.systempreferences","com.apple.calculator"]},"osd_popup":true})";
 
 std::string parse_err(const char *text, bool key) {
     hypr::Chord c;
@@ -193,10 +193,14 @@ TEST_CASE("cross-field validation: the new actions") {
 
 // ---------- the loader ----------
 
-TEST_CASE("extras: every new action is accepted, canonical and unbound by default") {
+TEST_CASE("extras: every new action is accepted, canonical and unbound by default (except rotate_split = alt+shift+r)") {
     auto e = extras("config = { keys = { toggle_float = 'ctrl+alt+t' } }\n");
     REQUIRE(e.status == HM_OK);
-    for (const hypr::ActionKey &a : hypr::kActionKeys) CHECK_FALSE(has(e.json, std::string("\"") + a.name + "\""));
+    for (const hypr::ActionKey &a : hypr::kActionKeys) {
+        if (std::string(a.name) == "rotate_split") continue;
+        CHECK_FALSE(has(e.json, std::string("\"") + a.name + "\""));
+    }
+    CHECK(has(e.json, R"("rotate_split":"alt+shift+r")"));
 
     const char *lua =
         "config = { keys = {\n"
@@ -272,7 +276,7 @@ TEST_CASE("extras: defaults equal the hard-coded behaviour") {
 TEST_CASE("extras: custom keys come back canonical") {
     auto e = extras("config = { keys = { throw = 'Ctrl+Alt', toggle_float = 'ALT+shift+Space', switch = 'ctrl' } }\n");
     REQUIRE(e.status == HM_OK);
-    CHECK(e.json == R"({"keys":{"throw":"ctrl+alt","toggle_float":"alt+shift+space","switch":"ctrl"},)"
+    CHECK(e.json == R"({"keys":{"throw":"ctrl+alt","toggle_float":"alt+shift+space","switch":"ctrl","rotate_split":"alt+shift+r"},)"
                     R"("rules":{"ignore":[],"float":[]},"osd_popup":true})");
     e = extras("config = { keys = { toggle_float = 'ctrl+alt+t' } }\n");  // partial table: others keep defaults
     REQUIRE(e.status == HM_OK);

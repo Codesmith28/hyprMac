@@ -37,22 +37,30 @@ struct CheatsheetView: View {
         .padding(.horizontal, 20).padding(.vertical, 14)
     }
 
-    /// Opt-in actions and mouse gestures: compact cells, no animation. Keycaps when bound, the
-    /// `keys.<name>` to set in init.lua when not.
+    /// Bound opt-in actions and mouse gestures as compact cells; every unbound action in one wrapped
+    /// line naming the `keys.<name>` that binds it, so nothing is missing and the card stays short.
     private var extrasSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let shown = extras.filter { if case .unbound = $0.binding { false } else { true } }
+        let unbound: [String] = extras.compactMap { if case .unbound(let key) = $0.binding { key } else { nil } }
+        return VStack(alignment: .leading, spacing: 0) {
             Divider().opacity(0.5)
-            HStack(spacing: 6) {
-                Text("More").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                Text("· keys.* entries are unbound: set them in init.lua")
-                    .font(.system(size: 11)).foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 6)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .leading), count: 3),
+            Text("More").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 6)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 20, alignment: .leading), count: 3),
                       alignment: .leading, spacing: 4) {
-                ForEach(extras) { ExtraCell(extra: $0) }
+                ForEach(shown) { ExtraCell(extra: $0) }
             }
             .padding(.horizontal, 20)
+            if !unbound.isEmpty {
+                (Text("Unbound, set under keys in init.lua: ").foregroundStyle(.secondary)
+                    + Text(unbound.joined(separator: " · ")).font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary))
+                    .font(.system(size: 11))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 20).padding(.top, 8)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Unbound actions")
+                    .accessibilityValue(unbound.map { "keys.\($0)" }.joined(separator: ", "))
+            }
         }
         .padding(.bottom, 10)
     }

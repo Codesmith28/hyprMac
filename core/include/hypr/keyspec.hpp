@@ -47,20 +47,20 @@ struct Keys {
     Chord move_down{0, ""};
     Chord move_up{0, ""};
     Chord move_right{0, ""};
-    // Actions that ship unbound: an empty key means "no shortcut".
+    // Actions that ship unbound (an empty key means "no shortcut"), except rotate_split (⌥⇧R).
     Chord resize_left{0, ""};
     Chord resize_down{0, ""};
     Chord resize_up{0, ""};
     Chord resize_right{0, ""};
     Chord equalize{0, ""};
-    Chord rotate_split{0, ""};
+    Chord rotate_split{kModAlt | kModShift, "r"};
     Chord toggle_zoom{0, ""};
     Chord move_display_next{0, ""};
     Chord move_display_prev{0, ""};
     Chord toggle_pause{0, ""};
 };
 
-// The unbound-by-default actions, by their `keys.<name>`.
+// The opt-in actions, by their `keys.<name>` (unbound by default, except rotate_split).
 struct ActionKey {
     const char *name;
     Chord Keys::*chord;

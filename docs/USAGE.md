@@ -12,15 +12,15 @@ hyprMac lives in the menu bar (the 2×2 grid icon). It has no Dock icon. After `
 | ⌥⇧C | Center the focused window. If tiled, floats and centers it at its original size. |
 | ⌥⇧H / J / K / L or ⌥⇧← / ↓ / ↑ / → | Move focus in the BSP tree (left, down, up, right). |
 | ⌥⇧⌘H / J / K / L or ⌥⇧⌘← / ↓ / ↑ / → | Move/swap the focused window in the BSP tree (left, down, up, right). Focus follows the moved window. |
+| ⌥⇧R | Flip the focused tile's split between side by side and stacked (`rotate_split`, also in the menu). Rebind it under `keys`; it can't be turned off. |
 | ⌥⇧/ | Open the shortcuts cheatsheet. Press it again, or Esc, to close. Works even while tiling is paused. Not configurable. |
 | *unbound* `resize_left` / `down` / `up` / `right` | Move the nearest split boundary that way by `resize_step` percent. |
 | *unbound* `equalize` | Reset every split in this Space to `split_ratio`. |
-| *unbound* `rotate_split` | Flip the focused tile's split between side by side and stacked. |
 | *unbound* `toggle_zoom` | The focused window fills the Space (outer gap kept); press again to restore the tiles. Ends when it closes, another tile gets focus or a window joins. |
 | *unbound* `move_display_next` / `prev` | Move the focused window to the next / previous display (left to right, wrapping), into that display's current Space. |
 | *unbound* `toggle_pause` | Pause or resume tiling, like the menu item. |
 
-These are the built-in defaults. The rows marked *unbound* have no shortcut until you set one under `keys`; `config/init.lua.example` has suggested ⌥⇧ bindings. You can change them under [keys](#keys-and-app-rules). The example config lists the H/J/K/L keys explicitly. Each arrow key stays bound next to its letter key, with the same modifiers. The menu's **Keyboard Shortcuts…** (or ⌥⇧/) opens an animated cheatsheet of your active shortcuts. Its **More** section lists every opt-in action too: bound ones show their keys, unbound ones show the `keys.` entry to set, and the mouse gestures (drag an edge to resize, drop a titlebar to swap, ⇧-drop to re-split) are there as well.
+These are the built-in defaults. The rows marked *unbound* have no shortcut until you set one under `keys`; `config/init.lua.example` has suggested ⌥⇧ bindings. You can change them under [keys](#keys-and-app-rules). The example config lists the H/J/K/L keys explicitly. Each arrow key stays bound next to its letter key, with the same modifiers. The menu's **Keyboard Shortcuts…** (or ⌥⇧/) opens an animated cheatsheet of your active shortcuts. Its **More** section lists every opt-in action too: bound ones show their keys, and unbound ones are listed with the `keys.` entry that binds them, and the mouse gestures (drag an edge to resize, drop a titlebar to swap, ⇧-drop to re-split) are there as well.
 
 New windows split the focused window along its longer side and take the second half. Close, minimize, hide or fullscreen a window and the rest reflow. When it comes back, it gets its old tile.
 
@@ -43,7 +43,7 @@ The log line is `{"event":"user_resize",...}`.
 | Item | What it does |
 |---|---|
 | **Pause Tiling** / **Resume Tiling** | Stops or restarts tiling. While paused, windows stay where they are, and the icon is dimmed and changes to a pause symbol. Remembered across launches. |
-| **Flip Split of Focused Window** | Flips the focused tile's split between side by side and stacked, same as `rotate_split`, with no shortcut needed. |
+| **Flip Split of Focused Window** | Flips the focused tile's split between side by side and stacked, same as ⌥⇧R (`rotate_split`). |
 | **Retile All Windows** | Lays out every Space again. Also gives back windows that were floated for fighting their tile. |
 | **OSD Popups** | Checkmark toggle for the small on-screen popups. Remembered in `~/.config/hyprmac/state.json`; until you use it, `osd_popup` in the config decides. |
 | **Launch at Login** | Checkmark toggle. Enabled only when `make install` created the login item. Uses `launchctl enable/disable`. |

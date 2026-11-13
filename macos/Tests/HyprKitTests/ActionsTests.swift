@@ -99,10 +99,12 @@ import Testing
         #expect(rect(-1920, 25, 1920, 1055).contains(h.frame(a)!))
     }
 
-    @Test func actionsAreUnboundByDefaultAndBoundFromConfig() {
+    @Test func actionsAreUnboundByDefaultExceptFlipSplitAndBoundFromConfig() {
         var h = started()
         let defaults = Set(h.hotkeys.registrations.map(\.id))
-        #expect(KeyAction.allCases.allSatisfy { !defaults.contains(HotkeyCenter.hotkeyID(for: $0)) })
+        #expect(KeyAction.allCases.filter { $0 != .rotateSplit }.allSatisfy { !defaults.contains(HotkeyCenter.hotkeyID(for: $0)) })
+        // Flip split ships on ⌥⇧R (keyCode 15).
+        #expect(h.hotkeys.registrations.contains { $0.id == HotkeyCenter.hotkeyID(for: .rotateSplit) && $0.keyCode == 15 })
         h = started("config = { keys = { resize_left = 'alt+shift+y', toggle_pause = 'alt+shift+p' } }\n")
         let regs = h.hotkeys.registrations
         #expect(regs.contains { $0.id == HotkeyCenter.hotkeyID(for: .resizeLeft) && $0.keyCode == 16 })

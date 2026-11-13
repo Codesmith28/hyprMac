@@ -9,15 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [0.3.0] - 2026-11-13
 
 ### 🚀 Added
-- ↔️ **Split Direction**: ⇧-drop a tile on another's edge to re-split side by side or stacked, or use **Flip Split** in the menu (or bind `rotate_split`).
-- ⌨️ **Keyboard Actions**: Resize, equalize, rotate split, zoom, move to display and pause hotkeys, all unbound by default.
+- ↔️ **Split Direction**: ⇧-drop a tile on another's edge to re-split side by side or stacked, or press `⌥⇧R` / use **Flip Split** in the menu.
+- ⌨️ **Keyboard Actions**: Flip split on `⌥⇧R`, plus resize, equalize, zoom, move to display and pause hotkeys, unbound by default.
 - 🛡️ **Shortcut Conflict Check**: Chords that clash with an enabled macOS shortcut are skipped and reported.
 - 📋 **Rules & Gaps**: Title-based float/ignore rules, `smart_gaps`, per-display gaps, optional focus-follows-mouse, experimental pin-app-to-Desktop.
 - 🔄 **Config Tools**: Auto-reload on save and `hyprMac --check-config`.
 - 🎛️ **Menu**: Status, Launch at Login, OSD toggle, Reveal Configuration and Copy Log Command; pause is remembered.
 - 🔑 **Stable Signing**: Opt-in `make sign-identity` keeps the Accessibility grant across upgrades.
 - 📦 **CI & Release**: GitHub Actions, tag-driven releases and a Homebrew cask template.
-- 🎞️ **Shortcut Cheatsheet**: Minimal modal with a looping animation per shortcut, opened with `⌥⇧/` or from the menu and closed with `Esc`. Also lists every opt-in action (unbound ones show the `keys.` entry to set) and the mouse gestures.
+- 🎞️ **Shortcut Cheatsheet**: Minimal modal with a looping animation per shortcut, opened with `⌥⇧/` or from the menu and closed with `Esc`. Also lists every opt-in action (unbound ones with the `keys.` entry to set) and the mouse gestures.
 
 ### 🔄 Changed
 - 🧹 **Menu Shortcuts**: Removed the ⌘, ⌘R and ⌘Q hints, which could never fire.

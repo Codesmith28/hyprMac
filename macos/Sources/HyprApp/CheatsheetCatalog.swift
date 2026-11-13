@@ -74,7 +74,7 @@ enum CheatsheetCatalog {
         }
         return actions + [
             CheatsheetExtra(title: "Resize a tile", binding: .gesture("drag its edge")),
-            CheatsheetExtra(title: "Swap two tiles", binding: .gesture("drop a titlebar on one")),
+            CheatsheetExtra(title: "Swap tiles", binding: .gesture("drop on a tile")),
         ]
     }
 

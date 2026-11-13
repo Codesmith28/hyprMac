@@ -52,19 +52,20 @@ struct CheatsheetCatalogTests {
         let all = CheatsheetCatalog.extras(for: keys)
         for action in KeyAction.allCases {
             #expect(all.contains { $0.title == CheatsheetCatalog.shortTitle(for: action) }, "\(action) missing")
-            #expect(all.contains { $0.binding == .unbound(configKey: action.rawValue) })
+            if action != .rotateSplit { #expect(all.contains { $0.binding == .unbound(configKey: action.rawValue) }) }
         }
-        #expect(extra("Flip split") == .unbound(configKey: "rotate_split"))
-        keys.actionKeys[.rotateSplit] = try #require(KeySpec(parsing: "alt+shift+r"))
+        #expect(extra("Flip split") == .keys(["⌥", "⇧", "R"]))  // the one opt-in action with a default key
+        #expect(extra("Zoom window") == .unbound(configKey: "toggle_zoom"))
+        keys.actionKeys[.rotateSplit] = try #require(KeySpec(parsing: "ctrl+alt+r"))
         keys.actionKeys[.toggleZoom] = try #require(KeySpec(parsing: "alt+shift+z"))
-        #expect(extra("Flip split", keys) == .keys(["⌥", "⇧", "R"]))
+        #expect(extra("Flip split", keys) == .keys(["⌃", "⌥", "R"]))
         #expect(extra("Zoom window", keys) == .keys(["⌥", "⇧", "Z"]))
         #expect(extra("Equalize splits", keys) == .unbound(configKey: "equalize"))
     }
 
     @Test func extrasIncludeMouseGestures() {
         #expect(extra("Resize a tile") == .gesture("drag its edge"))
-        #expect(extra("Swap two tiles") == .gesture("drop a titlebar on one"))
+        #expect(extra("Swap tiles") == .gesture("drop on a tile"))
     }
 
     @Test func helpShortcutIsPrefixSlash() {

@@ -76,7 +76,7 @@ import Testing
 
     @Test func registrationsFollowTheSpec() {
         let regs = HotkeyCenter.registrations(for: custom)
-        #expect(regs.count == 27)
+        #expect(regs.count == 28)  // 9 throws + toggle float + center + 8 focus + 8 move + flip split
         let ctrlAlt = UInt32(controlKey | optionKey)
         for n in 1...9 {
             #expect(regs[n - 1].id == UInt32(n) && regs[n - 1].modifiers == ctrlAlt)
