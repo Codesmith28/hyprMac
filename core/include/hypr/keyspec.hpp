@@ -1,8 +1,11 @@
 #pragma once
 // Key-binding grammar and the "extras" (keys + rules) of the Lua configuration.
 // Pure C++ so doctest covers it; Swift maps the canonical names to key codes.
+#include "hypr/rules.hpp"
+
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace hypr {
@@ -74,12 +77,18 @@ inline constexpr size_t kActionKeyCount = sizeof kActionKeys / sizeof kActionKey
 struct Rules {
     std::vector<std::string> ignore;
     std::vector<std::string> float_;
+    std::vector<std::string> float_title;   // title regexes (see rules.hpp)
+    std::vector<std::string> ignore_title;
+    std::vector<std::pair<std::string, int>> desktop;  // bundle id -> Desktop N, sorted by bundle id
 };
 
 struct Extras {
     Keys keys;
     Rules rules;
     bool osd_popup = true;
+    bool smart_gaps = false;
+    bool focus_follows_mouse = false;
+    std::vector<DisplayGaps> displays;  // sorted by name
 };
 
 // Cross-field checks (throw vs switch, toggle_float vs throw digits). "" when fine, else a
@@ -88,6 +97,9 @@ std::string validate_keys(const Keys &keys);
 
 // Compact JSON: {"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt"},
 //                "rules":{"ignore":[...],"float":[...]}}
+// v0.3.0 options appear only when set (default = absent): rules.float_title / ignore_title (lists),
+// rules.desktop ({"bundle.id":3}), and top-level "smart_gaps", "focus_follows_mouse" (true) and
+// "displays" ({"Name":{"inner":4,"outer":8}}, unset gaps omitted).
 std::string extras_to_json(const Extras &extras);
 
 }  // namespace hypr

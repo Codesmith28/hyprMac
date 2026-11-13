@@ -47,6 +47,7 @@ extension Coordinator {
         }
         if let targetFrame = lastTargets[targetId] ?? (try? deps.ax.frame(of: targetRef)) {
             let center = CGPoint(x: targetFrame.midX, y: targetFrame.midY)
+            hoverGate.noteWarp(now: deps.clock.now()) // focus_follows_mouse must not react to our own warp
             deps.poster.post(.warpCursor(center))
         }
         EventLog.shared.emit("focus_direction", ["window": Int(targetRef.windowID), "direction": direction.rawValue])

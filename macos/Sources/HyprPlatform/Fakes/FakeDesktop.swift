@@ -212,7 +212,7 @@ public final class FakeDesktop: @unchecked Sendable {
     /// Adds a display with `userSpaces` user Spaces; the first is active. Returns the Space ids.
     @discardableResult
     public func addDisplay(_ id: DisplayID, frame: CGRect, visibleFrame: CGRect? = nil, isMain: Bool = false,
-                           userSpaces: Int = 1) -> [SpaceID] {
+                           userSpaces: Int = 1, name: String = "") -> [SpaceID] {
         locked {
             let vf = visibleFrame ?? CGRect(x: frame.minX, y: frame.minY + 25, width: frame.width, height: frame.height - 25)
             var list: [SpaceInfo] = []
@@ -220,7 +220,7 @@ public final class FakeDesktop: @unchecked Sendable {
                 list.append(SpaceInfo(id: nextSpaceID, display: id, kind: .user, index: i))
                 nextSpaceID += 1
             }
-            displayList.append(Display(info: DisplayInfo(id: id, frame: frame, visibleFrame: vf, isMain: isMain),
+            displayList.append(Display(info: DisplayInfo(id: id, frame: frame, visibleFrame: vf, isMain: isMain, name: name),
                                        spaces: list, active: list[0].id))
             return list.map(\.id)
         }

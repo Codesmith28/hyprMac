@@ -255,8 +255,48 @@ std::string extras_to_json(const Extras &e) {
     json_list(out, e.rules.ignore);
     out += ",\"float\":";
     json_list(out, e.rules.float_);
+    if (!e.rules.float_title.empty()) {
+        out += ",\"float_title\":";
+        json_list(out, e.rules.float_title);
+    }
+    if (!e.rules.ignore_title.empty()) {
+        out += ",\"ignore_title\":";
+        json_list(out, e.rules.ignore_title);
+    }
+    if (!e.rules.desktop.empty()) {
+        out += ",\"desktop\":{";
+        for (size_t i = 0; i < e.rules.desktop.size(); ++i) {
+            if (i) out += ',';
+            json_string(out, e.rules.desktop[i].first);
+            out += ":" + std::to_string(e.rules.desktop[i].second);
+        }
+        out += "}";
+    }
     out += "},\"osd_popup\":";
     out += e.osd_popup ? "true" : "false";
+    if (e.smart_gaps) out += ",\"smart_gaps\":true";
+    if (e.focus_follows_mouse) out += ",\"focus_follows_mouse\":true";
+    if (!e.displays.empty()) {
+        out += ",\"displays\":{";
+        for (size_t i = 0; i < e.displays.size(); ++i) {
+            if (i) out += ',';
+            json_string(out, e.displays[i].name);
+            out += ":{";
+            bool first = true;
+            char buf[32];
+            if (e.displays[i].inner >= 0) {
+                std::snprintf(buf, sizeof buf, "%.10g", e.displays[i].inner);
+                out += std::string("\"inner\":") + buf;
+                first = false;
+            }
+            if (e.displays[i].outer >= 0) {
+                std::snprintf(buf, sizeof buf, "%.10g", e.displays[i].outer);
+                out += std::string(first ? "" : ",") + "\"outer\":" + buf;
+            }
+            out += "}";
+        }
+        out += "}";
+    }
     out += "}";
     return out;
 }

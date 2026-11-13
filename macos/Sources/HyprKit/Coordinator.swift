@@ -25,6 +25,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         public var spaceKeys: SpaceKeyObserving
         /// Reads the native "Switch to Desktop N" shortcuts; nil = assume `keys.switch`.
         public var nativeShortcuts: NativeSwitchShortcuts?
+        /// Cursor-position source for `focus_follows_mouse`; nil = feature unavailable.
+        public var mouseMonitor: MouseMoveMonitoring?
         public var clock: TimeSource
         /// Builds the platform event source; nil means "no live events" (tests drive `handle`).
         public var makeEvents: ((DispatchQueue, @escaping (PlatformEvent) -> Void) -> PlatformEvents)?
@@ -36,13 +38,14 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         public init(ax: AXBackend, windowServer: WindowServerQuery, spaces: SpaceProvider,
                     displays: DisplayProvider, apps: AppProvider, systemState: SystemStateQuery,
                     poster: EventPoster, hotkeys: ThrowHotkeys, spaceKeys: SpaceKeyObserving,
-                    nativeShortcuts: NativeSwitchShortcuts? = nil, clock: TimeSource,
+                    nativeShortcuts: NativeSwitchShortcuts? = nil, mouseMonitor: MouseMoveMonitoring? = nil,
+                    clock: TimeSource,
                     makeEvents: ((DispatchQueue, @escaping (PlatformEvent) -> Void) -> PlatformEvents)?,
                     onMain: @escaping (@escaping () -> Void) -> Void) {
             self.ax = ax; self.windowServer = windowServer; self.spaces = spaces
             self.displays = displays; self.apps = apps; self.systemState = systemState
             self.poster = poster; self.hotkeys = hotkeys; self.spaceKeys = spaceKeys
-            self.nativeShortcuts = nativeShortcuts
+            self.nativeShortcuts = nativeShortcuts; self.mouseMonitor = mouseMonitor
             self.clock = clock; self.makeEvents = makeEvents; self.onMain = onMain
         }
     }
@@ -68,7 +71,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
 
     public weak var delegate: TilingControllerDelegate?
     public let queue = DispatchQueue(label: "dev.codesmith28.hyprmac.coordinator")
-    private let moverQueue = DispatchQueue(label: "dev.codesmith28.hyprmac.mover")
+    let moverQueue = DispatchQueue(label: "dev.codesmith28.hyprmac.mover")
     /// Delegate callbacks leave `queue` through here, so a delegate may synchronously call back
     /// into the coordinator (`isPaused` does `queue.sync`) without re-entering `queue`.
     private let deliveryQueue = DispatchQueue(label: "dev.codesmith28.hyprmac.delivery")
@@ -84,7 +87,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     let discovery: WindowDiscovery
     let executor: GeometryExecutor
     let mover: SpaceMover
-    private let transitions = SpaceTransitionGuard(settle: 0.25)
+    let transitions = SpaceTransitionGuard(settle: 0.25)
     private var events: PlatformEvents?
 
     var userPaused = false
@@ -101,6 +104,17 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     var uncooperative: Set<UInt64> = []
     /// Small-window float decision per window id, made once from the first-seen size (sticky).
     var floatDecided: [UInt64: Bool] = [:]
+    /// `rules.float_title` decision per window id (Coordinator+Float.swift), sticky.
+    var titleFloatDecided: [UInt64: Bool] = [:]
+    // focus_follows_mouse (Coordinator+Hover.swift)
+    var hoverGate = HoverFocusGate()
+    var mouseMonitorRunning = false
+    // rules.desktop (Coordinator+Pin.swift)
+    var pinBaseline: Set<HyprPlatform.WindowRef>?
+    var pinHandled: Set<HyprPlatform.WindowRef> = []
+    var pinPending: (ref: HyprPlatform.WindowRef, desktop: Int)?
+    var pinFreshRefs: [HyprPlatform.WindowRef: TimeInterval] = [:]
+    var pinFreshPids: [pid_t: TimeInterval] = [:]
     var currentConfig: Config { configStore.current }
     var lastTargets: [UInt64: CGRect] = [:]
     var lastStates: [UInt64: Engine.TileState] = [:]
@@ -169,6 +183,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             spaces: SkyLightSpaceProvider(), displays: SystemDisplayProvider(), apps: SystemAppProvider(),
             systemState: SystemStateReader(), poster: SystemEventPoster(), hotkeys: HotkeyCenter(),
             spaceKeys: SpaceKeyObserver(), nativeShortcuts: SystemNativeSwitchShortcuts(),
+            mouseMonitor: SystemMouseMoveMonitor(),
             clock: SystemTimeSource(),
             makeEvents: { queue, handler in PlatformEvents(queue: queue, handler: handler) },
             onMain: { block in DispatchQueue.main.async(execute: block) })
@@ -198,6 +213,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             deps.hotkeys.stop()
             deps.spaceKeys.stop()
             events?.stop()
+            deps.mouseMonitor?.stop()
         }
         // At quit an async hop may never run; on the main thread tear down right away.
         if Thread.isMainThread { teardown() } else { deps.onMain(teardown) }
@@ -239,8 +255,11 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     func handle(_ event: PlatformEvent) {
         dispatchPrecondition(condition: .onQueue(queue))
         switch event {
-        case let .window(kind, _, window):
+        case let .window(kind, pid, window):
             switch kind {
+            case .created:
+                notePinFresh(pid: pid, window: window)
+                scheduleReconcile(after: tuning.debounce)
             case .focused:
                 if let window { trackedFocusedRef = window }
                 scheduleReconcile(after: tuning.debounce)
@@ -279,6 +298,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         case let .appTerminated(pid):
             for id in idsByPid.removeValue(forKey: pid) ?? [] { forgetEngineWindow(id) }
             idByRef = idByRef.filter { $0.key.pid != pid }
+            pinFreshPids[pid] = nil
             executor.forget(pid: pid)
             scheduleReconcile(after: tuning.debounce)
         case .activeSpaceChanged:
@@ -297,7 +317,10 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             dragTouched.removeAll()
             adoptUserResizes(touched)
             scheduleReconcile(after: tuning.dragSettle)
-        case .appLaunched, .appHidden, .appShown, .appActivated, .observerRegistrationFailed:
+        case .appLaunched(let pid, _):
+            notePinFresh(pid: pid, window: nil)
+            scheduleReconcile(after: tuning.debounce)
+        case .appHidden, .appShown, .appActivated, .observerRegistrationFailed:
             scheduleReconcile(after: tuning.debounce)
         }
     }
@@ -326,6 +349,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         forgetToggleState(id)
         stateRestored.remove(id)
         fights[id] = nil
+        titleFloatDecided[id] = nil
         lastTargets[id] = nil
         lastStates[id] = nil
         limboSince[id] = nil
@@ -356,7 +380,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     }
 
     /// `asyncAfter` on `queue`, counted so tests can wait for quiescence.
-    private func schedule(after delay: TimeInterval, _ work: @escaping () -> Void) {
+    func schedule(after delay: TimeInterval, _ work: @escaping () -> Void) {
         outstandingTimers += 1
         queue.asyncAfter(deadline: .now() + delay) { [weak self] in
             self?.outstandingTimers -= 1
@@ -383,6 +407,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         var activeCount: [UInt64: Int] = [:]
         for d in displays { activeCount[deps.spaces.activeSpace(display: d.id), default: 0] += 1 }
         activeSpaces.removeAll()
+        syncGaps(displays: displays)
+        ensurePinBaseline()
         for display in displays {
             guard var snap = discovery.snapshot(display: display.id) else { continue }
             if activeCount[snap.space, default: 0] > 1 {
@@ -405,8 +431,10 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 if state == .tiled, uncooperative.contains(id) { state = .floating }
                 if state == .tiled, floatsAsSmall(id: id, frame: w.frame) { state = .floating }
                 if state == .tiled, ruleFloat.contains(w.ref.pid) { state = .floating } // rules.float
+                if state == .tiled, floatsByTitle(id: id, title: w.title) { state = .floating } // rules.float_title
                 // The ⌥⇧F override (Coordinator+Toggle) wins over size and fight floating.
                 state = resolveFloatOverride(id: id, platform: w.state, frame: w.frame, current: state)
+                considerPin(ref: w.ref, state: state, platform: w.state, display: display.id)
                 let oldState = lastStates[id]
                 lastStates[id] = state
                 noteWindowStateChanged(id: id, oldState: oldState, newState: state, frame: w.frame)
@@ -442,6 +470,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 logger.error("reconcile failed for space \(snap.space): \(String(describing: error))")
             }
         }
+        startPendingPin()
     }
 
     /// Bounded re-reconcile for windows that weren't AX-ready (late windows, busy apps).
@@ -562,7 +591,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 EventLog.shared.emit("throw", ["n": n, "result": "noFocusedWindow"])
                 return
             }
-            guard !isIgnored(pid: pid) else { // rules.ignore: never moved
+            guard !isIgnored(pid: pid), !isIgnoredByTitle(window) else { // rules.ignore / ignore_title: never moved
                 EventLog.shared.emit("throw", ["n": n, "result": "ignoredApp"])
                 return
             }
@@ -590,6 +619,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
                 queue.async { [self] in
                     activity += 1
                     throwInFlight = false
+                    hoverGate.noteWarp(now: deps.clock.now()) // the mover restored the cursor
                     EventLog.shared.emit("throw", ["n": n, "result": Self.name(result)])
                     switch result {
                     case .moved:
@@ -656,6 +686,8 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             do {
                 try engine.setConfig(c)
                 applyRules(c.rules)
+                logUnknownDisplays(deps.displays.displays())
+                updateMouseMonitor()
                 bindInput(c.keys)
                 EventLog.shared.emit("config_loaded", ["inner": c.innerGap, "outer": c.outerGap])
                 if reload { notify(.configLoaded) }

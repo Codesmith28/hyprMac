@@ -87,6 +87,15 @@ hm_status hm_engine_set_config(hm_engine *engine, const hm_config *cfg) {
     return guarded([&] { return engine->impl.set_config(hypr::Config::from_c(*cfg)); });
 }
 
+void hm_engine_set_smart_gaps(hm_engine *engine, int smart_gaps) {
+    if (engine) engine->impl.set_smart_gaps(smart_gaps != 0);
+}
+
+hm_status hm_engine_set_display_gaps(hm_engine *engine, hm_display_id display, double inner, double outer) {
+    if (!engine) return HM_ERR_INVALID_ARGUMENT;
+    return guarded([&] { return engine->impl.set_display_gaps(display, inner, outer); });
+}
+
 void hm_plan_free(hm_plan *plan) {
     if (!plan) return;
     if (plan->placements) {

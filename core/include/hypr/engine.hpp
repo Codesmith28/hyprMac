@@ -49,6 +49,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace hypr {
@@ -84,6 +85,13 @@ public:
 
     const Config &config() const { return cfg_; }
     hm_status set_config(const Config &cfg); // HM_ERR_CONFIG when invalid
+
+    // Gap policy on top of the config. smart_gaps: a space with exactly one tiled leaf uses zero inner
+    // AND zero outer gap (its window fills the usable rect). Per-display gaps: a value >= 0 replaces the
+    // global inner/outer gap for every space on that display (< 0 keeps the global one; both < 0 clears).
+    // Neither changes dwindle orientation: insertion decisions use the un-smartened layout.
+    void set_smart_gaps(bool on) { smart_gaps_ = on; }
+    hm_status set_display_gaps(DisplayId display, double inner, double outer); // HM_ERR_CONFIG when out of range
 
     hm_status reconcile(const Snapshot &snapshot, Plan &out);
     hm_status relayout(SpaceId space, Plan &out);
@@ -121,8 +129,9 @@ private:
     };
 
     static hm_status validate(const Snapshot &s);
-    LayoutResult layout(const Space &space) const;
-    MinSize subtree_min(const Node *n) const;
+    LayoutResult layout(const Space &space, bool smart = true) const;
+    Config effective_config(const Space &space, bool smart) const;
+    MinSize subtree_min(const Node *n, double gap) const;
     void make_plan(Space &space, Plan &out);
     void restore(Space &space, WindowId w, const Snapshot &s, const std::unordered_set<WindowId> &pending);
     void dwindle_insert(Space &space, WindowId w, const Snapshot &s, const std::unordered_set<WindowId> &pending);
@@ -131,6 +140,8 @@ private:
     void drop_if_untracked(WindowId w);
 
     Config cfg_;
+    bool smart_gaps_ = false;
+    std::unordered_map<DisplayId, std::pair<double, double>> display_gaps_; // (inner, outer), < 0 = unset
     WorkspaceModel model_;
     std::unordered_map<WindowId, MinInfo> mins_;
     std::uint64_t revision_ = 0;

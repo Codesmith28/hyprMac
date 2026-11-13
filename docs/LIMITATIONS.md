@@ -30,6 +30,12 @@ The window moves with the "drag" and stays focused on the new Desktop. It works 
 
 **Tabs and toolbars are never pressed.** A mouse-down on a tab would drag it out into a new window, and one on a button would press it. If every candidate lands on a tab, button, toolbar or title, hyprMac returns `noGrabPoint` rather than guess. Native tab bars sit below the titlebar, so the titlebar is still grabbable. Apps that draw tabs *inside* the titlebar can't be thrown.
 
+## Title rules, focus-follows-mouse and `rules.desktop`
+- Title rules are decided once, from the first non-empty title a window shows. A window that only gets its title later is judged on that title; later changes are ignored.
+- Title patterns run in the system regex engine after the core checked them with its own, so rare syntax differences are possible. A pattern the system engine rejects is skipped and logged.
+- `focus_follows_mouse` needs Accessibility only. It cannot tell a hover caused by a window moving under a still cursor from a real move.
+- `rules.desktop` is experimental. A new window is recognised from the window-created event, so a window that shows up late or on another Desktop first is not pinned. It inherits every limit of [moving windows between Spaces](#moving-windows-between-spaces), and the Desktop switch is visible.
+
 ## Private SkyLight symbols (read-only)
 To know the active Space, how many Desktops exist and which Space a window is on, hyprMac looks up a few private functions at runtime with `dlsym`:
 - `CGSMainConnectionID`, `CGSGetActiveSpace`, `CGSCopyManagedDisplaySpaces`, `CGSCopySpacesForWindows`, `CGSManagedDisplayGetCurrentSpace`

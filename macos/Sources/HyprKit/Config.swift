@@ -8,7 +8,26 @@ public struct AppRules: Equatable {
     public var ignore: [String]
     /// Always floating (⌥⇧F can still tile them); added to the built-in float list.
     public var float: [String]
-    public init(ignore: [String] = [], float: [String] = []) { self.ignore = ignore; self.float = float }
+    /// `rules.float_title`: windows whose first non-empty title matches float (⌥⇧F can still tile them).
+    public var floatTitle: [String] { didSet { floatTitleMatcher = TitleMatcher(floatTitle) } }
+    /// `rules.ignore_title`: windows whose first non-empty title matches are never managed or moved.
+    public var ignoreTitle: [String]
+    /// EXPERIMENTAL `rules.desktop`: bundle id → Desktop N; new windows of the app are thrown there once.
+    public var desktop: [String: Int]
+    public private(set) var floatTitleMatcher: TitleMatcher
+    public init(ignore: [String] = [], float: [String] = [], floatTitle: [String] = [],
+                ignoreTitle: [String] = [], desktop: [String: Int] = [:]) {
+        self.ignore = ignore; self.float = float
+        self.floatTitle = floatTitle; self.ignoreTitle = ignoreTitle; self.desktop = desktop
+        self.floatTitleMatcher = TitleMatcher(floatTitle)
+    }
+}
+
+/// `config.displays[<name>]`: a nil side keeps the global gap.
+public struct DisplayGapOverride: Equatable {
+    public var inner: Double?
+    public var outer: Double?
+    public init(inner: Double? = nil, outer: Double? = nil) { self.inner = inner; self.outer = outer }
 }
 
 /// Validated configuration (mirrors `hm_config`).
@@ -24,6 +43,12 @@ public struct Config: Equatable {
     public var keys: KeyBindings = .defaults
     public var rules = AppRules()
     public var osdPopup: Bool = true
+    /// A Space with exactly one tiled window uses zero inner and zero outer gap.
+    public var smartGaps: Bool = false
+    /// Hovering a window focuses it after a short debounce.
+    public var focusFollowsMouse: Bool = false
+    /// Per-display gap overrides keyed by `NSScreen.localizedName`.
+    public var displays: [String: DisplayGapOverride] = [:]
 
     public static var defaults: Config { var c = hm_config(); hm_config_default(&c); return Config(c) }
 
@@ -84,6 +109,29 @@ public struct Config: Equatable {
         let osd = root["osd_popup"] as? Bool ?? true
         return (keys, AppRules(ignore: ignore, float: float), osd)
     }
+    /// Reads the v0.3.0 options (title rules, `rules.desktop`, `smart_gaps`, `focus_follows_mouse`,
+    /// `displays`) from the extras JSON. Absent keys keep today's behaviour; the core validated them.
+    mutating func applyV3Options(json: String) {
+        guard let data = json.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        if let r = root["rules"] as? [String: Any] {
+            rules.floatTitle = r["float_title"] as? [String] ?? []
+            rules.ignoreTitle = r["ignore_title"] as? [String] ?? []
+            var desktop: [String: Int] = [:]
+            for (k, v) in r["desktop"] as? [String: Any] ?? [:] { if let n = v as? Int { desktop[k] = n } }
+            rules.desktop = desktop
+        }
+        smartGaps = root["smart_gaps"] as? Bool ?? false
+        focusFollowsMouse = root["focus_follows_mouse"] as? Bool ?? false
+        var displays: [String: DisplayGapOverride] = [:]
+        for (name, v) in root["displays"] as? [String: Any] ?? [:] {
+            guard let d = v as? [String: Any] else { continue }
+            displays[name] = DisplayGapOverride(inner: (d["inner"] as? NSNumber)?.doubleValue,
+                                                outer: (d["outer"] as? NSNumber)?.doubleValue)
+        }
+        self.displays = displays
+    }
+
     var c: hm_config {
         hm_config(inner_gap: innerGap, outer_gap: outerGap, split_ratio: splitRatio,
                   float_min_w: floatMinWidth, float_min_h: floatMinHeight, resize_step: resizeStep)
@@ -132,6 +180,7 @@ public final class ConfigStore {
         loaded.keys = extras.keys
         loaded.rules = extras.rules
         loaded.osdPopup = extras.osdPopup
+        loaded.applyV3Options(json: String(cString: json))
         current = loaded
         return .loaded(current)
     }
