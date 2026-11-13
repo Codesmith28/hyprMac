@@ -25,12 +25,32 @@ case "${1:-}" in
         case "$2" in
             SIGTERM | TERM | 15) [ -e "$FAKE_STATE/ignore-term" ] || rm -f "$FAKE_STATE/running" ;;
             SIGKILL | KILL | 9) rm -f "$FAKE_STATE/running" ;;
-            *) echo "fake launchctl: unsupported signal $2" >&2; exit 64 ;;
+            disable)  # launchctl disable gui/<uid>/<label>: persists in $FAKE_STATE/launchd.disabled
+        echo "${2##*/}" >>"$FAKE_STATE/launchd.disabled" ;;
+    enable)
+        touch "$FAKE_STATE/launchd.disabled"
+        grep -vxF "${2##*/}" "$FAKE_STATE/launchd.disabled" >"$FAKE_STATE/launchd.disabled.tmp" || true
+        mv "$FAKE_STATE/launchd.disabled.tmp" "$FAKE_STATE/launchd.disabled" ;;
+    print-disabled)
+        echo "disabled services = {"
+        [ -f "$FAKE_STATE/launchd.disabled" ] && while IFS= read -r l; do printf '\t"%s" => disabled\n' "$l"; done <"$FAKE_STATE/launchd.disabled"
+        echo "}" ;;
+    *) echo "fake launchctl: unsupported signal $2" >&2; exit 64 ;;
         esac ;;
     bootout)
         label="${2##*/}"
         grep -qxF "$label" "$db" || { echo "Boot-out failed: 3: No such process" >&2; exit 3; }
         grep -vxF "$label" "$db" >"$db.tmp" || true; mv "$db.tmp" "$db"
         rm -f "$FAKE_STATE/running" ;;
+    disable)  # launchctl disable gui/<uid>/<label>: persists in $FAKE_STATE/launchd.disabled
+        echo "${2##*/}" >>"$FAKE_STATE/launchd.disabled" ;;
+    enable)
+        touch "$FAKE_STATE/launchd.disabled"
+        grep -vxF "${2##*/}" "$FAKE_STATE/launchd.disabled" >"$FAKE_STATE/launchd.disabled.tmp" || true
+        mv "$FAKE_STATE/launchd.disabled.tmp" "$FAKE_STATE/launchd.disabled" ;;
+    print-disabled)
+        echo "disabled services = {"
+        [ -f "$FAKE_STATE/launchd.disabled" ] && while IFS= read -r l; do printf '\t"%s" => disabled\n' "$l"; done <"$FAKE_STATE/launchd.disabled"
+        echo "}" ;;
     *) echo "fake launchctl: unsupported $*" >&2; exit 64 ;;
 esac

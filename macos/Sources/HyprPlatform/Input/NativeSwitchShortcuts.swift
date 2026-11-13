@@ -24,6 +24,11 @@ public struct SystemChord: Equatable, Hashable, Sendable {
     }
 }
 
+public extension NativeSwitchShortcuts {
+    /// True when some enabled native "Switch to Desktop N" shortcut uses exactly `configured`.
+    func matches(_ configured: KeyModifiers) -> Bool { enabledModifiers().values.contains(configured.cgFlags) }
+}
+
 public enum SymbolicHotkeys {
     /// "Switch to Desktop 1" is id 118, … Desktop 9 is 126.
     public static let firstDesktopID = 118

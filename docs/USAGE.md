@@ -40,14 +40,23 @@ The log line is `{"event":"user_resize",...}`.
 
 | Item | What it does |
 |---|---|
-| **Pause Tiling** / **Resume Tiling** | Stops or restarts tiling. While paused, windows stay where they are and the icon is dimmed. Pausing isn't remembered across launches. |
+| **Pause Tiling** / **Resume Tiling** | Stops or restarts tiling. While paused, windows stay where they are, and the icon is dimmed and changes to a pause symbol. Remembered across launches. |
 | **Retile All Windows** | Lays out every Space again. Also gives back windows that were floated for fighting their tile. |
-| **Open Configuration…** (⌘,) | Opens `~/.config/hyprmac/init.lua`, creating it from the example if needed. |
-| **Reload Configuration** (⌘R) | Re-reads the config and re-lays out. |
-| **Quit hyprMac** (⌘Q) | Quits. Windows stay put. With the login item installed, hyprMac starts again at your next login. |
+| **OSD Popups** | Checkmark toggle for the small on-screen popups. Remembered in `~/.config/hyprmac/state.json`; until you use it, `osd_popup` in the config decides. |
+| **Launch at Login** | Checkmark toggle. Enabled only when `make install` created the login item. Uses `launchctl enable/disable`. |
+| **Open Configuration…** | Opens `~/.config/hyprmac/init.lua`, creating it from the example if needed. |
+| **Reveal Configuration in Finder** | Shows the config file in Finder. |
+| **Reload Configuration** | Re-reads the config and re-lays out. |
+| **Keyboard Shortcuts…** | Lists your current shortcuts, including any you changed under `keys`. |
+| **Copy Log Command** | Copies a `log stream` command that shows hyprMac's log. |
+| **Status** | ✓/✗ for Accessibility, Input Monitoring, Stage Manager off, and `keys.switch` matching a macOS Desktop shortcut. |
+| **Grant Input Monitoring…** | Shown only while Input Monitoring is missing. Asks for it and opens the pane. |
+| **Quit hyprMac** | Quits. Windows stay put. With the login item installed, hyprMac starts again at your next login. |
+
+The popup for a window action appears on the display of the window you acted on. Menu items have no keyboard shortcuts.
 
 ## Notifications
-hyprMac asks to show notifications the first time it runs. If you say no, the same messages still go to the log.
+hyprMac asks to show notifications the first time it runs. If you say no, the same messages still go to the log. Clicking a notification opens the relevant place: the Accessibility or Keyboard Shortcuts pane, or `init.lua` for configuration problems. With OSD popups on, the **Desktop N doesn't exist** and **Couldn't move window** notices show as a popup instead.
 
 | Notification | What it means |
 |---|---|

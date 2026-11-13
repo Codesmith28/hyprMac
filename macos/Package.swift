@@ -42,6 +42,9 @@ let package = Package(
         .executableTarget(name: "HyprApp", dependencies: ["HyprKit", "HyprPlatform"],
                           path: "Sources/HyprApp", swiftSettings: v5),
 
+        .testTarget(name: "HyprAppTests", dependencies: ["HyprApp", "HyprKit", "HyprPlatform"],
+                    path: "Tests/HyprAppTests", swiftSettings: v5),
+
         // Test fixture app + end-to-end harness (real macOS, needs Accessibility).
         .executableTarget(name: "FixtureApp", path: "Sources/FixtureApp", swiftSettings: v5),
         .executableTarget(name: "HyprE2E", path: "Sources/HyprE2E", swiftSettings: v5),

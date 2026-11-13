@@ -1,9 +1,12 @@
 import Foundation
+import HyprPlatform
 
 /// What the app shell needs from the tiling machinery. Implemented by `Coordinator`.
 public protocol TilingController: AnyObject {
     var isPaused: Bool { get }
     var osdPopup: Bool { get }
+    /// The live shortcuts (from the loaded config).
+    var keyBindings: KeyBindings { get }
     var delegate: TilingControllerDelegate? { get set }
     func start()
     func stop()

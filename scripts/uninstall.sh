@@ -53,6 +53,12 @@ on_exit() {
 trap on_exit EXIT
 trap on_interrupt INT TERM HUP
 
+# The menu's "Launch at Login" toggle uses `launchctl disable`, which persists in launchd's database
+# beyond the agent plist: enable the label again before the agent is removed.
+if [ -f "$MANIFEST" ] && [ -e "$AGENT_PLIST" ]; then
+    run "$LAUNCHCTL" enable "$AGENT_TARGET" || warn "launchctl enable failed (ignored)"
+fi
+
 rc=0
 do_uninstall || rc=$?
 exit "$rc"

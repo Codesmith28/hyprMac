@@ -206,7 +206,7 @@ expect_rc() { # description expected
     if [ "$RC" != "$2" ]; then bad "$1: exit $RC, expected $2"; show_out; fi
 }
 STATE_DIR_REL="Library/Application Support/hyprMac/install"
-MUTATING='^(defaults (write|delete|import)|launchctl (bootstrap|bootout|kill)|tccutil|lsregister -[fu]|open|killall|activateSettings|pkill -(TERM|KILL)|security (import|delete-identity)|codesign --force)'
+MUTATING='^(defaults (write|delete|import)|launchctl (bootstrap|bootout|kill|enable|disable)|tccutil|lsregister -[fu]|open|killall|activateSettings|pkill -(TERM|KILL)|security (import|delete-identity)|codesign --force)'
 
 # Clean install + uninstall with the zero-diff checks every scenario shares.
 roundtrip() { # label
@@ -297,6 +297,24 @@ t_uninstall_without_install() {
     contains "says nothing to undo" "$OUT" "nothing to undo"
     check "no mutating calls" test -z "$(grep -E "$MUTATING" "$FAKE_STATE/calls.log")"
     same_fp "no-op uninstall" "$fp"
+}
+
+t_login_item_disabled() {
+    # The app's "Launch at Login" toggle runs `launchctl disable`; uninstall must undo it.
+    local fp="$S/fp.before"
+    sys_fp >"$fp"
+    inst; expect_rc "install" 0
+    "$LAUNCHCTL" disable "gui/$UID_VAL/$BID"
+    check "label disabled" grep -qx "$BID" "$FAKE_STATE/launchd.disabled"
+    : >"$FAKE_STATE/calls.log"
+    uninst; expect_rc "uninstall" 0
+    check "enabled again" test -z "$(grep -x "$BID" "$FAKE_STATE/launchd.disabled")"
+    local en bo
+    en="$(grep -n "^launchctl enable gui/$UID_VAL/$BID" "$FAKE_STATE/calls.log" | head -1 | cut -d: -f1)"
+    bo="$(grep -n "^launchctl bootout gui/$UID_VAL/$BID" "$FAKE_STATE/calls.log" | head -1 | cut -d: -f1)"
+    check "enable call logged" test -n "$en"
+    check "enable runs before the agent is booted out" test "${en:-99}" -lt "${bo:-0}"
+    same_fp "login item roundtrip" "$fp"
 }
 
 t_hotkey_preexisting() {
@@ -1079,6 +1097,7 @@ tap "36 upgrade re-signs an unsigned build; a failing sign does not break it" t_
 tap "37 failures with an identity present roll back and keep the identity" t_failure_with_identity_rolls_back
 tap "38 verify ignores the signing line of older snapshots, compares it otherwise" t_verify_ignores_snapshots_from_older_versions
 tap "39 sign-identity --dry-run and the make targets" t_sign_identity_dry_run_and_make
+tap "40 launch-at-login disable is undone (launchctl enable) before the agent is removed" t_login_item_disabled
 echo "1..$N"
 if [ "$FAILED" -gt 0 ]; then
     echo "# FAILED $FAILED of $N:$FAILED_NAMES"
