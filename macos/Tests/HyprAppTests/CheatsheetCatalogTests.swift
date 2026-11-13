@@ -1,4 +1,6 @@
 import Testing
+import Foundation
+import HyprKit
 import HyprPlatform
 @testable import HyprApp
 
@@ -16,8 +18,8 @@ struct CheatsheetCatalogTests {
         #expect(entry(.throwWindow)?.keys == [["⌥", "⇧", "1–9"]])
         #expect(entry(.toggleFloat)?.keys == [["⌥", "⇧", "F"]])
         #expect(entry(.center)?.keys == [["⌥", "⇧", "C"]])
-        #expect(entry(.focus)?.keys == [["⌥", "⇧", "H", "J", "K", "L"], ["⌥", "⇧", "←", "↓", "↑", "→"]])
-        #expect(entry(.swap)?.keys == [["⌥", "⇧", "⌘", "H", "J", "K", "L"], ["⌥", "⇧", "⌘", "←", "↓", "↑", "→"]])
+        #expect(entry(.focus)?.keys == [["⌥", "⇧", "H/J/K/L"], ["⌥", "⇧", "←/↓/↑/→"]])
+        #expect(entry(.swap)?.keys == [["⌥", "⇧", "⌘", "H/J/K/L"], ["⌥", "⇧", "⌘", "←/↓/↑/→"]])
         #expect(entry(.help)?.keys == [["⌥", "⇧", "/"]])
     }
 
@@ -49,5 +51,24 @@ struct CheatsheetCatalogTests {
     @Test func helpShortcutIsPrefixSlash() {
         #expect(KeyBindings.defaults.showShortcuts.keyCode == 44)
         #expect(KeyBindings.defaults.showShortcuts.modifiers == [.option, .shift])
+    }
+
+    /// The real path: init.lua -> ConfigStore (what the coordinator uses) -> cheatsheet.
+    @Test func followsInitLua() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cheatsheet-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("init.lua")
+        try """
+        config = { keys = { toggle_float = "ctrl+alt+g", focus_left = "ctrl+alt+a", focus_down = "ctrl+alt+s",
+                            focus_up = "ctrl+alt+w", focus_right = "ctrl+alt+d", toggle_zoom = "ctrl+alt+z" } }
+        """.write(to: file, atomically: true, encoding: .utf8)
+
+        let store = ConfigStore(path: file)
+        guard case .loaded = store.load() else { Issue.record("init.lua did not load"); return }
+        let keys = store.current.keys
+        #expect(entry(.toggleFloat, keys)?.keys == [["⌃", "⌥", "G"]])
+        #expect(entry(.focus, keys)?.keys == [["⌃", "⌥", "A/S/W/D"]])
+        #expect(CheatsheetCatalog.extras(for: keys).map(\.keys) == [["⌃", "⌥", "Z"]])
     }
 }
