@@ -68,6 +68,11 @@ config = {
     float = { min_width = 400, min_height = 300 }, -- smaller windows float (0 – 2000, 0 = off)
     keys = { throw = "alt+shift", toggle_float = "alt+shift+f", switch = "alt" }, -- shortcuts
     rules = { ignore = {}, float = {} },           -- bundle ids: never managed / always floating
+    smart_gaps = false,           -- one tiled window on a Space: zero gaps
+    focus_follows_mouse = false,  -- hover focuses a window after ~120 ms
+    -- displays = { ["Studio Display"] = { inner = 4, outer = 8 } },   -- per-display gaps, by name
+    -- rules.float_title / rules.ignore_title = { "regex" }           -- match window titles
+    -- rules.desktop = { ["com.example.app"] = 3 }                    -- EXPERIMENTAL, see usage
 }
 ```
 
@@ -75,7 +80,7 @@ config = {
 - A file with an error is rejected as a whole. hyprMac keeps the old settings and tells you the file, line and problem.
 - The schema is strict. Unknown keys and wrong types are errors. The Lua sandbox has no `io`, `os`, `require` or `load`, and it has memory and instruction limits.
 
-The shortcut grammar and app rules are in [usage](docs/USAGE.md#keys-and-app-rules).
+The shortcut grammar and app rules are in [usage](docs/USAGE.md#keys-and-app-rules). The title rules, gap options, focus-follows-mouse and `rules.desktop` are in [usage](docs/USAGE.md#title-rules-gaps-and-focus).
 
 ## Architecture
 ```

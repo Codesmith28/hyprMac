@@ -80,6 +80,29 @@ config = {
 - **`switch` doesn't switch Desktops.** macOS does that, with the shortcuts under Mission Control. `switch` only tells hyprMac which keys to watch for the missing-Desktop notice. A throw reads the modifiers from macOS's own shortcut (`com.apple.symbolichotkeys`, read only) and uses `switch` only if that can't be read.
 - **Rules** take bundle ids (`osascript -e 'id of app "Calculator"'`), up to 200 per list. `float` adds to the built-in list. An app in `ignore` is skipped entirely, including by the throw and toggle shortcuts.
 
+### Title rules, gaps and focus
+
+All of these are off or equal to today's behaviour unless you set them. New actions have no default shortcut.
+
+```lua
+config = {
+    smart_gaps = true,            -- one tiled window on a Space: zero inner and zero outer gap
+    displays = { ["Studio Display"] = { inner = 4, outer = 8 } },
+    focus_follows_mouse = true,
+    rules = {
+        float_title  = { "^Picture.in.Picture$" },
+        ignore_title = { "^Zoom Meeting$" },
+        desktop      = { ["com.apple.Music"] = 3 },   -- EXPERIMENTAL
+    },
+}
+```
+
+- **Title rules** are case-insensitive regexes (ECMAScript) searched anywhere in the title, so anchor with `^` and `$`. Up to 200 per list, 128 characters each. A bad pattern is a config error with the file and line. Back-references and a repeated group that contains a repeat, like `(a+)+`, are refused because they can run for a very long time. Titles are cut to 512 characters before matching. A window is checked once, against the first non-empty title it shows, and that decision sticks (browser titles change all the time). `float_title` floats like `rules.float`, so ⌥⇧F can tile it. `ignore_title` acts like `rules.ignore` for that window: never tiled, never thrown.
+- **`smart_gaps`**: a Space with exactly one tiled window gets zero inner and zero outer gap, so the window fills the usable area. Floating windows don't count.
+- **`displays`** overrides the gaps for the display with that name (`NSScreen.localizedName`, as shown in System Settings ▸ Displays). Either side may be left out to keep the global gap. Names that match no connected display are ignored and listed in the log.
+- **`focus_follows_mouse`**: resting the pointer on a tiled or floating window for about 120 ms focuses it. It never moves the cursor, never refocuses the focused window, and ignores mouse movement for 0.4 s after hyprMac itself moves the cursor (directional focus, throws), so the two don't fight. The menu bar, Dock and ignored apps never take focus.
+- **`rules.desktop`** (EXPERIMENTAL, empty by default): the first time a new window of the app shows up on another Desktop, hyprMac throws it to Desktop N (1–9) with the same drag trick as ⌥⇧N. That switches Desktops under you. Windows that were already open when hyprMac started, floating or fullscreen windows, ignored apps and windows already on Desktop N are left alone. Each window is tried once. If the throw fails (`noGrabPoint`, `timedOut`), it is logged and not retried.
+
 If the config has an error, nothing changes. hyprMac keeps the last good settings and tells you what's wrong. A missing file means the defaults.
 
 ## Logs

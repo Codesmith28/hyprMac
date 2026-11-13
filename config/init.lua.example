@@ -17,6 +17,18 @@ config = {
 
     split_ratio = 0.5,
 
+    -- A Space with exactly one tiled window uses zero inner AND zero outer gap (default: false).
+    smart_gaps = false,
+
+    -- Per-display gaps, keyed by the display's name (System Settings ▸ Displays). A missing side
+    -- uses the global gap above; names that match no connected display are ignored (and logged).
+    -- displays = {
+    --     ["Studio Display"] = { inner = 4, outer = 8 },
+    -- },
+
+    -- Hovering a window focuses it after ~120 ms (default: false). Never moves the cursor.
+    focus_follows_mouse = false,
+
     -- Small applications (whose initial dimensions are small by default) are set to float by default.
     -- Windows smaller than min_width x min_height float automatically instead of tiling.
     float = {
@@ -57,5 +69,17 @@ config = {
             "com.docker.docker",               -- Docker Desktop
             "com.mongodb.compass",             -- MongoDB Compass
         },
+
+        -- Window-title patterns: case-insensitive ECMAScript regexes searched anywhere in the title
+        -- (anchor with ^ and $). Max 200 per list, 128 characters each. Back-references and nested
+        -- repeats like "(a+)+" are refused, so keep patterns simple. Decided once, from the first
+        -- non-empty title a window shows; later title changes don't flip it.
+        -- float_title = { "^Picture.in.Picture$", "^About " },   -- float (⌥⇧F can still tile)
+        -- ignore_title = { "^Zoom Meeting$" },                   -- never managed or moved
+
+        -- EXPERIMENTAL: throw a NEW window of an app to Desktop N (1–9) with the drag trick. It
+        -- switches Desktops, so use sparingly. Windows already open, floating, fullscreen or already
+        -- on that Desktop are left alone; a failed attempt is logged and never retried.
+        -- desktop = { ["com.apple.Music"] = 3 },
     },
 }
