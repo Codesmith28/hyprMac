@@ -22,11 +22,17 @@ extension Coordinator {
         if pinFreshRefs.count > 512 { pinFreshRefs = pinFreshRefs.filter { now - $1 <= Self.pinFreshness } }
     }
 
+    /// Records the windows that exist when pinning is first evaluated (start, or the reload that
+    /// enabled it), before any window is considered. On `queue`.
+    func ensurePinBaseline() {
+        guard pinBaseline == nil, !currentConfig.rules.desktop.isEmpty else { return }
+        pinBaseline = currentWindowRefs()
+    }
+
     /// Inspects one discovered window during reconcile; may select it as the pending pin. On `queue`.
     func considerPin(ref: HyprPlatform.WindowRef, state: Engine.TileState, platform: WindowState, display: DisplayID) {
         let rules = currentConfig.rules.desktop
         guard !rules.isEmpty else { return }
-        if pinBaseline == nil { pinBaseline = currentWindowRefs() }
         guard pinPending == nil, !pinHandled.contains(ref), !(pinBaseline?.contains(ref) ?? true),
               let bundle = bundleID(for: ref), let n = rules[bundle] else { return }
         let now = deps.clock.now()
@@ -54,6 +60,8 @@ extension Coordinator {
         throwInFlight = true
         let sourceSpace = idByRef[ref].flatMap { engine.space(of: $0) }
         moverQueue.async { [self] in
+            // The window was just tiled: let the executor finish writing its frame before grabbing it.
+            _ = executor.waitUntilIdle(timeout: 1.5)
             let result = mover.move(ref, toSpace: n)
             queue.async { [self] in
                 activity += 1

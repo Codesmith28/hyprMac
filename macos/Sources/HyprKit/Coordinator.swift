@@ -403,6 +403,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
         for d in displays { activeCount[deps.spaces.activeSpace(display: d.id), default: 0] += 1 }
         activeSpaces.removeAll()
         syncGaps(displays: displays)
+        ensurePinBaseline()
         for display in displays {
             guard var snap = discovery.snapshot(display: display.id) else { continue }
             if activeCount[snap.space, default: 0] > 1 {
