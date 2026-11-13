@@ -19,5 +19,6 @@ preflight:                                     ## read-only: show what `make ins
 verify-rollback:                               ## diff current state against the pre-install snapshot
 	scripts/verify_rollback.sh
 
-scripts-test:                                  ## sandboxed tests for install/uninstall (fake HOME + shims)
+scripts-test:                                  ## sandboxed tests for install/uninstall (fake HOME + shims) and the release helpers
 	scripts/tests/run.sh
+	scripts/tests/release.sh
