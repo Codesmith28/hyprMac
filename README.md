@@ -66,6 +66,7 @@ config = {
         outer = 12,  -- points between windows and the edges (0 – 200)
     },
     split_ratio = 0.5, -- share of a split given to the existing window (0.1 – 0.9)
+    resize_step = 5,   -- percent of a split per keyboard resize press (1 – 25)
     float = { min_width = 400, min_height = 300 }, -- smaller windows float (0 – 2000, 0 = off)
     osd_popup = true,  -- brief on-screen popup on window and Desktop actions
     keys = {           -- shortcuts (defaults shown)
@@ -73,6 +74,7 @@ config = {
         center_window = "alt+shift+c",
         focus_left = "alt+shift+h", focus_down = "alt+shift+j", focus_up = "alt+shift+k", focus_right = "alt+shift+l",
         move_left = "alt+shift+cmd+h", move_down = "alt+shift+cmd+j", move_up = "alt+shift+cmd+k", move_right = "alt+shift+cmd+l",
+        -- unbound by default (set under keys): resize_left/down/up/right, equalize, rotate_split, toggle_zoom, move_display_next/prev, toggle_pause
     },
     rules = { ignore = {}, float = {} },           -- bundle ids: never managed / always floating
 }

@@ -12,8 +12,14 @@ hyprMac lives in the menu bar (the 2×2 grid icon). It has no Dock icon. After `
 | ⌥⇧C | Center the focused window. If tiled, floats and centers it at its original size. |
 | ⌥⇧H / J / K / L or ⌥⇧← / ↓ / ↑ / → | Move focus in the BSP tree (left, down, up, right). |
 | ⌥⇧⌘H / J / K / L or ⌥⇧⌘← / ↓ / ↑ / → | Move/swap the focused window in the BSP tree (left, down, up, right). Focus follows the moved window. |
+| *unbound* `resize_left` / `down` / `up` / `right` | Move the nearest split boundary that way by `resize_step` percent. |
+| *unbound* `equalize` | Reset every split in this Space to `split_ratio`. |
+| *unbound* `rotate_split` | Flip the focused tile's split between side by side and stacked. |
+| *unbound* `toggle_zoom` | The focused window fills the Space (outer gap kept); press again to restore the tiles. Ends when it closes, another tile gets focus or a window joins. |
+| *unbound* `move_display_next` / `prev` | Move the focused window to the next / previous display (left to right, wrapping), into that display's current Space. |
+| *unbound* `toggle_pause` | Pause or resume tiling, like the menu item. |
 
-These are the built-in defaults. You can change them under [keys](#keys-and-app-rules). The example config lists the H/J/K/L keys explicitly, so arrow keys only work if you leave the `focus_*` / `move_*` keys out. The menu's **Keyboard Shortcuts…** lists only the Desktop shortcuts.
+These are the built-in defaults. The rows marked *unbound* have no shortcut until you set one under `keys`; `config/init.lua.example` has suggested ⌥⇧ bindings. You can change them under [keys](#keys-and-app-rules). The example config lists the H/J/K/L keys explicitly, so arrow keys only work if you leave the `focus_*` / `move_*` keys out. The menu's **Keyboard Shortcuts…** lists your active shortcuts.
 
 New windows split the focused window along its longer side and take the second half. Close, minimize, hide or fullscreen a window and the rest reflow. When it comes back, it gets its old tile.
 
@@ -91,6 +97,9 @@ config = {
 - **Names** are joined with `+` and are not case-sensitive. Modifiers: `alt` (`opt`, `option`), `shift`, `ctrl` (`control`), `cmd` (`command`). Keys: `a`–`z`, `0`–`9`, `f1`–`f12`, `space`, `tab`, `return`, `escape`, `grave`, `minus`, `equal`, `comma`, `period`, `slash`.
 - `throw` and `switch` are modifiers only. `toggle_float`, `center_window`, `focus_*` and `move_*` need at least one modifier and exactly one key. Setting any `focus_*` (or `move_*`) key replaces that group's defaults, so the default arrow keys stop working. `throw` must differ from `switch`, and `toggle_float` can't be a throw shortcut like `alt+shift+3`.
 - **`switch` doesn't switch Desktops.** macOS does that, with the shortcuts under Mission Control. `switch` only tells hyprMac which keys to watch for the missing-Desktop notice. A throw reads the modifiers from macOS's own shortcut (`com.apple.symbolichotkeys`, read only) and uses `switch` only if that can't be read.
+- **More actions** (`resize_left`, `resize_down`, `resize_up`, `resize_right`, `equalize`, `rotate_split`, `toggle_zoom`, `move_display_next`, `move_display_prev`, `toggle_pause`) take modifiers plus one key like `toggle_float`, and can't reuse another configured or default shortcut or a Desktop digit chord.
+- **macOS conflicts.** On every load, each shortcut except the throw prefix is compared with the enabled shortcuts in System Settings. A match isn't registered, and a notice says which (for example `⌥⇧F conflicts with a macOS shortcut (Spotlight)`). Nothing in System Settings is changed.
+- **`resize_step`** (top level of `config`, not under `keys`) is the percent of a split one resize press moves: 1–25, default 5.
 - **Rules** take bundle ids (`osascript -e 'id of app "Calculator"'`), up to 200 per list. `float` adds to the built-in list. An app in `ignore` is skipped entirely, including by the throw and toggle shortcuts.
 
 If the config has an error, nothing changes. hyprMac keeps the last good settings and tells you what's wrong. A missing file means the defaults.

@@ -19,6 +19,8 @@ public struct Config: Equatable {
     /// Windows first seen narrower / shorter than this float (0 disables that axis).
     public var floatMinWidth: Double
     public var floatMinHeight: Double
+    /// Percent of a split moved per keyboard resize press (1–25).
+    public var resizeStep: Double = 5
     public var keys: KeyBindings = .defaults
     public var rules = AppRules()
     public var osdPopup: Bool = true
@@ -28,13 +30,14 @@ public struct Config: Equatable {
     init(_ c: hm_config) {
         innerGap = c.inner_gap; outerGap = c.outer_gap; splitRatio = c.split_ratio
         floatMinWidth = c.float_min_w; floatMinHeight = c.float_min_h
+        resizeStep = c.resize_step
     }
     public init(innerGap: Double, outerGap: Double, splitRatio: Double = 0.5,
-                floatMinWidth: Double = 400, floatMinHeight: Double = 300,
+                floatMinWidth: Double = 400, floatMinHeight: Double = 300, resizeStep: Double = 5,
                 keys: KeyBindings = .defaults, rules: AppRules = AppRules(),
                 osdPopup: Bool = true) {
         self.innerGap = innerGap; self.outerGap = outerGap; self.splitRatio = splitRatio
-        self.floatMinWidth = floatMinWidth; self.floatMinHeight = floatMinHeight
+        self.floatMinWidth = floatMinWidth; self.floatMinHeight = floatMinHeight; self.resizeStep = resizeStep
         self.keys = keys; self.rules = rules; self.osdPopup = osdPopup
     }
 
@@ -71,6 +74,10 @@ public struct Config: Equatable {
             keys.moveKeys = customMove
         }
 
+        for action in KeyAction.allCases {
+            if let text = k[action.rawValue], let spec = KeySpec(parsing: text) { keys.actionKeys[action] = spec }
+        }
+
         guard let r = root["rules"] as? [String: Any],
               let ignore = r["ignore"] as? [String], let float = r["float"] as? [String]
         else { return nil }
@@ -79,7 +86,7 @@ public struct Config: Equatable {
     }
     var c: hm_config {
         hm_config(inner_gap: innerGap, outer_gap: outerGap, split_ratio: splitRatio,
-                  float_min_w: floatMinWidth, float_min_h: floatMinHeight)
+                  float_min_w: floatMinWidth, float_min_h: floatMinHeight, resize_step: resizeStep)
     }
 }
 

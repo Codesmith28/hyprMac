@@ -13,12 +13,21 @@ extension Coordinator {
         dispatchPrecondition(condition: .onQueue(queue))
         guard running else { return }
         mover.fallbackSwitchFlags = keys.switchModifiers.cgFlags
+        // A chord macOS already owns is not registered; the user is told instead (never crash, never touch settings).
+        let conflicts = ShortcutConflicts.find(in: keys, system: deps.nativeShortcuts?.enabledChords() ?? [])
+        var effective = keys
+        effective.suppressedIDs = Set(conflicts.map(\.id))
+        for c in conflicts {
+            logger.error("\(c.message, privacy: .public)")
+            EventLog.shared.emit("shortcut_conflict", ["action": c.action, "chord": c.chord, "macos": c.system])
+        }
         deps.onMain { [self] in
+            deps.hotkeys.onAction = { [weak self] action in self?.perform(action) }
             deps.hotkeys.onToggleFloat = { [weak self] in self?.toggleFocusedFloat() }
             deps.hotkeys.onCenterWindow = { [weak self] in self?.centerFocusedWindow() }
             deps.hotkeys.onFocusDirection = { [weak self] dir in self?.focus(direction: dir) }
             deps.hotkeys.onMoveDirection = { [weak self] dir in self?.move(direction: dir) }
-            let failed = deps.hotkeys.start(bindings: keys) { [weak self] n in self?.throwFocusedWindow(toSpace: n) }
+            let failed = deps.hotkeys.start(bindings: effective) { [weak self] n in self?.throwFocusedWindow(toSpace: n) }
             var unavailable: [String] = []
             if !failed.isEmpty {
                 logger.error("\(keys.throwModifiers.symbols) hotkeys unavailable for digits \(failed)")
@@ -32,6 +41,7 @@ extension Coordinator {
                                      onSwitch: { [weak self] n in self?.spaceKeyPressed(n) }) {
                 logger.error("space key observer unavailable; missing-space notices disabled")
             }
+            unavailable.append(contentsOf: conflicts.map(\.message))
             if !unavailable.isEmpty { notify(.hotkeysUnavailable(unavailable.joined(separator: ", "))) }
         }
         checkSwitchShortcut(keys.switchModifiers)

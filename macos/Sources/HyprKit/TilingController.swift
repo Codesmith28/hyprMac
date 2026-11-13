@@ -8,6 +8,8 @@ public protocol TilingController: AnyObject {
     func start()
     func stop()
     func setPaused(_ paused: Bool, reason: String?)
+    /// Same as the menu item: pause when running, resume when paused (`keys.toggle_pause`).
+    func togglePause()
     func retileAll()
     func reloadConfig()
 }

@@ -89,8 +89,13 @@ LayoutResult Engine::layout_of(SpaceId id) const {
     return space ? layout(*space) : LayoutResult{};
 }
 
-void Engine::make_plan(const Space &space, Plan &out) {
+void Engine::make_plan(Space &space, Plan &out) {
     LayoutResult l = layout(space);
+    if (space.zoomed != 0 && (!space.tree.contains(space.zoomed) || space.tree.leaf_count() < 2)) space.zoomed = 0;
+    if (space.zoomed != 0) {
+        for (Placement &p : l.placements)
+            if (p.id == space.zoomed) p.frame = l.root;
+    }
     Plan p;
     p.space = space.id;
     p.placements = std::move(l.placements);
@@ -252,6 +257,12 @@ hm_status Engine::reconcile(const Snapshot &s, Plan &out) {
         for (auto it = inserts.rbegin(); it != inserts.rend(); ++it) dwindle_insert(space, *it, snap, pending);
     }
 
+    // Zoom survives only while nothing joins the space and focus stays on the zoomed window.
+    if (space.zoomed != 0) {
+        const bool focus_moved = snap.focused != 0 && snap.focused != space.zoomed && space.tree.contains(snap.focused);
+        if (!restores.empty() || !inserts.empty() || focus_moved) space.zoomed = 0;
+    }
+
     for (const WindowInfo &w : snap.windows) drop_if_untracked(w.id);
 
     make_plan(space, out);
@@ -259,7 +270,7 @@ hm_status Engine::reconcile(const Snapshot &s, Plan &out) {
 }
 
 hm_status Engine::relayout(SpaceId id, Plan &out) {
-    const Space *space = model_.find_space(id);
+    Space *space = model_.find_space(id);
     if (!space) return HM_ERR_UNKNOWN_SPACE;
     make_plan(*space, out);
     return HM_OK;
@@ -279,7 +290,9 @@ hm_status Engine::swap(WindowId a, WindowId b, Plan &out) {
     if (sa == 0 || sb == 0) return HM_ERR_UNKNOWN_WINDOW;
     if (sa != sb) return HM_ERR_INVALID_ARGUMENT;
     model_.swap(a, b);
-    make_plan(*model_.find_space(sa), out);
+    Space &space = *model_.find_space(sa);
+    space.zoomed = 0;
+    make_plan(space, out);
     return HM_OK;
 }
 
@@ -302,6 +315,18 @@ Rect subtree_rect(const LayoutResult &l, const Node *n) {
 
 } // namespace
 
+MinSize Engine::subtree_min(const Node *n) const {
+    const double g = cfg_.inner_gap;
+    if (n->is_leaf()) {
+        const MinSize m = min_size(n->window);
+        return {std::max(m.w, 1.0), std::max(m.h, 1.0)};
+    }
+    const MinSize a = subtree_min(n->child[0].get());
+    const MinSize b = subtree_min(n->child[1].get());
+    if (n->orientation == Orientation::Vertical) return {a.w + b.w + g, std::max(a.h, b.h)};
+    return {std::max(a.w, b.w), a.h + b.h + g};
+}
+
 hm_status Engine::resize(WindowId w, const Rect &desired, Plan &out) {
     if (w == 0 || !is_valid_rect(desired)) return HM_ERR_INVALID_ARGUMENT;
     const SpaceId sid = model_.tree_space_of(w);
@@ -312,6 +337,7 @@ hm_status Engine::resize(WindowId w, const Rect &desired, Plan &out) {
     constexpr double kEdgeEps = 0.5;
     const std::optional<Rect> cur = find_frame(layout(*space), w);
     if (!cur) return HM_ERR_UNKNOWN_WINDOW;
+    space->zoomed = 0;
 
     // 0 = left, 1 = right (vertical splits); 2 = top, 3 = bottom (horizontal splits).
     struct Task {
@@ -344,16 +370,7 @@ hm_status Engine::resize(WindowId w, const Rect &desired, Plan &out) {
     std::sort(tasks.begin(), tasks.end(), [](const Task &a, const Task &b) { return a.depth < b.depth; });
 
     const double g = cfg_.inner_gap;
-    std::function<MinSize(const Node *)> min_of = [&](const Node *n) -> MinSize {
-        if (n->is_leaf()) {
-            const MinSize m = min_size(n->window);
-            return {std::max(m.w, 1.0), std::max(m.h, 1.0)};
-        }
-        const MinSize a = min_of(n->child[0].get());
-        const MinSize b = min_of(n->child[1].get());
-        if (n->orientation == Orientation::Vertical) return {a.w + b.w + g, std::max(a.h, b.h)};
-        return {std::max(a.w, b.w), a.h + b.h + g};
-    };
+    const auto min_of = [this](const Node *n) { return subtree_min(n); };
 
     for (const Task &t : tasks) {
         const LayoutResult l = layout(*space); // earlier tasks may have moved this split's rect
@@ -379,6 +396,136 @@ hm_status Engine::resize(WindowId w, const Rect &desired, Plan &out) {
     }
 
     make_plan(*space, out);
+    return HM_OK;
+}
+
+hm_status Engine::resize_step(WindowId w, Direction dir, Plan &out) {
+    if (w == 0) return HM_ERR_INVALID_ARGUMENT;
+    const SpaceId sid = model_.tree_space_of(w);
+    Space *space = sid ? model_.find_space(sid) : nullptr;
+    if (!space) return HM_ERR_UNKNOWN_WINDOW;
+    space->zoomed = 0;
+
+    const bool vertical = dir == Direction::Left || dir == Direction::Right;
+    const bool grow_first = dir == Direction::Right || dir == Direction::Down; // boundary moves +
+    const Orientation o = vertical ? Orientation::Vertical : Orientation::Horizontal;
+    // The window's own edge in `dir` is a boundary when it sits in the first child (right/down)
+    // or the second child (left/up) of a split on that axis. Otherwise any split on the axis will do.
+    const Node *split = nullptr, *fallback = nullptr;
+    const Node *child = space->tree.find(w);
+    for (const Node *p = child->parent; p; child = p, p = p->parent) {
+        if (p->orientation != o) continue;
+        if (!fallback) fallback = p;
+        if (p->child[grow_first ? 0 : 1].get() == child) {
+            split = p;
+            break;
+        }
+    }
+    if (!split) split = fallback;
+    if (split) {
+        const LayoutResult l = layout(*space);
+        const Rect r = subtree_rect(l, split);
+        const Rect r0 = subtree_rect(l, split->child[0].get());
+        const double avail = (vertical ? r.w : r.h) - cfg_.inner_gap;
+        if (avail > 0) {
+            // Step from where the boundary is drawn now: minimum sizes may have shifted it away
+            // from the stored ratio, and a key press must move what the user sees.
+            const double shown = std::clamp((vertical ? r0.w : r0.h) / avail, kMinRatio, kMaxRatio);
+            double target = std::clamp(shown + (grow_first ? 1 : -1) * cfg_.resize_step / 100.0, kMinRatio, kMaxRatio);
+            double l1 = avail * target;
+            const MinSize m1 = subtree_min(split->child[0].get());
+            const MinSize m2 = subtree_min(split->child[1].get());
+            const double lo = vertical ? m1.w : m1.h;
+            const double hi = avail - (vertical ? m2.w : m2.h);
+            if (lo <= hi) l1 = std::clamp(l1, lo, hi);
+            target = l1 / avail;
+            target = grow_first ? std::max(target, shown) : std::min(target, shown); // never against the key
+            space->tree.set_ratio(split, target);
+        }
+    }
+    make_plan(*space, out);
+    return HM_OK;
+}
+
+hm_status Engine::equalize(SpaceId id, Plan &out) {
+    Space *space = model_.find_space(id);
+    if (!space) return HM_ERR_UNKNOWN_SPACE;
+    space->zoomed = 0;
+    std::function<void(const Node *)> walk = [&](const Node *n) {
+        if (n->is_leaf()) return;
+        space->tree.set_ratio(n, cfg_.split_ratio);
+        walk(n->child[0].get());
+        walk(n->child[1].get());
+    };
+    if (space->tree.root()) walk(space->tree.root());
+    make_plan(*space, out);
+    return HM_OK;
+}
+
+hm_status Engine::rotate_split(WindowId w, Plan &out) {
+    if (w == 0) return HM_ERR_INVALID_ARGUMENT;
+    const SpaceId sid = model_.tree_space_of(w);
+    Space *space = sid ? model_.find_space(sid) : nullptr;
+    if (!space) return HM_ERR_UNKNOWN_WINDOW;
+    space->zoomed = 0;
+    if (const Node *parent = space->tree.find(w)->parent)
+        space->tree.set_orientation(parent, parent->orientation == Orientation::Vertical ? Orientation::Horizontal
+                                                                                         : Orientation::Vertical);
+    make_plan(*space, out);
+    return HM_OK;
+}
+
+hm_status Engine::toggle_zoom(WindowId w, Plan &out) {
+    if (w == 0) return HM_ERR_INVALID_ARGUMENT;
+    const SpaceId sid = model_.tree_space_of(w);
+    Space *space = sid ? model_.find_space(sid) : nullptr;
+    if (!space) return HM_ERR_UNKNOWN_WINDOW;
+    // A lone window already fills the space; there is nothing to zoom.
+    space->zoomed = (space->zoomed == w || space->tree.leaf_count() < 2) ? 0 : w;
+    make_plan(*space, out);
+    return HM_OK;
+}
+
+WindowId Engine::zoomed_window(SpaceId id) const {
+    const Space *space = model_.find_space(id);
+    if (!space || space->zoomed == 0 || !space->tree.contains(space->zoomed) || space->tree.leaf_count() < 2) return 0;
+    return space->zoomed;
+}
+
+void Engine::clear_zoom(SpaceId id) {
+    if (id != 0) {
+        if (Space *space = model_.find_space(id)) space->zoomed = 0;
+        return;
+    }
+    for (const auto &[sid, ignored] : model_.spaces()) {
+        (void)ignored;
+        model_.find_space(sid)->zoomed = 0;
+    }
+}
+
+hm_status Engine::move_to_space(WindowId w, SpaceId target, Plan &target_plan, Plan &source_plan) {
+    if (w == 0 || target == 0) return HM_ERR_INVALID_ARGUMENT;
+    const SpaceId src = model_.tree_space_of(w);
+    if (src == 0) return HM_ERR_UNKNOWN_WINDOW;
+    if (src == target) return HM_ERR_INVALID_ARGUMENT;
+    Space *to = model_.find_space(target);
+    if (!to) return HM_ERR_UNKNOWN_SPACE;
+    Space *from = model_.find_space(src);
+    model_.remove(w, false);
+    from->zoomed = 0;
+    to->zoomed = 0;
+    if (to->tree.empty()) {
+        model_.insert_root(*to, w);
+    } else {
+        const WindowId anchor = (to->last_inserted != 0 && to->tree.contains(to->last_inserted))
+                                    ? to->last_inserted
+                                    : LayoutTree::first_leaf(to->tree.root());
+        const LayoutResult l = layout(*to);
+        const Rect r = find_frame(l, anchor).value_or(l.root);
+        model_.split_leaf(*to, anchor, w, dwindle_orientation(r), cfg_.split_ratio, false);
+    }
+    make_plan(*to, target_plan);
+    make_plan(*from, source_plan);
     return HM_OK;
 }
 

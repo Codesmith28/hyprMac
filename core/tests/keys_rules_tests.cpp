@@ -8,6 +8,7 @@
 
 #include <cstdlib>
 #include <fstream>
+#include <cstring>
 #include <string>
 
 #ifndef HYPR_SOURCE_DIR
@@ -155,7 +156,109 @@ TEST_CASE("cross-field validation") {
     CHECK(hypr::validate_keys(k).empty());
 }
 
+TEST_CASE("cross-field validation: the new actions") {
+    using namespace hypr;
+    Keys k;
+    k.resize_left = {kModAlt | kModShift, "3"};
+    CHECK(has(validate_keys(k), "keys.resize_left: conflicts with the throw shortcut for Desktop 3"));
+    k = Keys{};
+    k.toggle_zoom = {kModAlt, "4"};
+    CHECK(has(validate_keys(k), "keys.toggle_zoom: conflicts with the Desktop switch shortcut for Desktop 4"));
+    k = Keys{};
+    k.toggle_zoom = {kModAlt | kModShift, "0"};
+    CHECK(validate_keys(k).empty());
+    k = Keys{};
+    k.equalize = {kModAlt | kModShift, "f"};  // toggle_float's default
+    CHECK(validate_keys(k) == "keys.equalize: 'alt+shift+f' is already used by keys.toggle_float");
+    k = Keys{};
+    k.equalize = {kModAlt | kModShift, "h"};  // a default focus shortcut
+    CHECK(validate_keys(k) == "keys.equalize: 'alt+shift+h' is already used by the default focus_left shortcut");
+    k.focus_left = {kModAlt | kModShift, "j"};  // focus_left set: the defaults are replaced
+    CHECK(validate_keys(k).empty());
+    k = Keys{};
+    k.rotate_split = {kModAlt | kModShift | kModCmd, "up"};  // default move_up (arrow)
+    CHECK(has(validate_keys(k), "already used by the default move_up shortcut"));
+    k = Keys{};
+    k.equalize = {kModAlt | kModShift, "c"};  // default center_window
+    CHECK(has(validate_keys(k), "already used by the default center_window shortcut"));
+    k.center_window = {kModAlt | kModShift, "x"};
+    CHECK(validate_keys(k).empty());
+    k = Keys{};
+    k.resize_left = {kModAlt | kModShift, "u"};
+    k.resize_right = {kModAlt | kModShift, "u"};
+    CHECK(validate_keys(k) == "keys.resize_right: 'alt+shift+u' is already used by keys.resize_left");
+    k.resize_right = {kModAlt | kModShift, "i"};
+    CHECK(validate_keys(k).empty());
+}
+
 // ---------- the loader ----------
+
+TEST_CASE("extras: every new action is accepted, canonical and unbound by default") {
+    auto e = extras("config = { keys = { toggle_float = 'ctrl+alt+t' } }\n");
+    REQUIRE(e.status == HM_OK);
+    for (const hypr::ActionKey &a : hypr::kActionKeys) CHECK_FALSE(has(e.json, std::string("\"") + a.name + "\""));
+
+    const char *lua =
+        "config = { keys = {\n"
+        "  resize_left = 'Alt+Shift+Y', resize_down = 'alt+shift+u', resize_up = 'opt+shift+i', resize_right = 'alt+shift+o',\n"
+        "  equalize = 'alt+shift+e', rotate_split = 'alt+shift+r', toggle_zoom = 'alt+shift+z',\n"
+        "  move_display_next = 'alt+shift+period', move_display_prev = 'alt+shift+comma', toggle_pause = 'alt+shift+p',\n"
+        "} }\n";
+    e = extras(lua);
+    INFO(e.err);
+    REQUIRE(e.status == HM_OK);
+    CHECK(has(e.json, R"("resize_left":"alt+shift+y","resize_down":"alt+shift+u","resize_up":"alt+shift+i","resize_right":"alt+shift+o",)"
+                      R"("equalize":"alt+shift+e","rotate_split":"alt+shift+r","toggle_zoom":"alt+shift+z",)"
+                      R"("move_display_next":"alt+shift+period","move_display_prev":"alt+shift+comma","toggle_pause":"alt+shift+p")"));
+}
+
+TEST_CASE("extras: the new actions validate like the existing ones") {
+    for (const hypr::ActionKey &a : hypr::kActionKeys) {
+        CAPTURE(a.name);
+        const std::string k = a.name;
+        auto e = extras("config = { keys = { " + k + " = 'alt+shift' } }\n");
+        CHECK(e.status == HM_ERR_CONFIG);
+        CHECK(e.err == "<path>: keys." + k + ": needs exactly one key (for example 'alt+shift+f' or '<M-S-f>')");
+        e = extras("config = { keys = { " + k + " = 'f' } }\n");
+        CHECK(e.err == "<path>: keys." + k + ": needs at least one modifier");
+        e = extras("config = { keys = { " + k + " = 'hyper+f' } }\n");
+        CHECK(e.err == "<path>: keys." + k + ": unknown modifier 'hyper'");
+        e = extras("config = { keys = { " + k + " = 'alt+shift+nope' } }\n");
+        CHECK(e.err == "<path>: keys." + k + ": unknown key 'nope'");
+        e = extras("config = { keys = { " + k + " = 'alt+f+g' } }\n");
+        CHECK(e.err == "<path>: keys." + k + ": more than one key in 'alt+f+g'");
+        e = extras("config = { keys = { " + k + " = 5 } }\n");
+        CHECK(e.err == "<path>: config.keys." + k + " must be a string, got number");
+        e = extras("config = { keys = { " + k + " = '' } }\n");
+        CHECK(e.err == "<path>: keys." + k + ": must not be empty");
+        e = extras("config = { keys = { " + k + " = 'alt+shift+3' } }\n");
+        CHECK(has(e.err, "keys." + k + ": conflicts with the throw shortcut for Desktop 3"));
+        e = extras("config = { keys = { " + k + " = 'alt+3' } }\n");
+        CHECK(has(e.err, "keys." + k + ": conflicts with the Desktop switch shortcut for Desktop 3"));
+        e = extras("config = { keys = { " + k + " = 'alt+shift+f' } }\n");
+        CHECK(e.err == "<path>: keys." + k + ": 'alt+shift+f' is already used by keys.toggle_float");
+        e = extras("config = { keys = { " + k + " = 'ctrl+alt+shift+x' } }\n");
+        CHECK(e.status == HM_OK);
+    }
+    auto e = extras("config = { keys = { resize_lef = 'alt+shift+y' } }\n");
+    CHECK(has(e.err, "unknown key 'resize_lef' in config.keys (did you mean 'resize_left'?)"));
+    e = extras("config = { keys = { toggel_zoom = 'alt+shift+z' } }\n");
+    CHECK(has(e.err, "unknown key 'toggel_zoom' in config.keys (did you mean 'toggle_zoom'?)"));
+    // A failed reload keeps the previous config: nothing is written to the caller's struct.
+    hm_config c;
+    hm_config_default(&c);
+    const hm_config before = c;
+    TempFile bad("config = { keys = { equalize = 'alt+shift+h' } }\n");
+    char err[256];
+    CHECK(hm_config_load_file(bad.path.c_str(), &c, err, sizeof err) == HM_ERR_CONFIG);
+    CHECK(std::memcmp(&c, &before, sizeof c) == 0);
+}
+
+TEST_CASE("extras: two new actions on the same shortcut are rejected") {
+    auto e = extras("config = { keys = { toggle_zoom = 'alt+shift+z', rotate_split = 'alt+shift+z' } }\n");
+    CHECK(e.status == HM_ERR_CONFIG);
+    CHECK(e.err == "<path>: keys.toggle_zoom: 'alt+shift+z' is already used by keys.rotate_split");
+}
 
 TEST_CASE("extras: defaults equal the hard-coded behaviour") {
     auto e = extras("config = { gaps = { inner = 4 } }\n");

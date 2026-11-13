@@ -11,6 +11,8 @@ public protocol ThrowHotkeys: AnyObject {
     var onFocusDirection: ((Direction) -> Void)? { get set }
     /// Move window in the BSP tree in the given direction. Set before `start`.
     var onMoveDirection: ((Direction) -> Void)? { get set }
+    /// An unbound-by-default action fired (resize, equalize, rotate, zoom, display move, pause). Set before `start`.
+    var onAction: ((KeyAction) -> Void)? { get set }
     /// True when the toggle-float shortcut could not be registered (taken by another app).
     var toggleFloatFailed: Bool { get }
     /// (Re-)registers the hotkeys for `bindings`, dropping the previous registrations first;
@@ -39,6 +41,7 @@ public final class HotkeyCenter: ThrowHotkeys {
     public var onCenterWindow: (() -> Void)?
     public var onFocusDirection: ((Direction) -> Void)?
     public var onMoveDirection: ((Direction) -> Void)?
+    public var onAction: ((KeyAction) -> Void)?
     public private(set) var toggleFloatFailed = false
     public private(set) var currentBindings: KeyBindings?
 
@@ -51,11 +54,36 @@ public final class HotkeyCenter: ThrowHotkeys {
     /// Base ID for move direction shortcuts.
     public static let moveBaseID: UInt32 = 230
 
+    /// Base ID for the unbound-by-default actions (`KeyAction.allCases` order).
+    public static let actionBaseID: UInt32 = 250
+
+    public static func hotkeyID(for action: KeyAction) -> UInt32 {
+        actionBaseID + UInt32(KeyAction.allCases.firstIndex(of: action) ?? 0)
+    }
+
     /// `kVK_ANSI_F`.
     public static let toggleFloatKeyCode = UInt32(kVK_ANSI_F)
 
+    /// Every configurable chord (the throw digits excluded), labeled by its `keys.<name>`.
+    /// Pure data, so tests and the macOS-shortcut conflict check can use it.
+    public static func namedChords(for bindings: KeyBindings) -> [(id: UInt32, name: String, spec: KeySpec)] {
+        var list: [(id: UInt32, name: String, spec: KeySpec)] = []
+        list.append((toggleFloatID, "toggle_float", bindings.toggleFloat))
+        list.append((centerWindowID, "center_window", bindings.centerWindow))
+        for (i, item) in bindings.focusKeys.enumerated() {
+            list.append((focusBaseID + UInt32(i), "focus_\(item.direction.rawValue)", item.spec))
+        }
+        for (i, item) in bindings.moveKeys.enumerated() {
+            list.append((moveBaseID + UInt32(i), "move_\(item.direction.rawValue)", item.spec))
+        }
+        for action in KeyAction.allCases {
+            if let spec = bindings.actionKeys[action] { list.append((hotkeyID(for: action), action.rawValue, spec)) }
+        }
+        return list
+    }
+
     /// Every registration for `bindings`, in order: (hotkey id, virtual key code, Carbon modifiers).
-    /// Pure data, so tests can check it.
+    /// Chords in `bindings.suppressedIDs` are left out. Pure data, so tests can check it.
     public static func registrations(for bindings: KeyBindings) -> [(id: UInt32, keyCode: UInt32, modifiers: UInt32)] {
         var list: [(id: UInt32, keyCode: UInt32, modifiers: UInt32)] = []
         for n in 1...9 {
@@ -63,13 +91,8 @@ public final class HotkeyCenter: ThrowHotkeys {
                 list.append((UInt32(n), UInt32(kc), bindings.throwModifiers.carbon))
             }
         }
-        list.append((toggleFloatID, bindings.toggleFloat.keyCode, bindings.toggleFloat.modifiers.carbon))
-        list.append((centerWindowID, bindings.centerWindow.keyCode, bindings.centerWindow.modifiers.carbon))
-        for (i, item) in bindings.focusKeys.enumerated() {
-            list.append((focusBaseID + UInt32(i), item.spec.keyCode, item.spec.modifiers.carbon))
-        }
-        for (i, item) in bindings.moveKeys.enumerated() {
-            list.append((moveBaseID + UInt32(i), item.spec.keyCode, item.spec.modifiers.carbon))
+        for c in namedChords(for: bindings) where !bindings.suppressedIDs.contains(c.id) {
+            list.append((c.id, c.spec.keyCode, c.spec.modifiers.carbon))
         }
         return list
     }
@@ -109,6 +132,8 @@ public final class HotkeyCenter: ThrowHotkeys {
                 if let direction = center.currentBindings?.moveKeys[idx].direction {
                     center.onMoveDirection?(direction)
                 }
+            } else if id.id >= HotkeyCenter.actionBaseID && id.id < HotkeyCenter.actionBaseID + UInt32(KeyAction.allCases.count) {
+                center.onAction?(KeyAction.allCases[Int(id.id - HotkeyCenter.actionBaseID)])
             } else {
                 center.onThrow?(Int(id.id))
             }

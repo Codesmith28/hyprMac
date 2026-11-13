@@ -53,6 +53,8 @@
 
 namespace hypr {
 
+enum class Direction : std::uint8_t { Left, Down, Up, Right };
+
 enum class WindowState : std::uint8_t { Tiled, Floating, Minimized, Fullscreen, Hidden };
 
 struct WindowInfo {
@@ -90,6 +92,15 @@ public:
     // The user resized `w` to `desired`: move the adjacent split boundaries (see engine.cpp) and
     // return the plan for the window's space. HM_ERR_UNKNOWN_WINDOW unless `w` is a tiled leaf.
     hm_status resize(WindowId w, const Rect &desired, Plan &out);
+    // Keyboard actions; each returns the plan for the affected space.
+    hm_status resize_step(WindowId w, Direction dir, Plan &out);
+    hm_status equalize(SpaceId space, Plan &out);
+    hm_status rotate_split(WindowId w, Plan &out);
+    hm_status toggle_zoom(WindowId w, Plan &out);
+    // Move a tiled window into another known space's tree; plans for both spaces.
+    hm_status move_to_space(WindowId w, SpaceId target, Plan &target_plan, Plan &source_plan);
+    WindowId zoomed_window(SpaceId space) const;
+    void clear_zoom(SpaceId space); // 0 = every space
     void forget_window(WindowId w);
     void forget_space(SpaceId space);
 
@@ -111,7 +122,8 @@ private:
 
     static hm_status validate(const Snapshot &s);
     LayoutResult layout(const Space &space) const;
-    void make_plan(const Space &space, Plan &out);
+    MinSize subtree_min(const Node *n) const;
+    void make_plan(Space &space, Plan &out);
     void restore(Space &space, WindowId w, const Snapshot &s, const std::unordered_set<WindowId> &pending);
     void dwindle_insert(Space &space, WindowId w, const Snapshot &s, const std::unordered_set<WindowId> &pending);
     WindowId choose_target(const Space &space, const Snapshot &s,

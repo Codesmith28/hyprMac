@@ -65,6 +65,10 @@ public:
     // foreign nodes or non-finite ratios.
     bool set_ratio(const Node *split, double ratio);
 
+    // Set the orientation of a split node of THIS tree; the ratio is kept. False for leaves or
+    // foreign nodes.
+    bool set_orientation(const Node *split, Orientation o);
+
     // Remove w's leaf; its sibling subtree takes the parent's place. False if absent.
     bool remove(WindowId w);
 

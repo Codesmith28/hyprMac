@@ -139,6 +139,60 @@ std::string validate_keys(const Keys &k) {
     if (k.toggle_float.mods == k.throw_to.mods && k.toggle_float.key.size() == 1 && k.toggle_float.key[0] >= '1' &&
         k.toggle_float.key[0] <= '9')
         return "keys.toggle_float: conflicts with the throw shortcut for Desktop " + k.toggle_float.key;
+
+    // The unbound-by-default actions must not shadow ⌥⇧1-9 / ⌥1-9 (Desktop throw and switch).
+    for (const ActionKey &a : kActionKeys) {
+        const Chord &c = k.*(a.chord);
+        if (c.key.empty()) continue;
+        const bool digit = c.key.size() == 1 && c.key[0] >= '1' && c.key[0] <= '9';
+        if (digit && c.mods == k.throw_to.mods)
+            return std::string("keys.") + a.name + ": conflicts with the throw shortcut for Desktop " + c.key;
+        if (digit && c.mods == k.switch_to.mods)
+            return std::string("keys.") + a.name + ": conflicts with the Desktop switch shortcut for Desktop " + c.key;
+    }
+
+    // Duplicates that involve at least one of the new actions. The default focus/move/center
+    // shortcuts count while they are in effect (focus_* / move_* replace them as soon as one is set).
+    struct Entry {
+        std::string name;
+        Chord chord;
+        bool is_new;
+    };
+    std::vector<Entry> all;
+    all.push_back({"keys.toggle_float", k.toggle_float, false});
+    const Chord prefix{kModAlt | kModShift, ""};
+    const Chord moves{kModAlt | kModShift | kModCmd, ""};
+    all.push_back({k.center_window.key.empty() ? "the default center_window shortcut" : "keys.center_window",
+                   k.center_window.key.empty() ? Chord{prefix.mods, "c"} : k.center_window, false});
+    const struct { const char *name; const Chord *set; Chord base; } groups[] = {
+        {"focus", &k.focus_left, prefix}, {"move", &k.move_left, moves}};
+    for (const auto &g : groups) {
+        const Chord *first = g.set; // four consecutive members: left, down, up, right
+        const char *dirs[] = {"left", "down", "up", "right"};
+        const char *keys_hjkl[] = {"h", "j", "k", "l"};
+        const char *keys_arrow[] = {"left", "down", "up", "right"};
+        bool any = false;
+        for (int i = 0; i < 4; ++i) any = any || !first[i].key.empty();
+        for (int i = 0; i < 4; ++i) {
+            const std::string name = std::string(g.name) + "_" + dirs[i];
+            if (any) {
+                if (!first[i].key.empty()) all.push_back({"keys." + name, first[i], false});
+            } else {
+                all.push_back({"the default " + name + " shortcut", Chord{g.base.mods, keys_hjkl[i]}, false});
+                all.push_back({"the default " + name + " shortcut", Chord{g.base.mods, keys_arrow[i]}, false});
+            }
+        }
+    }
+    for (const ActionKey &a : kActionKeys)
+        if (!(k.*(a.chord)).key.empty()) all.push_back({std::string("keys.") + a.name, k.*(a.chord), true});
+    for (size_t j = 0; j < all.size(); ++j) {
+        if (!all[j].is_new) continue;
+        for (size_t i = 0; i < all.size(); ++i) {
+            if (i == j || (all[i].is_new && i > j)) continue;
+            if (all[i].chord.mods == all[j].chord.mods && all[i].chord.key == all[j].chord.key)
+                return all[j].name + ": '" + format_chord(all[j].chord) + "' is already used by " + all[i].name;
+        }
+    }
     return "";
 }
 
@@ -188,6 +242,14 @@ std::string extras_to_json(const Extras &e) {
     if (!e.keys.move_right.key.empty()) {
         out += ",\"move_right\":";
         json_string(out, format_chord(e.keys.move_right));
+    }
+    for (const ActionKey &a : kActionKeys) {
+        const Chord &c = e.keys.*(a.chord);
+        if (c.key.empty()) continue;
+        out += ",\"";
+        out += a.name;
+        out += "\":";
+        json_string(out, format_chord(c));
     }
     out += "},\"rules\":{\"ignore\":";
     json_list(out, e.rules.ignore);

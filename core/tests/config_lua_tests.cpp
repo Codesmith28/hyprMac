@@ -100,6 +100,30 @@ TEST_CASE("partial config: only split_ratio") {
     CHECK(r.cfg.split_ratio == doctest::Approx(0.3));
 }
 
+TEST_CASE("resize_step: default 5, accepted within [1, 25], rejected outside") {
+    auto r = load("config = { gaps = { inner = 3 } }");
+    REQUIRE(r.status == HM_OK);
+    CHECK(r.cfg.resize_step == 5.0);
+    r = load("config = { resize_step = 10 }");
+    REQUIRE(r.status == HM_OK);
+    CHECK(r.cfg.resize_step == 10.0);
+    CHECK(load("config = { resize_step = 1 }").status == HM_OK);
+    CHECK(load("config = { resize_step = 25 }").status == HM_OK);
+    CHECK(load("config = { resize_step = 2.5 }").cfg.resize_step == 2.5);
+    for (const char *bad : {"0", "0.99", "25.01", "-5", "100", "0/0", "math.huge"}) {
+        CAPTURE(bad);
+        auto e = load(std::string("config = { resize_step = ") + bad + " }");
+        CHECK(e.status == HM_ERR_CONFIG);
+        CHECK(same(e.cfg, sentinel()));
+        CHECK(contains(e.err, "resize_step"));
+    }
+    auto e = load("config = { resize_step = '5' }");
+    CHECK(e.status == HM_ERR_CONFIG);
+    CHECK(contains(e.err, "config.resize_step must be a number, got string"));
+    e = load("config = { resize_stp = 5 }");
+    CHECK(contains(e.err, "unknown key 'resize_stp' in config (did you mean 'resize_step'?)"));
+}
+
 TEST_CASE("empty source gives defaults") {
     auto r = load("");
     REQUIRE(r.status == HM_OK);
