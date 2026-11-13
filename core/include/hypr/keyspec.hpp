@@ -44,7 +44,32 @@ struct Keys {
     Chord move_down{0, ""};
     Chord move_up{0, ""};
     Chord move_right{0, ""};
+    // Actions that ship unbound: an empty key means "no shortcut".
+    Chord resize_left{0, ""};
+    Chord resize_down{0, ""};
+    Chord resize_up{0, ""};
+    Chord resize_right{0, ""};
+    Chord equalize{0, ""};
+    Chord rotate_split{0, ""};
+    Chord toggle_zoom{0, ""};
+    Chord move_display_next{0, ""};
+    Chord move_display_prev{0, ""};
+    Chord toggle_pause{0, ""};
 };
+
+// The unbound-by-default actions, by their `keys.<name>`.
+struct ActionKey {
+    const char *name;
+    Chord Keys::*chord;
+};
+inline constexpr ActionKey kActionKeys[] = {
+    {"resize_left", &Keys::resize_left},   {"resize_down", &Keys::resize_down},
+    {"resize_up", &Keys::resize_up},       {"resize_right", &Keys::resize_right},
+    {"equalize", &Keys::equalize},         {"rotate_split", &Keys::rotate_split},
+    {"toggle_zoom", &Keys::toggle_zoom},   {"move_display_next", &Keys::move_display_next},
+    {"move_display_prev", &Keys::move_display_prev}, {"toggle_pause", &Keys::toggle_pause},
+};
+inline constexpr size_t kActionKeyCount = sizeof kActionKeys / sizeof kActionKeys[0];
 
 struct Rules {
     std::vector<std::string> ignore;

@@ -400,7 +400,7 @@ std::string parse_keys(const std::optional<std::string> &t, const std::optional<
                        const std::optional<std::string> &fu, const std::optional<std::string> &fr,
                        const std::optional<std::string> &ml, const std::optional<std::string> &md,
                        const std::optional<std::string> &mu, const std::optional<std::string> &mr,
-                       hypr::Keys *out) {
+                       const std::optional<std::string> *actions, hypr::Keys *out) {
     struct Item { const char *name; const std::optional<std::string> *text; bool key; hypr::Chord *dst; };
     const Item items[] = {{"throw", &t, false, &out->throw_to},
                           {"toggle_float", &tf, true, &out->toggle_float},
@@ -421,6 +421,13 @@ std::string parse_keys(const std::optional<std::string> &t, const std::optional<
         std::string e = hypr::parse_chord(**it.text, it.key, c);
         if (!e.empty()) return std::string("keys.") + it.name + ": " + e;
         *it.dst = c;
+    }
+    for (size_t i = 0; i < hypr::kActionKeyCount; ++i) {
+        if (!actions[i].has_value()) continue;
+        hypr::Chord c;
+        std::string e = hypr::parse_chord(*actions[i], true, c);
+        if (!e.empty()) return std::string("keys.") + hypr::kActionKeys[i].name + ": " + e;
+        out->*(hypr::kActionKeys[i].chord) = c;
     }
     if (out->prefix.mods != 0) {
         if (out->prefix.mods != (hypr::kModAlt | hypr::kModShift)) {
@@ -464,6 +471,7 @@ hm_status run(const char *src, size_t len, const std::string &path, hm_config *i
     std::optional<std::string> key_throw, key_toggle, key_switch, key_prefix, key_center;
     std::optional<std::string> key_focus_left, key_focus_down, key_focus_up, key_focus_right;
     std::optional<std::string> key_move_left, key_move_down, key_move_up, key_move_right;
+    std::optional<std::string> key_actions[hypr::kActionKeyCount];
 
     lua_pushcfunction(L, setup_state);
     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
@@ -505,17 +513,21 @@ hm_status run(const char *src, size_t len, const std::string &path, hm_config *i
         if (lua_type(L, -1) != LUA_TTABLE) {
             message = std::string("config must be a table, got ") + luaL_typename(L, -1);
         } else {
+            std::vector<Field> key_fields = {str_field("throw", &key_throw), str_field("toggle_float", &key_toggle),
+                                             str_field("switch", &key_switch),
+                                             str_field("prefix", &key_prefix), str_field("center_window", &key_center),
+                                             str_field("focus_left", &key_focus_left), str_field("focus_down", &key_focus_down),
+                                             str_field("focus_up", &key_focus_up), str_field("focus_right", &key_focus_right),
+                                             str_field("move_left", &key_move_left), str_field("move_down", &key_move_down),
+                                             str_field("move_up", &key_move_up), str_field("move_right", &key_move_right)};
+            for (size_t i = 0; i < hypr::kActionKeyCount; ++i)
+                key_fields.push_back(str_field(hypr::kActionKeys[i].name, &key_actions[i]));
             std::vector<Field> schema = {
                 table_field("gaps", {num_field("inner", &cfg.inner_gap), num_field("outer", &cfg.outer_gap)}),
                 num_field("split_ratio", &cfg.split_ratio),
+                num_field("resize_step", &cfg.resize_step),
                 table_field("float", {num_field("min_width", &cfg.float_min_w), num_field("min_height", &cfg.float_min_h)}),
-                table_field("keys", {str_field("throw", &key_throw), str_field("toggle_float", &key_toggle),
-                                     str_field("switch", &key_switch),
-                                     str_field("prefix", &key_prefix), str_field("center_window", &key_center),
-                                     str_field("focus_left", &key_focus_left), str_field("focus_down", &key_focus_down),
-                                     str_field("focus_up", &key_focus_up), str_field("focus_right", &key_focus_right),
-                                     str_field("move_left", &key_move_left), str_field("move_down", &key_move_down),
-                                     str_field("move_up", &key_move_up), str_field("move_right", &key_move_right)}),
+                table_field("keys", std::move(key_fields)),
                 table_field("rules", {list_field("ignore", &extras.rules.ignore), list_field("float", &extras.rules.float_)}),
                 bool_field("osd_popup", &extras.osd_popup),
             };
@@ -525,7 +537,7 @@ hm_status run(const char *src, size_t len, const std::string &path, hm_config *i
     if (message.empty())
         message = parse_keys(key_throw, key_toggle, key_switch, key_prefix, key_center, key_focus_left,
                              key_focus_down, key_focus_up, key_focus_right, key_move_left, key_move_down,
-                             key_move_up, key_move_right, &extras.keys);
+                             key_move_up, key_move_right, key_actions, &extras.keys);
     if (message.empty()) message = hypr::validate(cfg);
     if (!message.empty()) {
         write_err(err, err_cap, path + ": " + message);
