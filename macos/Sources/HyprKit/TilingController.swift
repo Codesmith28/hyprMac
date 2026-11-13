@@ -28,6 +28,8 @@ public enum TilingNotice: Equatable {
     case configLoaded
     case stageManagerEnabled
     case conflictingApp(name: String)
+    /// More than one display is connected but "Displays have separate Spaces" is off.
+    case separateSpacesOff
     case permissionLost
     /// Some configured shortcuts could not be registered (another app owns them).
     case hotkeysUnavailable(String)

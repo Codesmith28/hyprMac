@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
     private var signalSources: [DispatchSourceSignal] = []
     private var permissionTimer: Timer?
     private var pauseItem: NSMenuItem!
+    private var services: BackgroundServices?
 
     init(options: AppOptions) { self.options = options }
 
@@ -34,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        services?.stop()
         controller?.stop()
         EventLog.shared.emit("stopped")
     }
@@ -56,6 +58,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
         c.delegate = self
         controller = c
         c.start()
+        services?.stop()
+        services = BackgroundServices(controller: c, configPath: configPath,
+                                      version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? Engine.version)
+        services?.start()
         refreshMenu()
     }
 
@@ -160,6 +166,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, TilingControllerDelega
         case let .conflictingApp(name):
             notifier.post(title: "\(name) is running",
                           body: "\(name) may move windows too. Quit it if windows jump around.", id: "conflict-\(name)")
+        case .separateSpacesOff:
+            notifier.post(title: "Turn on “Displays have separate Spaces”",
+                          body: "Several displays are connected but this is off, so tiling and Desktop numbers are unreliable. Turn it on in System Settings ▸ Desktop & Dock ▸ Mission Control, then log out and back in.",
+                          id: "separate-spaces")
         case let .hotkeysUnavailable(what):
             notifier.post(title: "Some shortcuts are unavailable",
                           body: "\(what) — another app may be using them. Change them in init.lua (keys).",

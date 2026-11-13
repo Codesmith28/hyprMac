@@ -109,6 +109,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
     var limboSince: [UInt64: TimeInterval] = [:]
     private var unresolvedRetries = 0
     private var warnedRectangle = false
+    private var warnedSeparateSpaces = false
     // Toggle floating ↔ tiling (logic in Coordinator+Toggle.swift).
     /// Per-window explicit choice (true = floating, false = tiled); beats every automatic float decision.
     var floatOverride: [UInt64: Bool] = [:]
@@ -282,6 +283,7 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             checkSystemState()
             scheduleReconcile(after: tuning.debounce)
         case .screenParametersChanged:
+            checkSeparateSpaces()
             scheduleReconcile(after: 0.15) // displays settle a little after the notification
         case .userDragBegan:
             dragging = true
@@ -681,6 +683,17 @@ public final class Coordinator: TilingController, GeometryExecutorDelegate {
             warnedRectangle = true
             notify(.conflictingApp(name: "Rectangle"))
         }
+        checkSeparateSpaces()
+    }
+
+    /// Once per run: several displays but "Displays have separate Spaces" is off.
+    private func checkSeparateSpaces() {
+        guard !warnedSeparateSpaces,
+              SeparateSpaces.shouldWarn(displaysHaveSeparateSpaces: deps.systemState.displaysHaveSeparateSpaces,
+                                        displayCount: deps.displays.displays().count) else { return }
+        warnedSeparateSpaces = true
+        EventLog.shared.emit("separate_spaces_off")
+        notify(.separateSpacesOff)
     }
 
     /// Never calls the delegate from `queue` (or from inside a `queue.sync`): the callback is
