@@ -1,27 +1,95 @@
 name: Release
 
-# Push a tag like v0.3.0 (after the version bump and CHANGELOG entry are merged)
-# to build, zip and publish the app. The build is ad-hoc signed and not notarized.
+# Two ways to cut a release. The build is ad-hoc signed and not notarized.
+#  1. Merge a PR from a `release/vX.Y.Z` branch into main. The `tag` job checks that the branch,
+#     Info.plist and CHANGELOG.md agree, then tags the merge commit `vX.Y.Z`. The `release` job
+#     in the same run builds, zips and publishes it. (A tag pushed with the default GITHUB_TOKEN
+#     would not start another workflow, so the release runs here instead.)
+#  2. Push a tag like v0.3.0 yourself. The `release` job runs on that tag.
 on:
   push:
     tags: ["v*"]
+  pull_request:
+    types: [closed]
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  release:
+  tag:
+    name: Tag the merged release PR
+    if: >-
+      github.event_name == 'pull_request' && github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      startsWith(github.event.pull_request.head.ref, 'release/v')
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    env:
+      MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+      BRANCH: ${{ github.event.pull_request.head.ref }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Check the branch, Info.plist and CHANGELOG agree
+        run: |
+          VERSION="${BRANCH#release/v}"
+          PLIST_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' macos/Resources/Info.plist)"
+          if [ "$VERSION" != "$PLIST_VERSION" ]; then
+            echo "::error::branch $BRANCH is version $VERSION but Info.plist says $PLIST_VERSION"
+            exit 1
+          fi
+          # Fails when CHANGELOG.md has no section for this version.
+          scripts/release/notes.sh "$VERSION" >/dev/null
+
+      - name: Create the tag on the merge commit
+        id: tag
+        run: |
+          VERSION="${BRANCH#release/v}"
+          TAG="v$VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            # Re-run after a failure: reuse the tag only if it already points at this merge.
+            git fetch -q origin "refs/tags/$TAG:refs/tags/$TAG"
+            if [ "$(git rev-parse "refs/tags/$TAG^{commit}")" != "$MERGE_SHA" ]; then
+              echo "::error::$TAG already exists and does not point at this merge commit"
+              exit 1
+            fi
+            echo "$TAG already points at the merge commit; reusing it"
+          else
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                tag -a "$TAG" -m "hyprMac $VERSION" "$MERGE_SHA"
+            git push origin "refs/tags/$TAG"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Build and publish
+    needs: tag
+    # Tag pushes run directly. Merged release PRs run once the `tag` job has succeeded.
+    if: always() && (github.event_name == 'push' || needs.tag.result == 'success')
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      TAG: ${{ github.event_name == 'push' && github.ref_name || needs.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || format('refs/tags/{0}', needs.tag.outputs.tag) }}
 
       - name: Check the tag matches the app version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${TAG#v}"
           PLIST_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' macos/Resources/Info.plist)"
           if [ "$VERSION" != "$PLIST_VERSION" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match Info.plist version $PLIST_VERSION"
+            echo "::error::tag $TAG does not match Info.plist version $PLIST_VERSION"
             exit 1
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
@@ -54,6 +122,6 @@ jobs:
         run: |
           PRE=""
           case "$VERSION" in *-*) PRE="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" \
+          gh release create "$TAG" \
             "dist/hyprMac-$VERSION.zip" "dist/hyprMac-$VERSION.zip.sha256" \
             --title "hyprMac $VERSION" --notes-file dist/notes.md $PRE
