@@ -8,15 +8,21 @@ The layout engine is C++20 behind a C API, the macOS layer is Swift, and the con
 
 ![hyprMac tiling new windows across native Spaces](demo/demo.gif)
 
+**Shortcut cheatsheet.** Press ⌥⇧/ (or **Keyboard Shortcuts…** in the menu) to see every shortcut, with your `init.lua` bindings.
+
+![hyprMac shortcut cheatsheet tutorial](demo/hyprMac_tutorial.gif)
+
 ## Features
 - **Tiling.** A new window splits the focused tile along its longer side and takes the second half.
 - **Gaps.** 8 pt between tiles, 12 pt at the screen edges (menu bar and Dock excluded).
 - **Native Spaces.** ⌥1–⌥9 are still macOS's own "Switch to Desktop N". hyprMac only listens, so it can tell you when a Desktop doesn't exist.
 - **Throwing windows.** ⌥⇧1–⌥⇧9 move the focused window to Desktop N. macOS has no public API for that, so hyprMac uses a drag trick. See [limitations](docs/LIMITATIONS.md#moving-windows-between-spaces).
+- **Navigate.** ⌥⇧H/J/K/L (or arrows) move focus, ⌥⇧⌘H/J/K/L move the window, ⌥⇧C centers it, ⌥⇧F floats or tiles it.
 - **Same spot back.** Fullscreen, minimized or hidden windows return to their tile.
 - **Per display.** Each display tiles from its own active Space.
 - **Floating.** Dialogs, sheets, panels and popovers are never tiled. Small windows float, like in Krohnkite, and so do non-resizable windows, Archive Utility and Calculator. A window that keeps resizing itself away from its tile is floated instead of fought.
 - **Resize by hand.** Drag a tile's edge and the split follows. See [usage](docs/USAGE.md#resizing-by-hand).
+- **Change a split.** ⇧-drop a window on the side of another tile to re-split, or press ⌥⇧R (**Flip Split** in the menu).
 
 ## Requirements
 - macOS 14 or later. Tested on macOS 27.2, Apple silicon.
@@ -46,7 +52,7 @@ After install, System Settings opens to Privacy & Security ▸ Accessibility. Tu
 - **App.** Copies `hyprMac.app` to `~/Applications/`. An existing copy is moved aside and put back on uninstall.
 - **Config.** Creates `~/.config/hyprmac/init.lua` if that folder doesn't exist. Uninstall removes it only if install created it. Keep it with `KEEP_CONFIG=1 make uninstall`.
 - **Login item.** Writes `~/Library/LaunchAgents/dev.codesmith28.hyprmac.plist`.
-- **Accessibility.** Resets hyprMac's entry, so the new signature starts clean.
+- **Accessibility.** Resets hyprMac's entry, so the new signature starts clean. Optional: `make sign-identity` makes a local signing certificate so the grant survives upgrades.
 - **App data.** Backs up existing preferences, caches and notification settings. Uninstall removes hyprMac's data and restores the backups.
 
 Notes:
@@ -65,17 +71,31 @@ config = {
         outer = 12,  -- points between windows and the edges (0 – 200)
     },
     split_ratio = 0.5, -- share of a split given to the existing window (0.1 – 0.9)
+    resize_step = 5,   -- percent of a split per keyboard resize press (1 – 25)
     float = { min_width = 400, min_height = 300 }, -- smaller windows float (0 – 2000, 0 = off)
-    keys = { throw = "alt+shift", toggle_float = "alt+shift+f", switch = "alt" }, -- shortcuts
+    osd_popup = true,  -- brief on-screen popup on window and Desktop actions
+    keys = {           -- shortcuts (defaults shown)
+        throw = "alt+shift", toggle_float = "alt+shift+f", switch = "alt",
+        center_window = "alt+shift+c",
+        focus_left = "alt+shift+h", focus_down = "alt+shift+j", focus_up = "alt+shift+k", focus_right = "alt+shift+l",
+        move_left = "alt+shift+cmd+h", move_down = "alt+shift+cmd+j", move_up = "alt+shift+cmd+k", move_right = "alt+shift+cmd+l",
+        rotate_split = "alt+shift+r",
+        -- unbound by default (set under keys): resize_left/down/up/right, equalize, toggle_zoom, move_display_next/prev, toggle_pause
+    },
     rules = { ignore = {}, float = {} },           -- bundle ids: never managed / always floating
+    smart_gaps = false,           -- one tiled window on a Space: zero gaps
+    focus_follows_mouse = false,  -- hover focuses a window after ~120 ms
+    -- displays = { ["Studio Display"] = { inner = 4, outer = 8 } },   -- per-display gaps, by name
+    -- rules.float_title / rules.ignore_title = { "regex" }           -- match window titles
+    -- rules.desktop = { ["com.example.app"] = 3 }                    -- EXPERIMENTAL, see usage
 }
 ```
 
-- Reload from the menu (**Reload Configuration**) or with `pkill -HUP -x hyprMac`.
+- Saving the file reloads it. You can also reload from the menu (**Reload Configuration**) or with `pkill -HUP -x hyprMac`. Check a file with `hyprMac --check-config [path]`.
 - A file with an error is rejected as a whole. hyprMac keeps the old settings and tells you the file, line and problem.
 - The schema is strict. Unknown keys and wrong types are errors. The Lua sandbox has no `io`, `os`, `require` or `load`, and it has memory and instruction limits.
 
-The shortcut grammar and app rules are in [usage](docs/USAGE.md#keys-and-app-rules).
+The shortcut grammar and app rules are in [usage](docs/USAGE.md#keys-and-app-rules). The title rules, gap options, focus-follows-mouse and `rules.desktop` are in [usage](docs/USAGE.md#title-rules-gaps-and-focus).
 
 ## Architecture
 ```
@@ -106,6 +126,7 @@ hyprMac keeps native Spaces and needs no SIP changes. It can't create or delete 
 | `make test-e2e` | real-Mac end-to-end suite (needs Accessibility; see [testing](docs/TESTING.md)) |
 | `make preflight` | show what install would change, without changing anything |
 | `make install` / `make uninstall` | install or remove, reversibly (`DRY_RUN=1` to only print) |
+| `make sign-identity` | optional: stable local signing identity, so Accessibility survives upgrades (`sign-identity-remove` undoes it) |
 | `make verify-rollback` | compare the current state with the pre-install snapshot |
 | `make bench` | latency benchmark of the core |
 | `make clean` | remove build products |

@@ -49,7 +49,7 @@ final class Harness {
 
     init(spaces: Int = 3, config: String? = nil, appStateStore: AppStateStore? = nil,
          tuning: Coordinator.Tuning = Coordinator.Tuning(),
-         nativeShortcuts: NativeSwitchShortcuts? = nil) {
+         nativeShortcuts: NativeSwitchShortcuts? = nil, mouseMonitor: MouseMoveMonitoring? = nil) {
         desk = FakeDesktop()
         spaceIDs = desk.addDisplay(1, frame: mainFrame, visibleFrame: mainVisible, isMain: true, userSpaces: spaces)
         desk.addApp(pid: 100, bundleID: "com.example.editor")
@@ -60,7 +60,7 @@ final class Harness {
         let deps = Coordinator.Dependencies(
             ax: desk.ax, windowServer: desk.windowServer, spaces: desk.spaces, displays: desk.displays,
             apps: desk.apps, systemState: system, poster: desk.poster, hotkeys: hotkeys, spaceKeys: spaceKeys,
-            nativeShortcuts: nativeShortcuts, clock: desk.clock, makeEvents: nil, onMain: { $0() })
+            nativeShortcuts: nativeShortcuts, mouseMonitor: mouseMonitor, clock: desk.clock, makeEvents: nil, onMain: { $0() })
         let stateURL = dir.appendingPathComponent("state.json")
         let store = appStateStore ?? AppStateStore(path: stateURL)
         c = Coordinator(deps: deps, configStore: ConfigStore(path: configURL), appStateStore: store, tuning: tuning)

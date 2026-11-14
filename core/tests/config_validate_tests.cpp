@@ -11,6 +11,7 @@ TEST_CASE("defaults are valid") {
     CHECK(c.split_ratio == 0.5);
     CHECK(c.float_min_w == 400.0);
     CHECK(c.float_min_h == 300.0);
+    CHECK(c.resize_step == 5.0);
     CHECK(hm_config_validate(&c, nullptr, 0) == HM_OK);
 }
 
@@ -26,8 +27,13 @@ TEST_CASE("validate rejects bad values") {
     c = {}; c.float_min_h = 2001; CHECK(!hypr::validate(c).empty());
     c = {}; c.float_min_w = std::numeric_limits<double>::quiet_NaN(); CHECK(!hypr::validate(c).empty());
     c = {}; c.float_min_w = 0; c.float_min_h = 2000; CHECK(hypr::validate(c).empty());
+    c = {}; c.resize_step = 0.5; CHECK(!hypr::validate(c).empty());
+    c = {}; c.resize_step = 25.5; CHECK(!hypr::validate(c).empty());
+    c = {}; c.resize_step = std::numeric_limits<double>::quiet_NaN(); CHECK(!hypr::validate(c).empty());
+    c = {}; c.resize_step = 1; CHECK(hypr::validate(c).empty());
+    c = {}; c.resize_step = 25; CHECK(hypr::validate(c).empty());
     char buf[64];
-    hm_config bad{-3, 0, 0.5, 400, 300};
+    hm_config bad{-3, 0, 0.5, 400, 300, 5};
     CHECK(hm_config_validate(&bad, buf, sizeof buf) == HM_ERR_CONFIG);
     CHECK(std::string(buf).find("inner") != std::string::npos);
     CHECK(hm_config_validate(nullptr, buf, sizeof buf) == HM_ERR_INVALID_ARGUMENT);

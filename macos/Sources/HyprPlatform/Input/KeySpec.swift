@@ -107,6 +107,16 @@ public enum Direction: String, CaseIterable, Sendable {
     case left, down, up, right
 }
 
+/// Opt-in actions (`config.keys.<rawValue>`): unbound by default except `rotate_split` (⌥⇧R); order = hotkey id order.
+public enum KeyAction: String, CaseIterable, Sendable {
+    case resizeLeft = "resize_left", resizeDown = "resize_down", resizeUp = "resize_up", resizeRight = "resize_right"
+    case equalize
+    case rotateSplit = "rotate_split"
+    case toggleZoom = "toggle_zoom"
+    case moveDisplayNext = "move_display_next", moveDisplayPrev = "move_display_prev"
+    case togglePause = "toggle_pause"
+}
+
 /// The configurable shortcuts (`config.keys`).
 public struct KeyBindings: Equatable, Sendable {
     /// Modifiers + digit 1–9: throw the focused window to that Desktop.
@@ -124,6 +134,11 @@ public struct KeyBindings: Equatable, Sendable {
     public var focusKeys: [(direction: Direction, spec: KeySpec)]
     /// Move windows in the BSP tree (pref + cmd + h/j/k/l and pref + cmd + arrow keys, i.e. ⌥⇧⌘H/J/K/L, ⌥⇧⌘←/↓/↑/→).
     public var moveKeys: [(direction: Direction, spec: KeySpec)]
+    /// Opt-in actions that have a shortcut: `rotate_split` (prefix + R) by default, plus whatever the user bound
+    /// (`keys.resize_left`, `keys.toggle_zoom`, …).
+    public var actionKeys: [KeyAction: KeySpec] = [:]
+    /// Hotkey ids not to register because their chord clashes with a macOS shortcut (`ShortcutConflicts`).
+    public var suppressedIDs: Set<UInt32> = []
 
     public init(
         throwModifiers: KeyModifiers,
@@ -139,6 +154,7 @@ public struct KeyBindings: Equatable, Sendable {
         self.switchModifiers = switchModifiers
         self.prefix = prefix
         self.centerWindow = centerWindow ?? KeySpec(modifiers: prefix, key: "c")!
+        self.actionKeys = [.rotateSplit: KeySpec(modifiers: prefix, key: "r")!]
         let moveMods = prefix.contains(.shift) ? prefix.union(.command) : prefix.union(.shift)
         self.focusKeys = focusKeys ?? [
             (.left, KeySpec(modifiers: prefix, key: "h")!),
@@ -172,6 +188,8 @@ public struct KeyBindings: Equatable, Sendable {
             && zip(a.focusKeys, b.focusKeys).allSatisfy { $0.direction == $1.direction && $0.spec == $1.spec }
             && a.moveKeys.count == b.moveKeys.count
             && zip(a.moveKeys, b.moveKeys).allSatisfy { $0.direction == $1.direction && $0.spec == $1.spec }
+            && a.actionKeys == b.actionKeys
+            && a.suppressedIDs == b.suppressedIDs
     }
 
     /// Equal to the default shortcuts: ⌥⇧1–9, ⌥⇧F, ⌥1–9, ⌃⌥C, ⌃⌥H/J/K/L+arrows, ⌃⌥⇧H/J/K/L+arrows.
@@ -179,6 +197,9 @@ public struct KeyBindings: Equatable, Sendable {
         throwModifiers: [.option, .shift],
         toggleFloat: KeySpec(modifiers: [.option, .shift], key: "f")!,
         switchModifiers: [.option])
+
+    /// Opens the shortcuts cheatsheet: prefix + `/` (⌥⇧/, the key labelled "?"). Not configurable.
+    public var showShortcuts: KeySpec { KeySpec(modifiers: prefix, key: "slash")! }
 
     /// From the canonical strings of `hm_config_load_extras`.
     public init?(throw t: String, toggleFloat f: String, switch s: String) {

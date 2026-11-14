@@ -99,6 +99,7 @@ public final class FakeThrowHotkeys: ThrowHotkeys {
     public var onCenterWindow: (() -> Void)?
     public var onFocusDirection: ((Direction) -> Void)?
     public var onMoveDirection: ((Direction) -> Void)?
+    public var onAction: ((KeyAction) -> Void)?
     public var toggleFloatFailed = false
     /// The bindings of the last `start` (nil while stopped).
     public private(set) var bindings: KeyBindings?
@@ -120,6 +121,7 @@ public final class FakeThrowHotkeys: ThrowHotkeys {
     public func pressCenterWindow() { onCenterWindow?() }
     public func pressFocus(_ direction: Direction) { onFocusDirection?(direction) }
     public func pressMove(_ direction: Direction) { onMoveDirection?(direction) }
+    public func pressAction(_ action: KeyAction) { onAction?(action) }
 }
 
 public final class FakeSpaceKeyObserver: SpaceKeyObserving {

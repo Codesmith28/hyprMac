@@ -87,6 +87,12 @@ bool LayoutTree::set_ratio(const Node *split, double ratio) {
     return true;
 }
 
+bool LayoutTree::set_orientation(const Node *split, Orientation o) {
+    if (!split || split->is_leaf() || !owns(split)) return false;
+    const_cast<Node *>(split)->orientation = o; // we own it (checked above)
+    return true;
+}
+
 bool LayoutTree::remove(WindowId w) {
     auto it = index_.find(w);
     if (it == index_.end()) return false;

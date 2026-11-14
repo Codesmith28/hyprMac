@@ -33,8 +33,12 @@ APP_NAME="hyprMac"
 : "${PKILL:=/usr/bin/pkill}"
 : "${KILLALL:=/usr/bin/killall}"
 : "${PYTHON:=/usr/bin/python3}"
+# Opt-in stable signing identity (make sign-identity): keychain, signing and certificate tools.
+: "${SECURITY:=/usr/bin/security}"
+: "${CODESIGN:=/usr/bin/codesign}"
+: "${OPENSSL:=/usr/bin/openssl}"
 : "${UID_VAL:=$(/usr/bin/id -u)}"
-HYPR_CMD_VARS="DEFAULTS PLUTIL LAUNCHCTL TCCUTIL LSREGISTER ACTIVATE_SETTINGS OPEN PKILL KILLALL PYTHON"
+HYPR_CMD_VARS="DEFAULTS PLUTIL LAUNCHCTL TCCUTIL LSREGISTER ACTIVATE_SETTINGS OPEN PKILL KILLALL PYTHON SECURITY CODESIGN OPENSSL"
 
 # Runs after every change to com.apple.WindowManager (empty: nothing). We never
 # restart WindowManager ourselves: that drops the user's window state.
@@ -63,6 +67,11 @@ AGENT_PLIST="$AGENT_DIR/$BUNDLE_ID.plist"
 AGENT_TARGET="gui/$UID_VAL/$BUNDLE_ID"
 CONFIG_PARENT="$HOME/.config"
 CONFIG_DIR="$CONFIG_PARENT/hyprmac"
+# Opt-in local code-signing identity. Only this keychain is ever read or written.
+SIGN_IDENTITY_NAME="hyprMac Local Signing"
+# Organizational unit written into the certificate: proves `make sign-identity` made it.
+SIGN_IDENTITY_MARK="make sign-identity"
+LOGIN_KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
 # Verification snapshots (and, after a failed verification, the old state)
 # live next to the state dir. The snapshot never looks inside it.
 VERIFY_DIR="$APPSUPPORT_DIR/hyprMac-verify"
@@ -661,6 +670,11 @@ _snapshot_lines() {
     # shellcheck disable=SC2086
     pt snap "$d/hk.plist" "$d/wm.plist" "$d/nc.plist" "$BUNDLE_ID" $HOTKEY_IDS || return 1
 
+    if [ -n "$(sign_identity_hash)" ]; then
+        printf 'signing-identity %s present\n' "$SIGN_IDENTITY_NAME"
+    else
+        printf 'signing-identity %s absent\n' "$SIGN_IDENTITY_NAME"
+    fi
     if "$LAUNCHCTL" print "$AGENT_TARGET" >/dev/null 2>&1; then
         printf 'launchagent %s loaded\n' "$BUNDLE_ID"
     else
@@ -697,13 +711,21 @@ EOF
     done
 }
 
-# Lines verify ignores: KEEP_CONFIG keeps ~/.config/hyprmac on purpose.
+# Lines verify ignores: KEEP_CONFIG keeps ~/.config/hyprmac on purpose. A snapshot
+# taken by an older version has no signing-identity line; it is then not compared.
+# $1 snapshot file, $2 the "before" snapshot (the one that decides).
 _verify_filter() {
-    if [ "$KEEP_CONFIG" = 1 ]; then
-        /usr/bin/grep -Ev '^path ~/\.config( |/hyprmac )|^soft ls ~/\.config |^soft ls ~ \.config ' "$1" || true
-    else
-        cat "$1"
-    fi
+    local f="$1" ref="${2:-$1}"
+    {
+        if [ "$KEEP_CONFIG" = 1 ]; then
+            /usr/bin/grep -Ev '^path ~/\.config( |/hyprmac )|^soft ls ~/\.config |^soft ls ~ \.config ' "$f" || true
+        else
+            cat "$f"
+        fi
+    } | {
+        if /usr/bin/grep -q '^signing-identity ' "$ref"; then cat
+        else /usr/bin/grep -v '^signing-identity ' || true; fi
+    }
 }
 
 # verify_snapshots BEFORE AFTER -> 0 when every hard line matches. Soft-line
@@ -714,11 +736,11 @@ verify_snapshots() {
     [ -f "$before" ] || { err "missing snapshot: $before"; return 2; }
     [ -f "$after" ] || { err "missing snapshot: $after"; return 2; }
     hard="$(/usr/bin/diff -u \
-        <(_verify_filter "$before" | /usr/bin/grep -v '^soft ' || true) \
-        <(_verify_filter "$after" | /usr/bin/grep -v '^soft ' || true))" || rc=$?
+        <(_verify_filter "$before" "$before" | /usr/bin/grep -v '^soft ' || true) \
+        <(_verify_filter "$after" "$before" | /usr/bin/grep -v '^soft ' || true))" || rc=$?
     soft="$(/usr/bin/diff \
-        <(_verify_filter "$before" | /usr/bin/grep '^soft ' || true) \
-        <(_verify_filter "$after" | /usr/bin/grep '^soft ' || true))" || src=$?
+        <(_verify_filter "$before" "$before" | /usr/bin/grep '^soft ' || true) \
+        <(_verify_filter "$after" "$before" | /usr/bin/grep '^soft ' || true))" || src=$?
     if [ "$src" != 0 ]; then
         warn "other settings or files changed while hyprMac was installed (not caused by the installer, or worth a look):"
         printf '%s\n' "$soft" | /usr/bin/grep -E '^[<>]' | /usr/bin/sed -e 's/^< soft /    before: /' -e 's/^> soft /    after:  /' >&2
@@ -764,6 +786,137 @@ quit_app() {
     done
     warn "$APP_NAME did not exit within 3 s; sending SIGKILL"
     run "$PKILL" -KILL -f "$APP_PROC_RE" || true
+}
+
+# ----------------------------------------------------------- signing identity --
+# Opt-in (make sign-identity): a self-signed code-signing certificate in the LOGIN
+# keychain. macOS ties the Accessibility grant to the app's designated requirement;
+# with this identity that requirement is the same for every build, so the grant
+# survives upgrades. Without the identity nothing here does anything.
+
+# SHA-1 of our identity in the login keychain (upper case); empty when absent.
+# Untrusted self-signed identities are listed without -v, which is what we want.
+sign_identity_hash() {
+    local out
+    out="$("$SECURITY" find-identity -p codesigning "$LOGIN_KEYCHAIN" 2>/dev/null)" || return 0
+    printf '%s\n' "$out" |
+        /usr/bin/sed -n -E "s/^[[:space:]]*[0-9]+\\) ([0-9A-Fa-f]{40}) \"$SIGN_IDENTITY_NAME\".*/\\1/p" |
+        /usr/bin/sed -n '1p' | /usr/bin/tr 'a-f' 'A-F'
+}
+
+# Was the certificate with SHA-1 $1 made by `make sign-identity`? (its OU says so)
+sign_identity_is_ours() {
+    local pem subject
+    pem="$("$SECURITY" find-certificate -a -c "$SIGN_IDENTITY_NAME" -Z -p "$LOGIN_KEYCHAIN" 2>/dev/null)" || return 1
+    pem="$(printf '%s\n' "$pem" | /usr/bin/awk -v h="$1" '
+        /^SHA-1 hash:/ { on = (toupper($3) == h); next }
+        on && /BEGIN CERTIFICATE/ { pr = 1 }
+        on && pr { print }
+        /END CERTIFICATE/ { pr = 0; on = 0 }')"
+    [ -n "$pem" ] || return 1
+    subject="$(printf '%s\n' "$pem" | "$OPENSSL" x509 -noout -subject 2>/dev/null)" || return 1
+    case "$subject" in *"$SIGN_IDENTITY_MARK"*) return 0 ;; esac
+    return 1
+}
+
+# Does the bundle's designated requirement pin certificate $2 (SHA-1)?
+bundle_signed_with() {
+    local dr
+    dr="$("$CODESIGN" -d -r- "$1" 2>&1)" || return 1
+    case "$dr" in *"H\"$(printf '%s' "$2" | /usr/bin/tr 'A-F' 'a-f')\""*) return 0 ;; esac
+    return 1
+}
+
+# sign_app PATH: sign with the local identity when there is one (and SIGN_ADHOC is
+# not 1), otherwise ad-hoc exactly like the build always did.
+sign_app() {
+    local app="$1" h=""
+    if [ "${SIGN_ADHOC:-0}" != 1 ]; then h="$(sign_identity_hash)"; fi
+    if [ -n "$h" ]; then
+        if "$CODESIGN" --force --sign "$h" --options runtime --identifier "$BUNDLE_ID" "$app"; then
+            info "signed $(basename "$app") with \"$SIGN_IDENTITY_NAME\" (stable Accessibility grant)"
+            return 0
+        fi
+        warn "signing with \"$SIGN_IDENTITY_NAME\" failed (login keychain locked?); falling back to an ad-hoc signature"
+    fi
+    "$CODESIGN" --force --sign - --options runtime --identifier "$BUNDLE_ID" "$app"
+}
+
+# Re-sign the INSTALLED bundle with the local identity when it is not signed with
+# it already (a build made before the identity existed). No identity: nothing.
+sign_installed_app() {
+    local h
+    h="$(sign_identity_hash)"
+    [ -n "$h" ] || return 0
+    if ! is_dry && bundle_signed_with "$APP_DEST" "$h"; then return 0; fi
+    run "$CODESIGN" --force --sign "$h" --options runtime --identifier "$BUNDLE_ID" "$APP_DEST" ||
+        warn "could not sign $(tilde "$APP_DEST") with \"$SIGN_IDENTITY_NAME\"; it keeps its ad-hoc signature"
+}
+
+# Create the identity. Idempotent. Sets SIGN_IDENTITY_NEW=1 when it was created now.
+SIGN_IDENTITY_NEW=0
+sign_identity_create() {
+    local h d pass
+    SIGN_IDENTITY_NEW=0
+    h="$(sign_identity_hash)"
+    if [ -n "$h" ]; then
+        info "\"$SIGN_IDENTITY_NAME\" already exists in the login keychain ($h); nothing to do"
+        return 0
+    fi
+    if is_dry; then
+        printf '%s[dry-run]%s create a self-signed code-signing certificate "%s" (OU "%s", 20 years)\n' "$C_DIM" "$C_RESET" "$SIGN_IDENTITY_NAME" "$SIGN_IDENTITY_MARK"
+        printf '%s[dry-run]%s %s\n' "$C_DIM" "$C_RESET" "$(show_cmd "$SECURITY" import "<identity>.p12" -k "$LOGIN_KEYCHAIN" -P "<random>" -x -T "$CODESIGN")"
+        return 0
+    fi
+    [ -f "$LOGIN_KEYCHAIN" ] || { err "login keychain not found: $(tilde "$LOGIN_KEYCHAIN")"; return 1; }
+    make_tmp
+    d="$HYPR_TMP/identity"
+    (umask 077 && mkdir "$d") || return 1
+    cat >"$d/openssl.cnf" <<CNF
+[req]
+distinguished_name = dn
+x509_extensions = v3
+prompt = no
+[dn]
+CN = $SIGN_IDENTITY_NAME
+OU = $SIGN_IDENTITY_MARK
+[v3]
+basicConstraints = critical,CA:false
+keyUsage = critical,digitalSignature
+extendedKeyUsage = critical,codeSigning
+subjectKeyIdentifier = hash
+CNF
+    info "creating a self-signed code-signing certificate \"$SIGN_IDENTITY_NAME\" (valid 20 years)"
+    (umask 077 && "$OPENSSL" req -x509 -newkey rsa:2048 -nodes -days 7300 -config "$d/openssl.cnf" \
+        -keyout "$d/key.pem" -out "$d/cert.pem") >/dev/null 2>&1 || { err "openssl could not create the certificate"; return 1; }
+    pass="$(/usr/bin/uuidgen)$(/usr/bin/uuidgen)" || return 1
+    HYPR_P12_PASS="$pass" "$OPENSSL" pkcs12 -export -inkey "$d/key.pem" -in "$d/cert.pem" \
+        -name "$SIGN_IDENTITY_NAME" -passout env:HYPR_P12_PASS -out "$d/identity.p12" >/dev/null 2>&1 ||
+        { err "openssl could not package the identity"; return 1; }
+    info "importing it into the login keychain (key not exportable; codesign may use it)"
+    "$SECURITY" import "$d/identity.p12" -k "$LOGIN_KEYCHAIN" -P "$pass" -x -T "$CODESIGN" >/dev/null ||
+        { err "security import failed"; return 1; }
+    cleanup_tmp
+    h="$(sign_identity_hash)"
+    [ -n "$h" ] || { err "the identity was imported but is not listed by 'security find-identity'"; return 1; }
+    SIGN_IDENTITY_NEW=1
+    ok "created \"$SIGN_IDENTITY_NAME\" ($h)"
+}
+
+# Delete the identity, but only one that `make sign-identity` made.
+# Returns 0 (deleted or already absent), 1 (failed) or 2 (it exists but is not ours).
+sign_identity_delete() {
+    local h
+    h="$(sign_identity_hash)"
+    if [ -z "$h" ]; then
+        info "no \"$SIGN_IDENTITY_NAME\" identity in the login keychain; nothing to remove"
+        return 0
+    fi
+    if ! sign_identity_is_ours "$h"; then
+        warn "\"$SIGN_IDENTITY_NAME\" ($h) was not created by 'make sign-identity'; leaving it in your keychain"
+        return 2
+    fi
+    run "$SECURITY" delete-identity -Z "$h" "$LOGIN_KEYCHAIN" || { err "could not delete the identity"; return 1; }
 }
 
 # ---------------------------------------------------- settings application --
@@ -864,7 +1017,7 @@ _valid_entry() {
             [ $# = 2 ] && dir_for_key "$2" >/dev/null ;;
         app_installed | lsregister | hotkeys_dict_created | hotkeys_domain_absent | wm_domain_absent | \
         agent_plist_created | launchagent_preloaded | launchagent_loaded | tcc_reset | prefs_backup | \
-        ncprefs_preexisting | install_complete)
+        ncprefs_preexisting | signing_identity_created | install_complete)
             [ $# = 1 ] ;;
         backup)
             a1="${2:-}"
@@ -1182,6 +1335,7 @@ undo_entry() {
         launchagent_preloaded) undo_launchagent_preloaded ;;
         launchd_override) undo_launchd_override "$2" ;;
         tcc_reset) run "$TCCUTIL" reset Accessibility "$BUNDLE_ID" >/dev/null || warn "tccutil reset failed (ignored)" ;;
+        signing_identity_created) sign_identity_delete || { [ $? = 2 ]; } ;;
         config_dir_created) undo_config_dir_created "$2" ;;
         prefs_backup) undo_prefs_backup ;;
         ncprefs_preexisting) restore_ncprefs ;;

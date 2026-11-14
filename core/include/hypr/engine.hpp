@@ -49,9 +49,12 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace hypr {
+
+enum class Direction : std::uint8_t { Left, Down, Up, Right };
 
 enum class WindowState : std::uint8_t { Tiled, Floating, Minimized, Fullscreen, Hidden };
 
@@ -83,6 +86,13 @@ public:
     const Config &config() const { return cfg_; }
     hm_status set_config(const Config &cfg); // HM_ERR_CONFIG when invalid
 
+    // Gap policy on top of the config. smart_gaps: a space with exactly one tiled leaf uses zero inner
+    // AND zero outer gap (its window fills the usable rect). Per-display gaps: a value >= 0 replaces the
+    // global inner/outer gap for every space on that display (< 0 keeps the global one; both < 0 clears).
+    // Neither changes dwindle orientation: insertion decisions use the un-smartened layout.
+    void set_smart_gaps(bool on) { smart_gaps_ = on; }
+    hm_status set_display_gaps(DisplayId display, double inner, double outer); // HM_ERR_CONFIG when out of range
+
     hm_status reconcile(const Snapshot &snapshot, Plan &out);
     hm_status relayout(SpaceId space, Plan &out);
     hm_status report_min_size(WindowId w, double min_w, double min_h);
@@ -90,6 +100,18 @@ public:
     // The user resized `w` to `desired`: move the adjacent split boundaries (see engine.cpp) and
     // return the plan for the window's space. HM_ERR_UNKNOWN_WINDOW unless `w` is a tiled leaf.
     hm_status resize(WindowId w, const Rect &desired, Plan &out);
+    // Keyboard actions; each returns the plan for the affected space.
+    hm_status resize_step(WindowId w, Direction dir, Plan &out);
+    hm_status equalize(SpaceId space, Plan &out);
+    hm_status rotate_split(WindowId w, Plan &out);
+    // Re-split: take `w` out of its place and put it beside `target` on `side` (Left/Right = side by side,
+    // Up/Down = stacked); `w` lands on that side of `target`. Same space, both tiled, w != target.
+    hm_status move_beside(WindowId w, WindowId target, Direction side, Plan &out);
+    hm_status toggle_zoom(WindowId w, Plan &out);
+    // Move a tiled window into another known space's tree; plans for both spaces.
+    hm_status move_to_space(WindowId w, SpaceId target, Plan &target_plan, Plan &source_plan);
+    WindowId zoomed_window(SpaceId space) const;
+    void clear_zoom(SpaceId space); // 0 = every space
     void forget_window(WindowId w);
     void forget_space(SpaceId space);
 
@@ -110,8 +132,10 @@ private:
     };
 
     static hm_status validate(const Snapshot &s);
-    LayoutResult layout(const Space &space) const;
-    void make_plan(const Space &space, Plan &out);
+    LayoutResult layout(const Space &space, bool smart = true) const;
+    Config effective_config(const Space &space, bool smart) const;
+    MinSize subtree_min(const Node *n, double gap) const;
+    void make_plan(Space &space, Plan &out);
     void restore(Space &space, WindowId w, const Snapshot &s, const std::unordered_set<WindowId> &pending);
     void dwindle_insert(Space &space, WindowId w, const Snapshot &s, const std::unordered_set<WindowId> &pending);
     WindowId choose_target(const Space &space, const Snapshot &s,
@@ -119,6 +143,8 @@ private:
     void drop_if_untracked(WindowId w);
 
     Config cfg_;
+    bool smart_gaps_ = false;
+    std::unordered_map<DisplayId, std::pair<double, double>> display_gaps_; // (inner, outer), < 0 = unset
     WorkspaceModel model_;
     std::unordered_map<WindowId, MinInfo> mins_;
     std::uint64_t revision_ = 0;

@@ -1,0 +1,50 @@
+#!/bin/bash
+# Fake security: identities live in $FAKE_STATE/identities/<SHA1>/{name,cert.pem}.
+# Supports find-identity, find-certificate, import (of the fake PKCS#12) and
+# delete-identity. Every call must name a keychain inside the sandbox.
+. "$(dirname "$0")/_lib.sh"
+db="$FAKE_STATE/identities"; mkdir -p "$db"
+sub="${1:-}"; shift || true
+for a in "$@"; do
+    case "$a" in */login.keychain-db) case "$a" in "$FAKE_ROOT"/*) ;; *) echo "fake security: keychain outside the sandbox: $a" >&2; exit 97 ;; esac ;; esac
+done
+case "$sub" in
+    find-identity)
+        echo "Policy: Code Signing"; echo "  Matching identities"
+        n=0
+        for d in "$db"/*/; do
+            [ -d "$d" ] || continue
+            n=$((n + 1))
+            printf '  %d) %s "%s" (CSSMERR_TP_NOT_TRUSTED)\n' "$n" "$(basename "$d")" "$(cat "$d/name")"
+        done
+        printf '     %d identities found\n\n  Valid identities only\n     0 valid identities found\n' "$n" ;;
+    find-certificate)
+        for d in "$db"/*/; do
+            [ -d "$d" ] || continue
+            printf 'SHA-1 hash: %s\n' "$(basename "$d")"
+            cat "$d/cert.pem"
+        done ;;
+    import)
+        p12="$1"; shift
+        pw=""; keychain=""; nonext=0
+        while [ $# -gt 0 ]; do
+            case "$1" in -P) pw="$2"; shift 2 ;; -k) keychain="$2"; shift 2 ;; -x) nonext=1; shift ;; -T) shift 2 ;; *) shift ;; esac
+        done
+        [ -n "$keychain" ] || { echo "fake security: import without -k" >&2; exit 1; }
+        [ "$nonext" = 1 ] || { echo "fake security: key would be exportable (no -x)" >&2; exit 1; }
+        [ "$(sed -n 1p "$p12")" = FAKEP12 ] || { echo "fake security: not a PKCS#12 file" >&2; exit 1; }
+        [ "$(sed -n 2p "$p12")" = "pass=$pw" ] || { echo "fake security: wrong password" >&2; exit 1; }
+        sed -n '3,$p' "$p12" >"$FAKE_STATE/cert.tmp"
+        h="$(shasum -a 1 <"$FAKE_STATE/cert.tmp" | cut -c1-40 | tr a-f A-F)"
+        [ ! -d "$db/$h" ] || { echo "security: SecKeychainItemImport: The specified item already exists in the keychain." >&2; exit 1; }
+        mkdir "$db/$h"
+        mv "$FAKE_STATE/cert.tmp" "$db/$h/cert.pem"
+        sed -n 's/^subject=CN = \([^,]*\),.*/\1/p' "$db/$h/cert.pem" >"$db/$h/name"
+        echo "1 key imported."; echo "1 certificate imported." ;;
+    delete-identity)
+        h=""
+        while [ $# -gt 0 ]; do case "$1" in -Z) h="$2"; shift 2 ;; *) shift ;; esac; done
+        [ -n "$h" ] && [ -d "$db/$h" ] || { echo "security: SecKeychainSearchCopyNext: The specified item could not be found in the keychain." >&2; exit 44; }
+        rm -rf "${db:?}/$h" ;;
+    *) echo "fake security: unsupported $sub" >&2; exit 64 ;;
+esac

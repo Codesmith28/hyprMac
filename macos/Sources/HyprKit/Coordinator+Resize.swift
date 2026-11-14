@@ -5,7 +5,9 @@ import HyprPlatform
 /// Hyprland-style user resize and drag-to-move/swap.
 /// - A drag that changed a tiled window's SIZE is adopted on mouse-up: the engine moves the adjacent
 ///   split ratios (`Engine.resize`) and the neighbours reflow.
-/// - A drag of a tiled window onto another tile's region swaps them (`Engine.swap`).
+/// - A drag of a tiled window onto another tile's region swaps them (`Engine.swap`); holding ⇧ on
+///   release re-splits instead: the window lands on the side of that tile nearest the cursor
+///   (`Engine.moveBeside`, see `DropZone`), which is how side-by-side becomes stacked and back.
 /// - A drag of a floating window updates its recorded position (`firstSeenFrame`).
 /// - Anything else snaps back through the normal reconcile. A user drag is never a fight: `handle`
 ///   returns before `noteFight` while dragging.
@@ -51,12 +53,23 @@ extension Coordinator {
                           engine.space(of: otherId) == currentSpace else { return nil }
                     return (otherId, rect)
                 }
-                let targetWindow: (id: UInt64, rect: CGRect)? = otherTiled.first(where: { $0.rect.contains(center) })
+                let resplit = deps.poster.physicalModifierFlags().contains(.maskShift)
+                let cursor = deps.poster.cursorLocation()
+                let underCursor = resplit ? otherTiled.first(where: { $0.rect.contains(cursor) }) : nil
+                let targetWindow = underCursor ?? otherTiled.first(where: { $0.rect.contains(center) })
                 if let targetWindow {
-                    guard let plan = try? engine.swap(window: id, with: targetWindow.id) else { continue }
-                    activity += 1
-                    apply(plan)
-                    EventLog.shared.emit("user_drag_move", ["window": Int(window.windowID), "target": Int(targetWindow.id)])
+                    if let underCursor, let side = DropZone.side(of: cursor, in: underCursor.rect) {
+                        guard let plan = try? engine.moveBeside(window: id, target: underCursor.id, side: side) else { continue }
+                        activity += 1
+                        apply(plan)
+                        EventLog.shared.emit("user_drag_resplit", ["window": Int(window.windowID),
+                                                                   "target": Int(underCursor.id), "side": side.rawValue])
+                    } else {
+                        guard let plan = try? engine.swap(window: id, with: targetWindow.id) else { continue }
+                        activity += 1
+                        apply(plan)
+                        EventLog.shared.emit("user_drag_move", ["window": Int(window.windowID), "target": Int(targetWindow.id)])
+                    }
                     adopted = true
                 }
             }

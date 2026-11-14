@@ -62,7 +62,7 @@ public final class SystemDisplayProvider: DisplayProvider {
             return DisplayInfo(id: id,
                                frame: DisplayGeometry.topLeft(fromAppKit: s.frame, primaryHeight: h),
                                visibleFrame: DisplayGeometry.topLeft(fromAppKit: s.visibleFrame, primaryHeight: h),
-                               isMain: id == main)
+                               isMain: id == main, name: s.localizedName)
         }
     }
 }

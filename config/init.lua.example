@@ -17,6 +17,21 @@ config = {
 
     split_ratio = 0.5,
 
+    -- Percent of a split moved per keyboard resize press (1–25, default 5)
+    resize_step = 5,
+
+    -- A Space with exactly one tiled window uses zero inner AND zero outer gap (default: false).
+    smart_gaps = false,
+
+    -- Per-display gaps, keyed by the display's name (System Settings ▸ Displays). A missing side
+    -- uses the global gap above; names that match no connected display are ignored (and logged).
+    -- displays = {
+    --     ["Studio Display"] = { inner = 4, outer = 8 },
+    -- },
+
+    -- Hovering a window focuses it after ~120 ms (default: false). Never moves the cursor.
+    focus_follows_mouse = false,
+
     -- Small applications (whose initial dimensions are small by default) are set to float by default.
     -- Windows smaller than min_width x min_height float automatically instead of tiling.
     float = {
@@ -33,6 +48,7 @@ config = {
         toggle_float = prefix .. "+f",         -- tile / float focused window (⌥⇧F)
         center_window = prefix .. "+c",        -- center focused window (⌥⇧C)
 
+        -- Each arrow key stays bound next to its letter key, with the same modifiers (⌥⇧← ↓ ↑ →).
         focus_left = prefix .. "+h",           -- focus left (⌥⇧H)
         focus_down = prefix .. "+j",           -- focus down (⌥⇧J)
         focus_up = prefix .. "+k",             -- focus up (⌥⇧K)
@@ -42,6 +58,20 @@ config = {
         move_down = prefix .. "+cmd+j",        -- swap/move down (⌥⇧⌘J)
         move_up = prefix .. "+cmd+k",          -- swap/move up (⌥⇧⌘K)
         move_right = prefix .. "+cmd+l",       -- swap/move right (⌥⇧⌘L)
+
+        rotate_split = prefix .. "+r",         -- flip the focused tile's split, side by side <-> stacked (⌥⇧R)
+
+        -- More actions. All are UNBOUND by default (except rotate_split above); uncomment to enable (suggested ⌥⇧ keys).
+        -- A chord macOS already uses (System Settings ▸ Keyboard Shortcuts) is skipped with a notice.
+        -- resize_left = prefix .. "+y",          -- move the boundary left / down / up / right by resize_step
+        -- resize_down = prefix .. "+u",
+        -- resize_up = prefix .. "+i",
+        -- resize_right = prefix .. "+o",
+        -- equalize = prefix .. "+e",             -- reset every split in this Space to split_ratio
+        -- toggle_zoom = prefix .. "+z",          -- focused window fills the Space (monocle), toggle back
+        -- move_display_next = prefix .. "+period", -- move the focused window to the next / previous display
+        -- move_display_prev = prefix .. "+comma",
+        -- toggle_pause = prefix .. "+p",         -- pause / resume tiling (same as the menu item)
     },
 
     -- Per-app rules by bundle ID (find with: osascript -e 'id of app "Calculator"')
@@ -57,5 +87,17 @@ config = {
             "com.docker.docker",               -- Docker Desktop
             "com.mongodb.compass",             -- MongoDB Compass
         },
+
+        -- Window-title patterns: case-insensitive ECMAScript regexes searched anywhere in the title
+        -- (anchor with ^ and $). Max 200 per list, 128 characters each. Back-references and nested
+        -- repeats like "(a+)+" are refused, so keep patterns simple. Decided once, from the first
+        -- non-empty title a window shows; later title changes don't flip it.
+        -- float_title = { "^Picture.in.Picture$", "^About " },   -- float (⌥⇧F can still tile)
+        -- ignore_title = { "^Zoom Meeting$" },                   -- never managed or moved
+
+        -- EXPERIMENTAL: throw a NEW window of an app to Desktop N (1–9) with the drag trick. It
+        -- switches Desktops, so use sparingly. Windows already open, floating, fullscreen or already
+        -- on that Desktop are left alone; a failed attempt is logged and never retried.
+        -- desktop = { ["com.apple.Music"] = 3 },
     },
 }

@@ -1,0 +1,45 @@
+#!/bin/bash
+# Fake openssl: no real keys. Certificates are text files whose "subject" comes
+# from the config given to `req`; PKCS#12 files are text too. Supports only what
+# scripts/lib/common.sh uses: req -x509, pkcs12 -export, x509 -noout -subject.
+. "$(dirname "$0")/_lib.sh"
+opt() { # option value-after-it, from "$@" of the caller
+    local want="$1"; shift
+    while [ $# -gt 1 ]; do [ "$1" = "$want" ] && { printf '%s' "$2"; return 0; }; shift; done
+    return 1
+}
+case "${1:-}" in
+    req)
+        shift
+        [ "${1:-}" = -x509 ] || { echo "fake openssl: req needs -x509" >&2; exit 64; }
+        cnf="$(opt -config "$@")" || exit 64
+        key="$(opt -keyout "$@")" || exit 64
+        out="$(opt -out "$@")" || exit 64
+        # A code-signing certificate needs the codeSigning extended key usage.
+        grep -q 'extendedKeyUsage.*codeSigning' "$cnf" || { echo "fake openssl: no codeSigning EKU in $cnf" >&2; exit 1; }
+        grep -q '^CN = ' "$cnf" && grep -q '^OU = ' "$cnf" || exit 1
+        echo "FAKE PRIVATE KEY $RANDOM$RANDOM$RANDOM" >"$key"
+        {
+            echo "-----BEGIN CERTIFICATE-----"
+            echo "serial $RANDOM$RANDOM$RANDOM$(date +%s)"
+            echo "subject=$(grep '^CN = ' "$cnf"), $(grep '^OU = ' "$cnf")"
+            echo "-----END CERTIFICATE-----"
+        } >"$out" ;;
+    pkcs12)
+        shift
+        [ "${1:-}" = -export ] || exit 64
+        key="$(opt -inkey "$@")" || exit 64
+        crt="$(opt -in "$@")" || exit 64
+        out="$(opt -out "$@")" || exit 64
+        pw="$(opt -passout "$@")" || exit 64
+        case "$pw" in env:*) v="${pw#env:}"; pw="${!v:-}" ;; pass:*) pw="${pw#pass:}" ;; *) exit 64 ;; esac
+        [ -n "$pw" ] || { echo "fake openssl: empty export password" >&2; exit 1; }
+        [ -s "$key" ] && [ -s "$crt" ] || exit 1
+        { echo "FAKEP12"; echo "pass=$pw"; cat "$crt"; } >"$out" ;;
+    x509)
+        pem="$(cat)"
+        sub="$(printf '%s\n' "$pem" | sed -n 's/^subject=//p' | head -1)"
+        [ -n "$sub" ] || exit 1
+        echo "subject=$sub" ;;
+    *) echo "fake openssl: unsupported $*" >&2; exit 64 ;;
+esac

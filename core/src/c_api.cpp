@@ -87,6 +87,15 @@ hm_status hm_engine_set_config(hm_engine *engine, const hm_config *cfg) {
     return guarded([&] { return engine->impl.set_config(hypr::Config::from_c(*cfg)); });
 }
 
+void hm_engine_set_smart_gaps(hm_engine *engine, int smart_gaps) {
+    if (engine) engine->impl.set_smart_gaps(smart_gaps != 0);
+}
+
+hm_status hm_engine_set_display_gaps(hm_engine *engine, hm_display_id display, double inner, double outer) {
+    if (!engine) return HM_ERR_INVALID_ARGUMENT;
+    return guarded([&] { return engine->impl.set_display_gaps(display, inner, outer); });
+}
+
 void hm_plan_free(hm_plan *plan) {
     if (!plan) return;
     if (plan->placements) {
@@ -152,6 +161,101 @@ hm_status hm_engine_resize(hm_engine *engine, hm_window_id window, hm_rect desir
         hypr::Plan plan;
         if (hm_status st = engine->impl.resize(window, hypr::Rect::from_c(desired), plan); st != HM_OK) return st;
         return export_plan(plan, out);
+    });
+}
+
+namespace {
+
+// Out-of-range values (a C caller can pass anything) are rejected rather than cast.
+bool to_direction(const hm_direction &dir, hypr::Direction &out) { // by reference: copying a bad value is UB
+    std::underlying_type_t<hm_direction> raw;
+    static_assert(sizeof raw == sizeof dir);
+    std::memcpy(&raw, &dir, sizeof raw);
+    switch (raw) {
+    case HM_DIR_LEFT: out = hypr::Direction::Left; return true;
+    case HM_DIR_DOWN: out = hypr::Direction::Down; return true;
+    case HM_DIR_UP: out = hypr::Direction::Up; return true;
+    case HM_DIR_RIGHT: out = hypr::Direction::Right; return true;
+    default: return false;
+    }
+}
+
+} // namespace
+
+hm_status hm_engine_resize_step(hm_engine *engine, hm_window_id window, hm_direction dir, hm_plan *out) {
+    if (!engine || !out) return HM_ERR_INVALID_ARGUMENT;
+    hypr::Direction d;
+    if (!to_direction(dir, d)) return HM_ERR_INVALID_ARGUMENT;
+    return guarded([&] {
+        hypr::Plan plan;
+        if (hm_status st = engine->impl.resize_step(window, d, plan); st != HM_OK) return st;
+        return export_plan(plan, out);
+    });
+}
+
+hm_status hm_engine_move_beside(hm_engine *engine, hm_window_id window, hm_window_id target, hm_direction side,
+                                hm_plan *out) {
+    if (!engine || !out) return HM_ERR_INVALID_ARGUMENT;
+    hypr::Direction d;
+    if (!to_direction(side, d)) return HM_ERR_INVALID_ARGUMENT;
+    return guarded([&] {
+        hypr::Plan plan;
+        if (hm_status st = engine->impl.move_beside(window, target, d, plan); st != HM_OK) return st;
+        return export_plan(plan, out);
+    });
+}
+
+hm_status hm_engine_equalize(hm_engine *engine, hm_space_id space, hm_plan *out) {
+    if (!engine || !out) return HM_ERR_INVALID_ARGUMENT;
+    return guarded([&] {
+        hypr::Plan plan;
+        if (hm_status st = engine->impl.equalize(space, plan); st != HM_OK) return st;
+        return export_plan(plan, out);
+    });
+}
+
+hm_status hm_engine_rotate_split(hm_engine *engine, hm_window_id window, hm_plan *out) {
+    if (!engine || !out) return HM_ERR_INVALID_ARGUMENT;
+    return guarded([&] {
+        hypr::Plan plan;
+        if (hm_status st = engine->impl.rotate_split(window, plan); st != HM_OK) return st;
+        return export_plan(plan, out);
+    });
+}
+
+hm_status hm_engine_toggle_zoom(hm_engine *engine, hm_window_id window, hm_plan *out) {
+    if (!engine || !out) return HM_ERR_INVALID_ARGUMENT;
+    return guarded([&] {
+        hypr::Plan plan;
+        if (hm_status st = engine->impl.toggle_zoom(window, plan); st != HM_OK) return st;
+        return export_plan(plan, out);
+    });
+}
+
+hm_window_id hm_engine_zoomed_window(const hm_engine *engine, hm_space_id space) {
+    return engine ? engine->impl.zoomed_window(space) : 0;
+}
+
+void hm_engine_clear_zoom(hm_engine *engine, hm_space_id space) {
+    if (!engine) return;
+    try {
+        engine->impl.clear_zoom(space);
+    } catch (...) {
+    }
+}
+
+hm_status hm_engine_move_to_space(hm_engine *engine, hm_window_id window, hm_space_id target_space,
+                                  hm_plan *out_target, hm_plan *out_source) {
+    if (!engine || !out_target || !out_source) return HM_ERR_INVALID_ARGUMENT;
+    return guarded([&] {
+        hypr::Plan to, from;
+        if (hm_status st = engine->impl.move_to_space(window, target_space, to, from); st != HM_OK) return st;
+        if (hm_status st = export_plan(to, out_target); st != HM_OK) return st;
+        if (hm_status st = export_plan(from, out_source); st != HM_OK) {
+            hm_plan_free(out_target);
+            return st;
+        }
+        return HM_OK;
     });
 }
 

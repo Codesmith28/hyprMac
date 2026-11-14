@@ -18,7 +18,7 @@ The tiler's input is the live desktop and its output is other apps' windows, so 
                   no permissions, seconds
 ```
 
-`make test` runs the bottom four layers. None of them needs a permission or touches the real system.
+`make test` runs the bottom four layers. CI (`.github/workflows/ci.yml`) runs `make test` and `make test-asan` on every push and PR; the e2e layer never runs there. None of them needs a permission or touches the real system.
 
 ## 1. C++ core (doctest)
 `make core-test` runs `core/tests/*` with [doctest](https://github.com/doctest/doctest), vendored in the repo. It covers the layout tree, BSP geometry, geometry helpers, the engine (reconcile, ghost slots, multiple Spaces), the workspace model, the C API, and config validation and the Lua loader.
@@ -57,7 +57,7 @@ Fake windows can have the quirks hyprMac has to survive:
 
 A guard (`HYPR_SANDBOX=1`) refuses to run if any command points at a real system path, or if `HOME` is the real home.
 
-The scenarios cover a clean install and uninstall with zero snapshot diff, upgrades, a failure injected at **every** install step (each must roll back), existing ⌥8/⌥9 bindings, pre-existing config and app data, Stage Manager on and off, notification settings, dry runs, uninstalling from inside the bundle, and `verify-rollback` catching a deliberate change.
+The scenarios cover a clean install and uninstall with zero snapshot diff, upgrades, a failure injected at **every** install step (each must roll back), existing ⌥8/⌥9 bindings, pre-existing config and app data, Stage Manager on and off, notification settings, dry runs, uninstalling from inside the bundle, `verify-rollback` catching a deliberate change, and the opt-in signing identity (`make sign-identity`, with shimmed `security`, `codesign` and `openssl`, never the real keychain). `scripts/tests/release.sh` covers the release-notes and Homebrew cask helpers.
 
 ## 5. End-to-end on a real Mac
 Two extra executables are built with the app:
@@ -75,6 +75,7 @@ The harness launches `hyprMac.app/Contents/MacOS/hyprMac --config <file> --event
 | `plan_applied` | each layout written (`space`, `revision`, `count`) |
 | `missing_space` | ⌥N for a Desktop that doesn't exist |
 | `throw` | each ⌥⇧N attempt, with `result` (`moved`, `alreadyThere`, `noSuchSpace`, `refusedFullscreen`, `noGrabPoint`, `timedOut`, `transitionInFlight`, `failed`, `noFocusedWindow`) |
+| `separate_spaces_off` | 2+ displays while "Displays have separate Spaces" is off (once per run) |
 | `floated` | with `reason` `fights` or `small` |
 | `stopped` | clean shutdown |
 

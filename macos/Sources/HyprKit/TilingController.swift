@@ -1,14 +1,21 @@
 import Foundation
+import HyprPlatform
 
 /// What the app shell needs from the tiling machinery. Implemented by `Coordinator`.
 public protocol TilingController: AnyObject {
     var isPaused: Bool { get }
     var osdPopup: Bool { get }
+    /// The live shortcuts (from the loaded config).
+    var keyBindings: KeyBindings { get }
     var delegate: TilingControllerDelegate? { get set }
     func start()
     func stop()
     func setPaused(_ paused: Bool, reason: String?)
+    /// Same as the menu item: pause when running, resume when paused (`keys.toggle_pause`).
+    func togglePause()
     func retileAll()
+    /// Flips the focused tile's split between side by side and stacked (`keys.rotate_split`, menu).
+    func rotateFocusedSplit()
     func reloadConfig()
 }
 
@@ -28,6 +35,8 @@ public enum TilingNotice: Equatable {
     case configLoaded
     case stageManagerEnabled
     case conflictingApp(name: String)
+    /// More than one display is connected but "Displays have separate Spaces" is off.
+    case separateSpacesOff
     case permissionLost
     /// Some configured shortcuts could not be registered (another app owns them).
     case hotkeysUnavailable(String)

@@ -17,6 +17,7 @@
 #include "hypr/config.hpp"
 #include "hypr/hypr_core.h"
 #include "hypr/keyspec.hpp"
+#include "hypr/rules.hpp"
 
 #include "lua.hpp"
 
@@ -264,19 +265,108 @@ std::string describe_key(lua_State *L, int idx) {
 
 struct Field {
     std::string_view name;
-    enum Kind { Number, Table, String, StringList, Boolean } kind;
+    enum Kind { Number, Table, String, StringList, Boolean, DesktopMap, DisplayMap } kind;
     double *target;                          // Number
     std::vector<Field> children;             // Table
     std::optional<std::string> *str;         // String
     std::vector<std::string> *list;          // StringList
     bool *boolean;                           // Boolean
+    std::vector<std::pair<std::string, int>> *desktop;  // DesktopMap
+    std::vector<hypr::DisplayGaps> *displays;           // DisplayMap
+    bool *seen;                              // Number: set when the key is present (optional)
 };
 
-Field num_field(std::string_view n, double *t) { return {n, Field::Number, t, {}, nullptr, nullptr, nullptr}; }
-Field table_field(std::string_view n, std::vector<Field> c) { return {n, Field::Table, nullptr, std::move(c), nullptr, nullptr, nullptr}; }
-Field str_field(std::string_view n, std::optional<std::string> *t) { return {n, Field::String, nullptr, {}, t, nullptr, nullptr}; }
-Field list_field(std::string_view n, std::vector<std::string> *t) { return {n, Field::StringList, nullptr, {}, nullptr, t, nullptr}; }
-Field bool_field(std::string_view n, bool *t) { return {n, Field::Boolean, nullptr, {}, nullptr, nullptr, t}; }
+Field num_field(std::string_view n, double *t) { return {n, Field::Number, t, {}, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr}; }
+Field opt_num_field(std::string_view n, double *t, bool *seen) { return {n, Field::Number, t, {}, nullptr, nullptr, nullptr, nullptr, nullptr, seen}; }
+Field table_field(std::string_view n, std::vector<Field> c) { return {n, Field::Table, nullptr, std::move(c), nullptr, nullptr, nullptr, nullptr, nullptr, nullptr}; }
+Field str_field(std::string_view n, std::optional<std::string> *t) { return {n, Field::String, nullptr, {}, t, nullptr, nullptr, nullptr, nullptr, nullptr}; }
+Field list_field(std::string_view n, std::vector<std::string> *t) { return {n, Field::StringList, nullptr, {}, nullptr, t, nullptr, nullptr, nullptr, nullptr}; }
+Field bool_field(std::string_view n, bool *t) { return {n, Field::Boolean, nullptr, {}, nullptr, nullptr, t, nullptr, nullptr, nullptr}; }
+Field desktop_field(std::string_view n, std::vector<std::pair<std::string, int>> *t) { return {n, Field::DesktopMap, nullptr, {}, nullptr, nullptr, nullptr, t, nullptr, nullptr}; }
+Field displays_field(std::string_view n, std::vector<hypr::DisplayGaps> *t) { return {n, Field::DisplayMap, nullptr, {}, nullptr, nullptr, nullptr, nullptr, t, nullptr}; }
+
+std::string check_table(lua_State *L, const std::string &where, const std::vector<Field> &fields);
+
+// rules.desktop: { ["bundle.id"] = N }. The map is at the top of the stack. Raw API only.
+std::string read_desktop_map(lua_State *L, const std::string &path, std::vector<std::pair<std::string, int>> *out) {
+    const int t = lua_gettop(L);
+    std::vector<std::pair<std::string, double>> items;
+    std::string error;
+    lua_pushnil(L);
+    while (lua_next(L, t) != 0) {
+        if (error.empty()) {
+            if (lua_type(L, -2) != LUA_TSTRING) {
+                error = path + " must map bundle ids to Desktop numbers (found key " + describe_key(L, -2) + ")";
+            } else if (items.size() >= hypr::kMaxRuleEntries) {
+                error = path + " has too many entries (max " + std::to_string(hypr::kMaxRuleEntries) + ")";
+            } else if (lua_type(L, -1) != LUA_TNUMBER) {
+                error = path + "[" + describe_key(L, -2) + "] must be a number, got " + luaL_typename(L, -1);
+            } else {
+                size_t len = 0;
+                const char *k = lua_tolstring(L, -2, &len);
+                items.emplace_back(std::string(k, len), static_cast<double>(lua_tonumber(L, -1)));
+            }
+        }
+        lua_pop(L, 1);
+    }
+    if (!error.empty()) return error;
+    std::sort(items.begin(), items.end());
+    out->clear();
+    for (const auto &it : items) {
+        if (std::string e = hypr::validate_desktop_entry(it.first, it.second); !e.empty()) return path + ": " + e;
+        out->emplace_back(it.first, static_cast<int>(it.second));
+    }
+    return "";
+}
+
+// config.displays: { ["Display Name"] = { inner = 4, outer = 8 } }. The map is at the top of the stack.
+std::string read_display_map(lua_State *L, const std::string &path, std::vector<hypr::DisplayGaps> *out) {
+    const int t = lua_gettop(L);
+    std::vector<hypr::DisplayGaps> items;
+    std::string error;
+    lua_pushnil(L);
+    while (lua_next(L, t) != 0) {
+        if (error.empty()) {
+            if (lua_type(L, -2) != LUA_TSTRING) {
+                error = path + " must map display names to gap tables (found key " + describe_key(L, -2) + ")";
+            } else if (items.size() >= hypr::kMaxDisplayEntries) {
+                error = path + " has too many entries (max " + std::to_string(hypr::kMaxDisplayEntries) + ")";
+            } else {
+                size_t len = 0;
+                const char *k = lua_tolstring(L, -2, &len);
+                hypr::DisplayGaps d;
+                d.name.assign(k, len);
+                const std::string where = path + "[" + describe_key(L, -2) + "]";
+                if (std::string e = hypr::validate_display_name(d.name); !e.empty()) {
+                    error = path + ": " + e;
+                } else if (lua_type(L, -1) != LUA_TTABLE) {
+                    error = where + " must be a table, got " + luaL_typename(L, -1);
+                } else {
+                    double inner = 0, outer = 0;
+                    bool has_inner = false, has_outer = false;
+                    error = check_table(L, where, {opt_num_field("inner", &inner, &has_inner),
+                                                   opt_num_field("outer", &outer, &has_outer)});
+                    if (error.empty() && has_inner) {
+                        error = hypr::validate_display_gap("inner", inner);
+                        if (!error.empty()) error = where + "." + error;
+                        d.inner = inner;
+                    }
+                    if (error.empty() && has_outer) {
+                        error = hypr::validate_display_gap("outer", outer);
+                        if (!error.empty()) error = where + "." + error;
+                        d.outer = outer;
+                    }
+                    if (error.empty()) items.push_back(std::move(d));
+                }
+            }
+        }
+        lua_pop(L, 1);
+    }
+    if (!error.empty()) return error;
+    std::sort(items.begin(), items.end(), [](const hypr::DisplayGaps &a, const hypr::DisplayGaps &b) { return a.name < b.name; });
+    *out = std::move(items);
+    return "";
+}
 
 // Reads the list at the top of the stack into `out`: a Lua sequence of non-empty strings,
 // at most hypr::kMaxRuleEntries. Raw, non-allocating API only. Returns an error or "".
@@ -339,9 +429,10 @@ std::string check_table(lua_State *L, const std::string &where, const std::vecto
         } else if (type_error.empty()) {
             std::string path = where + "." + std::string(match->name);
             if (match->kind == Field::Number) {
-                if (lua_type(L, -1) == LUA_TNUMBER)
+                if (lua_type(L, -1) == LUA_TNUMBER) {
                     *match->target = static_cast<double>(lua_tonumber(L, -1));
-                else
+                    if (match->seen != nullptr) *match->seen = true;
+                } else
                     type_error = path + " must be a number, got " + luaL_typename(L, -1);
             } else if (match->kind == Field::String) {
                 if (lua_type(L, -1) == LUA_TSTRING) {
@@ -356,6 +447,16 @@ std::string check_table(lua_State *L, const std::string &where, const std::vecto
                     type_error = read_string_list(L, path, match->list);
                 else
                     type_error = path + " must be a list of strings, got " + luaL_typename(L, -1);
+            } else if (match->kind == Field::DesktopMap) {
+                if (lua_type(L, -1) == LUA_TTABLE)
+                    type_error = read_desktop_map(L, path, match->desktop);
+                else
+                    type_error = path + " must be a table, got " + luaL_typename(L, -1);
+            } else if (match->kind == Field::DisplayMap) {
+                if (lua_type(L, -1) == LUA_TTABLE)
+                    type_error = read_display_map(L, path, match->displays);
+                else
+                    type_error = path + " must be a table, got " + luaL_typename(L, -1);
             } else if (match->kind == Field::Boolean) {
                 if (lua_type(L, -1) == LUA_TBOOLEAN) {
                     if (match->boolean != nullptr) *match->boolean = (lua_toboolean(L, -1) != 0);
@@ -400,7 +501,7 @@ std::string parse_keys(const std::optional<std::string> &t, const std::optional<
                        const std::optional<std::string> &fu, const std::optional<std::string> &fr,
                        const std::optional<std::string> &ml, const std::optional<std::string> &md,
                        const std::optional<std::string> &mu, const std::optional<std::string> &mr,
-                       hypr::Keys *out) {
+                       const std::optional<std::string> *actions, hypr::Keys *out) {
     struct Item { const char *name; const std::optional<std::string> *text; bool key; hypr::Chord *dst; };
     const Item items[] = {{"throw", &t, false, &out->throw_to},
                           {"toggle_float", &tf, true, &out->toggle_float},
@@ -422,12 +523,50 @@ std::string parse_keys(const std::optional<std::string> &t, const std::optional<
         if (!e.empty()) return std::string("keys.") + it.name + ": " + e;
         *it.dst = c;
     }
+    for (size_t i = 0; i < hypr::kActionKeyCount; ++i) {
+        if (!actions[i].has_value()) continue;
+        hypr::Chord c;
+        std::string e = hypr::parse_chord(*actions[i], true, c);
+        if (!e.empty()) return std::string("keys.") + hypr::kActionKeys[i].name + ": " + e;
+        out->*(hypr::kActionKeys[i].chord) = c;
+    }
     if (out->prefix.mods != 0) {
         if (out->prefix.mods != (hypr::kModAlt | hypr::kModShift)) {
             return "keys.prefix: prefix is hardcoded to Option+Shift ('opt shift' / 'alt+shift') for native macOS safety and cannot be changed";
         }
     }
     return hypr::validate_keys(*out);
+}
+
+// Checks every title pattern. On failure `needle` is the offending pattern (for the line lookup).
+std::string validate_title_rules(const hypr::Rules &rules, std::string *needle) {
+    const struct { const char *name; const std::vector<std::string> *list; } sets[] = {
+        {"float_title", &rules.float_title}, {"ignore_title", &rules.ignore_title}};
+    for (const auto &set : sets) {
+        for (size_t i = 0; i < set.list->size(); ++i) {
+            std::string e = hypr::validate_title_pattern((*set.list)[i]);
+            if (e.empty()) continue;
+            *needle = (*set.list)[i];
+            return std::string("config.rules.") + set.name + "[" + std::to_string(i + 1) + "]: " + e;
+        }
+    }
+    return "";
+}
+
+// 1-based line of the first source line containing `needle` as written (or with doubled backslashes,
+// as in a Lua string literal), else of the key name when `needle` is a rule key, else 0.
+int find_line(const char *src, size_t len, const std::string &needle) {
+    const std::string text(src, len);
+    std::vector<std::string> candidates = {needle, replace_all(needle, "\\", "\\\\")};
+    for (const std::string &c : candidates) {
+        size_t at = text.find(c);
+        if (at != std::string::npos) return 1 + static_cast<int>(std::count(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(at), '\n'));
+    }
+    for (const char *key : {"float_title", "ignore_title"}) {
+        size_t at = text.find(key);
+        if (at != std::string::npos) return 1 + static_cast<int>(std::count(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(at), '\n'));
+    }
+    return 0;
 }
 
 hm_status run(const char *src, size_t len, const std::string &path, hm_config *inout, hypr::Extras *extras_out,
@@ -464,6 +603,7 @@ hm_status run(const char *src, size_t len, const std::string &path, hm_config *i
     std::optional<std::string> key_throw, key_toggle, key_switch, key_prefix, key_center;
     std::optional<std::string> key_focus_left, key_focus_down, key_focus_up, key_focus_right;
     std::optional<std::string> key_move_left, key_move_down, key_move_up, key_move_right;
+    std::optional<std::string> key_actions[hypr::kActionKeyCount];
 
     lua_pushcfunction(L, setup_state);
     if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
@@ -505,19 +645,29 @@ hm_status run(const char *src, size_t len, const std::string &path, hm_config *i
         if (lua_type(L, -1) != LUA_TTABLE) {
             message = std::string("config must be a table, got ") + luaL_typename(L, -1);
         } else {
+            std::vector<Field> key_fields = {str_field("throw", &key_throw), str_field("toggle_float", &key_toggle),
+                                             str_field("switch", &key_switch),
+                                             str_field("prefix", &key_prefix), str_field("center_window", &key_center),
+                                             str_field("focus_left", &key_focus_left), str_field("focus_down", &key_focus_down),
+                                             str_field("focus_up", &key_focus_up), str_field("focus_right", &key_focus_right),
+                                             str_field("move_left", &key_move_left), str_field("move_down", &key_move_down),
+                                             str_field("move_up", &key_move_up), str_field("move_right", &key_move_right)};
+            for (size_t i = 0; i < hypr::kActionKeyCount; ++i)
+                key_fields.push_back(str_field(hypr::kActionKeys[i].name, &key_actions[i]));
             std::vector<Field> schema = {
                 table_field("gaps", {num_field("inner", &cfg.inner_gap), num_field("outer", &cfg.outer_gap)}),
                 num_field("split_ratio", &cfg.split_ratio),
+                num_field("resize_step", &cfg.resize_step),
                 table_field("float", {num_field("min_width", &cfg.float_min_w), num_field("min_height", &cfg.float_min_h)}),
-                table_field("keys", {str_field("throw", &key_throw), str_field("toggle_float", &key_toggle),
-                                     str_field("switch", &key_switch),
-                                     str_field("prefix", &key_prefix), str_field("center_window", &key_center),
-                                     str_field("focus_left", &key_focus_left), str_field("focus_down", &key_focus_down),
-                                     str_field("focus_up", &key_focus_up), str_field("focus_right", &key_focus_right),
-                                     str_field("move_left", &key_move_left), str_field("move_down", &key_move_down),
-                                     str_field("move_up", &key_move_up), str_field("move_right", &key_move_right)}),
-                table_field("rules", {list_field("ignore", &extras.rules.ignore), list_field("float", &extras.rules.float_)}),
+                table_field("keys", std::move(key_fields)),
+                table_field("rules", {list_field("ignore", &extras.rules.ignore), list_field("float", &extras.rules.float_),
+                                      list_field("float_title", &extras.rules.float_title),
+                                      list_field("ignore_title", &extras.rules.ignore_title),
+                                      desktop_field("desktop", &extras.rules.desktop)}),
                 bool_field("osd_popup", &extras.osd_popup),
+                bool_field("smart_gaps", &extras.smart_gaps),
+                bool_field("focus_follows_mouse", &extras.focus_follows_mouse),
+                displays_field("displays", &extras.displays),
             };
             message = check_table(L, "config", schema);
         }
@@ -525,10 +675,13 @@ hm_status run(const char *src, size_t len, const std::string &path, hm_config *i
     if (message.empty())
         message = parse_keys(key_throw, key_toggle, key_switch, key_prefix, key_center, key_focus_left,
                              key_focus_down, key_focus_up, key_focus_right, key_move_left, key_move_down,
-                             key_move_up, key_move_right, &extras.keys);
+                             key_move_up, key_move_right, key_actions, &extras.keys);
     if (message.empty()) message = hypr::validate(cfg);
+    std::string needle;  // text to locate in the source for a "<path>:<line>:" prefix
+    if (message.empty()) message = validate_title_rules(extras.rules, &needle);
     if (!message.empty()) {
-        write_err(err, err_cap, path + ": " + message);
+        const int line = needle.empty() ? 0 : find_line(src, len, needle);
+        write_err(err, err_cap, path + (line > 0 ? ":" + std::to_string(line) : std::string()) + ": " + message);
         status = HM_ERR_CONFIG;
     } else {
         *inout = cfg.to_c();

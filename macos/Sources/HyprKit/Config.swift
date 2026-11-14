@@ -8,7 +8,26 @@ public struct AppRules: Equatable {
     public var ignore: [String]
     /// Always floating (⌥⇧F can still tile them); added to the built-in float list.
     public var float: [String]
-    public init(ignore: [String] = [], float: [String] = []) { self.ignore = ignore; self.float = float }
+    /// `rules.float_title`: windows whose first non-empty title matches float (⌥⇧F can still tile them).
+    public var floatTitle: [String] { didSet { floatTitleMatcher = TitleMatcher(floatTitle) } }
+    /// `rules.ignore_title`: windows whose first non-empty title matches are never managed or moved.
+    public var ignoreTitle: [String]
+    /// EXPERIMENTAL `rules.desktop`: bundle id → Desktop N; new windows of the app are thrown there once.
+    public var desktop: [String: Int]
+    public private(set) var floatTitleMatcher: TitleMatcher
+    public init(ignore: [String] = [], float: [String] = [], floatTitle: [String] = [],
+                ignoreTitle: [String] = [], desktop: [String: Int] = [:]) {
+        self.ignore = ignore; self.float = float
+        self.floatTitle = floatTitle; self.ignoreTitle = ignoreTitle; self.desktop = desktop
+        self.floatTitleMatcher = TitleMatcher(floatTitle)
+    }
+}
+
+/// `config.displays[<name>]`: a nil side keeps the global gap.
+public struct DisplayGapOverride: Equatable {
+    public var inner: Double?
+    public var outer: Double?
+    public init(inner: Double? = nil, outer: Double? = nil) { self.inner = inner; self.outer = outer }
 }
 
 /// Validated configuration (mirrors `hm_config`).
@@ -19,22 +38,31 @@ public struct Config: Equatable {
     /// Windows first seen narrower / shorter than this float (0 disables that axis).
     public var floatMinWidth: Double
     public var floatMinHeight: Double
+    /// Percent of a split moved per keyboard resize press (1–25).
+    public var resizeStep: Double = 5
     public var keys: KeyBindings = .defaults
     public var rules = AppRules()
     public var osdPopup: Bool = true
+    /// A Space with exactly one tiled window uses zero inner and zero outer gap.
+    public var smartGaps: Bool = false
+    /// Hovering a window focuses it after a short debounce.
+    public var focusFollowsMouse: Bool = false
+    /// Per-display gap overrides keyed by `NSScreen.localizedName`.
+    public var displays: [String: DisplayGapOverride] = [:]
 
     public static var defaults: Config { var c = hm_config(); hm_config_default(&c); return Config(c) }
 
     init(_ c: hm_config) {
         innerGap = c.inner_gap; outerGap = c.outer_gap; splitRatio = c.split_ratio
         floatMinWidth = c.float_min_w; floatMinHeight = c.float_min_h
+        resizeStep = c.resize_step
     }
     public init(innerGap: Double, outerGap: Double, splitRatio: Double = 0.5,
-                floatMinWidth: Double = 400, floatMinHeight: Double = 300,
+                floatMinWidth: Double = 400, floatMinHeight: Double = 300, resizeStep: Double = 5,
                 keys: KeyBindings = .defaults, rules: AppRules = AppRules(),
                 osdPopup: Bool = true) {
         self.innerGap = innerGap; self.outerGap = outerGap; self.splitRatio = splitRatio
-        self.floatMinWidth = floatMinWidth; self.floatMinHeight = floatMinHeight
+        self.floatMinWidth = floatMinWidth; self.floatMinHeight = floatMinHeight; self.resizeStep = resizeStep
         self.keys = keys; self.rules = rules; self.osdPopup = osdPopup
     }
 
@@ -59,7 +87,7 @@ public struct Config: Equatable {
         if let fu = k["focus_up"].flatMap(KeySpec.init(parsing:)) { customFocus.append((.up, fu)) }
         if let fr = k["focus_right"].flatMap(KeySpec.init(parsing:)) { customFocus.append((.right, fr)) }
         if !customFocus.isEmpty {
-            keys.focusKeys = customFocus
+            keys.focusKeys = withArrows(customFocus)
         }
 
         var customMove: [(direction: Direction, spec: KeySpec)] = []
@@ -68,7 +96,11 @@ public struct Config: Equatable {
         if let mu = k["move_up"].flatMap(KeySpec.init(parsing:)) { customMove.append((.up, mu)) }
         if let mr = k["move_right"].flatMap(KeySpec.init(parsing:)) { customMove.append((.right, mr)) }
         if !customMove.isEmpty {
-            keys.moveKeys = customMove
+            keys.moveKeys = withArrows(customMove)
+        }
+
+        for action in KeyAction.allCases {
+            if let text = k[action.rawValue], let spec = KeySpec(parsing: text) { keys.actionKeys[action] = spec }
         }
 
         guard let r = root["rules"] as? [String: Any],
@@ -77,9 +109,44 @@ public struct Config: Equatable {
         let osd = root["osd_popup"] as? Bool ?? true
         return (keys, AppRules(ignore: ignore, float: float), osd)
     }
+    /// Keeps each configured direction's arrow key bound next to its letter key, with the same modifiers
+    /// (`focus_left = "alt+shift+h"` also binds ⌥⇧←). Skipped when that arrow is already in the list.
+    static func withArrows(_ list: [(direction: Direction, spec: KeySpec)]) -> [(direction: Direction, spec: KeySpec)] {
+        var out = list
+        for item in list {
+            guard let arrow = KeySpec(modifiers: item.spec.modifiers, key: item.direction.rawValue),
+                  !out.contains(where: { $0.spec == arrow }) else { continue }
+            out.append((item.direction, arrow))
+        }
+        return out
+    }
+
+    /// Reads the v0.3.0 options (title rules, `rules.desktop`, `smart_gaps`, `focus_follows_mouse`,
+    /// `displays`) from the extras JSON. Absent keys keep today's behaviour; the core validated them.
+    mutating func applyV3Options(json: String) {
+        guard let data = json.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        if let r = root["rules"] as? [String: Any] {
+            rules.floatTitle = r["float_title"] as? [String] ?? []
+            rules.ignoreTitle = r["ignore_title"] as? [String] ?? []
+            var desktop: [String: Int] = [:]
+            for (k, v) in r["desktop"] as? [String: Any] ?? [:] { if let n = v as? Int { desktop[k] = n } }
+            rules.desktop = desktop
+        }
+        smartGaps = root["smart_gaps"] as? Bool ?? false
+        focusFollowsMouse = root["focus_follows_mouse"] as? Bool ?? false
+        var displays: [String: DisplayGapOverride] = [:]
+        for (name, v) in root["displays"] as? [String: Any] ?? [:] {
+            guard let d = v as? [String: Any] else { continue }
+            displays[name] = DisplayGapOverride(inner: (d["inner"] as? NSNumber)?.doubleValue,
+                                                outer: (d["outer"] as? NSNumber)?.doubleValue)
+        }
+        self.displays = displays
+    }
+
     var c: hm_config {
         hm_config(inner_gap: innerGap, outer_gap: outerGap, split_ratio: splitRatio,
-                  float_min_w: floatMinWidth, float_min_h: floatMinHeight)
+                  float_min_w: floatMinWidth, float_min_h: floatMinHeight, resize_step: resizeStep)
     }
 }
 
@@ -125,6 +192,7 @@ public final class ConfigStore {
         loaded.keys = extras.keys
         loaded.rules = extras.rules
         loaded.osdPopup = extras.osdPopup
+        loaded.applyV3Options(json: String(cString: json))
         current = loaded
         return .loaded(current)
     }

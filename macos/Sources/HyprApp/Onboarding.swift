@@ -25,18 +25,4 @@ enum Onboarding {
             }
         }
     }
-
-    static func showShortcuts() {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "hyprMac shortcuts"
-        alert.informativeText = """
-        ⌥1 … ⌥9      Switch to Desktop N (native macOS shortcut)
-        ⌥⇧1 … ⌥⇧9    Move the focused window to Desktop N
-
-        Desktops are your macOS Spaces. Add or remove them in Mission Control.
-        Fullscreen windows are never tiled.
-        """
-        alert.runModal()
-    }
 }

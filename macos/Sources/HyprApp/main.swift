@@ -2,6 +2,15 @@ import AppKit
 import HyprKit
 import HyprPlatform
 
+let options = AppOptions(arguments: CommandLine.arguments)
+
+// `--check-config [path]` validates and exits: no lock, no hotkeys, no app.
+if options.checkConfig {
+    exit(ConfigCheck.run(options: options,
+                         out: { print($0) },
+                         err: { FileHandle.standardError.write(Data(($0 + "\n").utf8)) }))
+}
+
 // Enforce single instance per user session.
 let instanceLock = SingleInstanceLock()
 switch instanceLock.acquire() {
@@ -18,7 +27,6 @@ case .cannotCreateLockDirectory(let msg):
     // Non-fatal warning; proceed if LaunchServices check passed
 }
 
-let options = AppOptions(arguments: CommandLine.arguments)
 if let p = options.eventLogPath { EventLog.shared.open(path: p) }
 
 let app = NSApplication.shared

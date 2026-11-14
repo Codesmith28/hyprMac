@@ -1,8 +1,11 @@
 #pragma once
 // Key-binding grammar and the "extras" (keys + rules) of the Lua configuration.
 // Pure C++ so doctest covers it; Swift maps the canonical names to key codes.
+#include "hypr/rules.hpp"
+
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace hypr {
@@ -44,17 +47,48 @@ struct Keys {
     Chord move_down{0, ""};
     Chord move_up{0, ""};
     Chord move_right{0, ""};
+    // Actions that ship unbound (an empty key means "no shortcut"), except rotate_split (⌥⇧R).
+    Chord resize_left{0, ""};
+    Chord resize_down{0, ""};
+    Chord resize_up{0, ""};
+    Chord resize_right{0, ""};
+    Chord equalize{0, ""};
+    Chord rotate_split{kModAlt | kModShift, "r"};
+    Chord toggle_zoom{0, ""};
+    Chord move_display_next{0, ""};
+    Chord move_display_prev{0, ""};
+    Chord toggle_pause{0, ""};
 };
+
+// The opt-in actions, by their `keys.<name>` (unbound by default, except rotate_split).
+struct ActionKey {
+    const char *name;
+    Chord Keys::*chord;
+};
+inline constexpr ActionKey kActionKeys[] = {
+    {"resize_left", &Keys::resize_left},   {"resize_down", &Keys::resize_down},
+    {"resize_up", &Keys::resize_up},       {"resize_right", &Keys::resize_right},
+    {"equalize", &Keys::equalize},         {"rotate_split", &Keys::rotate_split},
+    {"toggle_zoom", &Keys::toggle_zoom},   {"move_display_next", &Keys::move_display_next},
+    {"move_display_prev", &Keys::move_display_prev}, {"toggle_pause", &Keys::toggle_pause},
+};
+inline constexpr size_t kActionKeyCount = sizeof kActionKeys / sizeof kActionKeys[0];
 
 struct Rules {
     std::vector<std::string> ignore;
     std::vector<std::string> float_;
+    std::vector<std::string> float_title;   // title regexes (see rules.hpp)
+    std::vector<std::string> ignore_title;
+    std::vector<std::pair<std::string, int>> desktop;  // bundle id -> Desktop N, sorted by bundle id
 };
 
 struct Extras {
     Keys keys;
     Rules rules;
     bool osd_popup = true;
+    bool smart_gaps = false;
+    bool focus_follows_mouse = false;
+    std::vector<DisplayGaps> displays;  // sorted by name
 };
 
 // Cross-field checks (throw vs switch, toggle_float vs throw digits). "" when fine, else a
@@ -63,6 +97,9 @@ std::string validate_keys(const Keys &keys);
 
 // Compact JSON: {"keys":{"throw":"alt+shift","toggle_float":"alt+shift+f","switch":"alt"},
 //                "rules":{"ignore":[...],"float":[...]}}
+// v0.3.0 options appear only when set (default = absent): rules.float_title / ignore_title (lists),
+// rules.desktop ({"bundle.id":3}), and top-level "smart_gaps", "focus_follows_mouse" (true) and
+// "displays" ({"Name":{"inner":4,"outer":8}}, unset gaps omitted).
 std::string extras_to_json(const Extras &extras);
 
 }  // namespace hypr

@@ -96,11 +96,14 @@ public struct DisplayInfo: Equatable, Sendable {
     public var frame: CGRect
     public var visibleFrame: CGRect
     public var isMain: Bool
-    public init(id: DisplayID, frame: CGRect, visibleFrame: CGRect, isMain: Bool) {
+    /// `NSScreen.localizedName` (empty when unknown); keys `config.displays`.
+    public var name: String
+    public init(id: DisplayID, frame: CGRect, visibleFrame: CGRect, isMain: Bool, name: String = "") {
         self.id = id
         self.frame = frame
         self.visibleFrame = visibleFrame
         self.isMain = isMain
+        self.name = name
     }
 }
 

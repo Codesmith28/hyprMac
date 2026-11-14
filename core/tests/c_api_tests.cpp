@@ -59,7 +59,7 @@ TEST_CASE("engine create and destroy") {
     CHECK(hm_engine_create(&bad) == nullptr);
     hm_config nan_cfg{std::numeric_limits<double>::quiet_NaN(), 12, 0.5};
     CHECK(hm_engine_create(&nan_cfg) == nullptr);
-    hm_config ok{0, 0, 0.5};
+    hm_config ok{0, 0, 0.5, 0, 0, 5};
     hm_engine *e2 = hm_engine_create(&ok);
     CHECK(e2 != nullptr);
     hm_engine_destroy(e2);
@@ -253,7 +253,7 @@ TEST_CASE("set_config through the C API") {
     EngineGuard g;
     hm_config bad{0, 0, 2.0};
     CHECK(hm_engine_set_config(g.e, &bad) == HM_ERR_CONFIG);
-    hm_config zero{0, 0, 0.5};
+    hm_config zero{0, 0, 0.5, 0, 0, 5};
     REQUIRE(hm_engine_set_config(g.e, &zero) == HM_OK);
     std::vector<hm_window_info> ws{win(1)};
     hm_space_snapshot s = snap(5, ws);

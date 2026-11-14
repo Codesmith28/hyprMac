@@ -1,0 +1,36 @@
+name: CI
+
+# Runs only what needs no macOS permissions: no e2e, no install, no launching the app.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: make test
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          xcode-select -p
+          swift --version
+      - name: make test
+        run: make test
+
+  asan:
+    name: make test-asan
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: make test-asan
+        run: make test-asan

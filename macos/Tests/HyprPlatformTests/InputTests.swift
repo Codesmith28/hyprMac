@@ -74,8 +74,8 @@ import Testing
 @Suite struct HotkeyTableTests {
     @Test func registrationTableHasDigitsAndToggleFloatAndNavigation() {
         let table = HotkeyCenter.registrationTable
-        #expect(table.count == 27)
-        #expect(Set(table.map(\.id)).count == 27)           // unique hotkey ids
+        #expect(table.count == 28)
+        #expect(Set(table.map(\.id)).count == 28)           // unique hotkey ids
         for n in 1...9 {
             #expect(table[n - 1].id == UInt32(n))
             #expect(table[n - 1].keyCode == UInt32(DigitKeys.keyCode(forDigit: n)!))
