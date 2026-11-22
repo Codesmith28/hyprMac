@@ -36,7 +36,7 @@
   </header>
 
   <main id="top">
-    <!-- Hero Section: Full Viewport 100vh Landing -->
+    <!-- Hero Section: Full Viewport Landing -->
     <section class="hero-section">
       <div class="container hero-container">
         <div class="hero-2col">
@@ -50,17 +50,17 @@
             </div>
 
             <p class="hero-tagline">
-              Hyprland-style tiling for macOS that keeps your native Spaces.
+              Predictable, tactile tiling that honors your native Mission Control Desktops.
             </p>
 
             <p class="hero-desc">
               Windows tile as you open them along their longer side. hyprMac works with the Desktops you already have in Mission Control. It doesn't replace them with virtual workspaces, and it doesn't need System Integrity Protection turned off. The layout engine is C++20 behind a C API, the macOS layer is Swift, and the config is sandboxed Lua.
             </p>
 
-            <!-- Wrapped Quickstart Install Snippet with 1-click Copy -->
+            <!-- Quickstart Install Card with 1-Click Copy -->
             <div class="install-block">
               <div class="install-bar">
-                <span class="install-label">// QUICKSTART</span>
+                <span class="install-label">INSTALLATION</span>
                 <button class="btn-copy" id="copy-btn" aria-label="Copy install command">copy</button>
               </div>
               <div class="install-cmd-wrap">
@@ -69,7 +69,7 @@
               </div>
             </div>
             <div class="install-note">
-              Run <code>make preflight</code> to audit changes before installing. Fully reversible with <code>make uninstall</code>.
+              Run <code>make preflight</code> to audit system changes before installing. Fully reversible anytime with <code>make uninstall</code>.
             </div>
           </div>
 
@@ -212,29 +212,31 @@
         </div>
       </div>
 
-      <!-- Slightly Bouncing Button: Explore Features -->
-      <div class="hero-explore-wrap">
-        <a href="#features" class="btn-explore" aria-label="Scroll down to explore features">↓ explore features</a>
+      <!-- Refined Scroll Link -->
+      <div class="hero-scroll-indicator">
+        <a href="#features" class="hero-anchor-link" aria-label="Scroll down to explore features">
+          <span class="anchor-icon">↓</span> explore features
+        </a>
       </div>
     </section>
 
-    <!-- Alternating Feature Showcase -->
+    <!-- Alternating & Panoramic Feature Showcase -->
     <section id="features" class="features-section">
       <div class="container">
-        <div class="section-label">// SHOWCASE</div>
-        <h2 class="section-title">Core Features &amp; macOS Desktop Visualizations</h2>
+        <div class="section-label">INTERACTIONS</div>
+        <h2 class="section-title">Core Architecture &amp; Desktop Visualizations</h2>
 
         <!-- Feature 1: Move Focus (Desc Left, Anim Right) -->
         <div class="feature-row">
           <div class="feature-text-col">
-            <div class="feature-tag">01 / Navigation</div>
+            <div class="feature-tag">01 / NAVIGATION</div>
             <h3 class="feature-heading">Move Focus</h3>
             <p class="feature-desc">
               Focus walks cleanly between neighboring tiles in the BSP tree. A new window splits the focused tile along its longer side and takes the second half.
             </p>
             <div class="keycap-row">
               <kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">H</kbd> / <kbd class="kbd">J</kbd> / <kbd class="kbd">K</kbd> / <kbd class="kbd">L</kbd>
-              <span class="key-hint" style="color: var(--text-dim); font-size: 13px; margin-left: 8px;">(or arrow keys ← ↓ ↑ →)</span>
+              <span class="key-hint">(or arrow keys ← ↓ ↑ →)</span>
             </div>
           </div>
           <div class="feature-anim-col">
@@ -281,25 +283,17 @@
                       </div>
                     </div>
                   </div>
+                  <!-- Authentic Code Editor Window in Feature 1 -->
                   <div class="mac-window win-focus-3">
                     <div class="mac-titlebar">
                       <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
-                      <span class="win-title">Calculator</span>
+                      <span class="win-title">editor ~ init.lua</span>
                     </div>
-                    <div class="mac-body dummy-calc">
-                      <div class="calc-screen">42.0</div>
-                      <div class="calc-grid">
-                        <div class="calc-btn calc-fn">C</div>
-                        <div class="calc-btn calc-op">÷</div>
-                        <div class="calc-btn">7</div>
-                        <div class="calc-btn calc-op">×</div>
-                        <div class="calc-btn">4</div>
-                        <div class="calc-btn calc-op">−</div>
-                        <div class="calc-btn">1</div>
-                        <div class="calc-btn calc-op">+</div>
-                        <div class="calc-btn calc-zero">0</div>
-                        <div class="calc-btn calc-eq">=</div>
-                      </div>
+                    <div class="mac-body dummy-code">
+                      <div class="code-line"><span class="syn-comment">-- binary space partitioning</span></div>
+                      <div class="code-line"><span class="syn-prop">gaps</span> = { <span class="syn-prop">inner</span> = <span class="syn-num">8</span>, <span class="syn-prop">outer</span> = <span class="syn-num">12</span> }</div>
+                      <div class="code-line"><span class="syn-prop">split_ratio</span> = <span class="syn-num">0.5</span></div>
+                      <div class="code-line"><span class="syn-prop">smart_gaps</span> = <span class="syn-bool">false</span></div>
                     </div>
                   </div>
                 </div>
@@ -311,14 +305,14 @@
         <!-- Feature 2: Native Spaces & Throwing (Anim Left, Desc Right) -->
         <div class="feature-row row-reverse">
           <div class="feature-text-col">
-            <div class="feature-tag">02 / Spaces &amp; Throwing</div>
+            <div class="feature-tag">02 / SPACES &amp; THROWING</div>
             <h3 class="feature-heading">Throw Window</h3>
             <p class="feature-desc">
-              Send the focused window to Desktop N across native Spaces. macOS has no public API for moving windows between Desktops, so hyprMac uses an accessibility drag trick without requiring SIP disabled.
+              Send the focused window to Desktop N across native Spaces. Because macOS lacks a public API for inter-Space window dispatch, hyprMac coordinates an accessibility drag trick—preserving your native Mission Control without requiring SIP to be disabled.
             </p>
             <div class="keycap-row">
-              <kbd class="kbd">⌥</kbd><kbd class="kbd">1–9</kbd> <span style="color:#666; font-size:12px; margin: 0 4px;">switch</span>
-              <kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">1–9</kbd> <span style="color:#666; font-size:12px; margin: 0 4px;">throw</span>
+              <kbd class="kbd">⌥</kbd><kbd class="kbd">1–9</kbd> <span class="key-action-hint">switch</span>
+              <kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">1–9</kbd> <span class="key-action-hint">throw</span>
             </div>
           </div>
           <div class="feature-anim-col">
@@ -393,14 +387,14 @@
         <!-- Feature 3: Navigation & Move (Desc Left, Anim Right) -->
         <div class="feature-row">
           <div class="feature-text-col">
-            <div class="feature-tag">03 / Movement</div>
+            <div class="feature-tag">03 / MOVEMENT</div>
             <h3 class="feature-heading">Swap Windows</h3>
             <p class="feature-desc">
               Trade places with the neighboring tile. Windows swap cleanly without altering the rest of your BSP hierarchy or disrupting adjacent displays.
             </p>
             <div class="keycap-row">
               <kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">⌘</kbd><kbd class="kbd">H</kbd> / <kbd class="kbd">J</kbd> / <kbd class="kbd">K</kbd> / <kbd class="kbd">L</kbd>
-              <span class="key-hint" style="color: var(--text-dim); font-size: 13px; margin-left: 8px;">(or ⌥⇧⌘ + arrow keys ← ↓ ↑ →)</span>
+              <span class="key-hint">(or ⌥⇧⌘ + arrow keys ← ↓ ↑ →)</span>
             </div>
           </div>
           <div class="feature-anim-col">
@@ -454,14 +448,14 @@
         <!-- Feature 4: Floating Rules (Anim Left, Desc Right) -->
         <div class="feature-row row-reverse">
           <div class="feature-text-col">
-            <div class="feature-tag">04 / Window State</div>
+            <div class="feature-tag">04 / WINDOW STATE</div>
             <h3 class="feature-heading">Float / Tile</h3>
             <p class="feature-desc">
-              Pop the focused window out of the layout as a floating window, or pop it back into the BSP tree. Dialogs, sheets, Calculator, and non-resizable panels float automatically.
+              Pop the focused window out of the layout as a floating window, or pop it back into the BSP tree. Dialogs, sheets, Calculator, and non-resizable utility panels float automatically.
             </p>
             <div class="keycap-row">
               <kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">F</kbd>
-              <span style="color:#666; font-size:12px; margin-left: 8px;">or ⌥⇧C to center</span>
+              <span class="key-hint">or ⌥⇧C to center</span>
             </div>
           </div>
           <div class="feature-anim-col">
@@ -536,14 +530,14 @@
         <!-- Feature 5: Flip Split & Gaps (Desc Left, Anim Right) -->
         <div class="feature-row">
           <div class="feature-text-col">
-            <div class="feature-tag">05 / Geometry &amp; Splits</div>
+            <div class="feature-tag">05 / GEOMETRY &amp; SPLITS</div>
             <h3 class="feature-heading">Re-Split &amp; Flip</h3>
             <p class="feature-desc">
               Flip a split between horizontal (side-by-side) and vertical (stacked) instantly. Drop a window on a tile edge or press <code>⌥⇧R</code>. 8pt inner gaps and 12pt outer screen margins are preserved automatically.
             </p>
             <div class="keycap-row">
               <kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">R</kbd>
-              <span style="color:#666; font-size:12px; margin-left: 8px;">or ⇧-Drop on edge</span>
+              <span class="key-hint">or ⇧-drop on edge</span>
             </div>
           </div>
           <div class="feature-anim-col">
@@ -599,7 +593,7 @@
     <!-- Comparison Matrix Section -->
     <section id="comparison" class="matrix-section">
       <div class="container">
-        <div class="section-label">// COMPARISON</div>
+        <div class="section-label">SPECIFICATIONS</div>
         <h2 class="section-title">How hyprMac Compares</h2>
 
         <div class="matrix-table-wrap">
@@ -616,7 +610,7 @@
             <tbody>
               <tr>
                 <td><strong>SIP Status</strong></td>
-                <td class="col-highlight"><strong>Untouched (ON)</strong><span class="matrix-sub">Safe for Apple Pay & OS updates</span></td>
+                <td class="col-highlight"><strong>Untouched (ON)</strong><span class="matrix-sub">Safe for Apple Pay &amp; OS updates</span></td>
                 <td>Requires SIP Disabled<span class="matrix-sub">`csrutil disable` in recovery</span></td>
                 <td>Untouched (ON)<span class="matrix-sub">Standard Accessibility</span></td>
                 <td>Untouched (ON)<span class="matrix-sub">Standard Accessibility</span></td>
@@ -672,18 +666,18 @@
     <!-- Authentic Monospace Cheatsheet -->
     <section id="cheatsheet" class="cheatsheet-section">
       <div class="container">
-        <div class="section-label">// CHEATSHEET</div>
+        <div class="section-label">HUD CHEATSHEET</div>
         <h2 class="section-title">Keyboard Shortcuts (Press ⌥⇧/)</h2>
-        <p class="hero-desc" style="margin-bottom: 20px;">
-          Press <code>⌥⇧/</code> (or select <strong>Keyboard Shortcuts…</strong> from the menu) inside hyprMac to display this cheatsheet HUD mapped to your <code>init.lua</code> bindings.
+        <p class="section-intro">
+          Press <code>⌥⇧/</code> (or choose <strong>Keyboard Shortcuts…</strong> from the menu bar) inside hyprMac to display this cheatsheet HUD mapped to your <code>init.lua</code> bindings.
         </p>
 
         <div class="matrix-table-wrap">
           <table class="cheatsheet-table">
             <thead>
               <tr>
-                <th style="width: 25%;">Shortcut</th>
-                <th style="width: 35%;">Action</th>
+                <th style="width: 28%;">Shortcut</th>
+                <th style="width: 32%;">Action</th>
                 <th style="width: 40%;">Notes</th>
               </tr>
             </thead>
@@ -747,9 +741,9 @@
     <!-- Real init.lua Config Block -->
     <section id="config" class="config-section">
       <div class="container">
-        <div class="section-label">// CONFIGURATION</div>
+        <div class="section-label">CONFIGURATION</div>
         <h2 class="section-title">~/.config/hyprmac/init.lua</h2>
-        <p class="hero-desc" style="margin-bottom: 20px;">
+        <p class="section-intro">
           Every key is optional; with no file you get defaults. Strict schema checking rejects unknown keys. Reloads automatically on save, from the menu, or via <code>pkill -HUP -x hyprMac</code>.
         </p>
 
@@ -783,9 +777,9 @@
     <!-- Architecture Section -->
     <section id="architecture" class="arch-section">
       <div class="container">
-        <div class="section-label">// ARCHITECTURE</div>
+        <div class="section-label">ENGINE ARCHITECTURE</div>
         <h2 class="section-title">Swift + C++20 Core Design</h2>
-        <p class="hero-desc" style="margin-bottom: 20px;">
+        <p class="section-intro">
           Window events schedule a reconcile. The C++20 engine calculates target frames and writes them via Accessibility using one isolated serial queue per application. A hung application can never stall your desktop.
         </p>
 
@@ -802,8 +796,8 @@
       <div class="container">
         <div class="targets-grid">
           <div>
-            <div class="section-label">// REQUIREMENTS</div>
-            <h3 class="subsection-title">System Prerequisites</h3>
+            <div class="section-label">PREREQUISITES</div>
+            <h3 class="subsection-title">System Requirements</h3>
             <ul class="item-list">
               <li>macOS 14 or later. Tested on macOS 27.2, Apple Silicon.</li>
               <li>Command Line Tools (<code>xcode-select --install</code>).</li>
@@ -814,7 +808,7 @@
           </div>
 
           <div>
-            <div class="section-label">// MAKE TARGETS</div>
+            <div class="section-label">BUILD TARGETS</div>
             <h3 class="subsection-title">Terminal Commands</h3>
             <ul class="item-list">
               <li><code><span class="sh-cmd">make</span></code> — Build core engine and build/hyprMac.app</li>
