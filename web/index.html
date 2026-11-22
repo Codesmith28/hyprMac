@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>hyprMac — Hyprland-style Tiling for macOS</title>
+  <meta name="description" content="Hyprland-style tiling for macOS that keeps your native Spaces without disabling SIP. C++20 engine, Swift layer, sandboxed Lua config.">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="shortcut icon" href="favicon.ico">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="animations.css">
+</head>
+<body>
+  <!-- Header / Navigation -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="#top" class="brand">
+        <img src="icon.svg" alt="hyprMac icon" class="brand-icon">
+        <span>hyprMac</span>
+        <span class="brand-tag">prototype</span>
+      </a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="#features">features</a></li>
+          <li><a href="#comparison">comparison</a></li>
+          <li><a href="#cheatsheet">cheatsheet</a></li>
+          <li><a href="#config">config</a></li>
+          <li><a href="#architecture">architecture</a></li>
+          <li><a href="https://github.com/Codesmith28/hyprMac" target="_blank" rel="noopener">github</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- Hero Section: Full Viewport 100vh Landing -->
+    <section class="hero-section">
+      <div class="container hero-container">
+        <div class="hero-2col">
+          <!-- Left Column: Hero Brand & Quickstart -->
+          <div class="hero-left-col">
+            <div class="hero-meta">macOS 14+ • Apple Silicon &amp; Intel • SIP Enabled • C++20 / Swift</div>
+            
+            <div class="hero-brand">
+              <img src="icon.svg" alt="hyprMac icon" class="hero-brand-icon">
+              <h1 class="hero-title">hyprMac</h1>
+            </div>
+
+            <p class="hero-tagline">
+              Hyprland-style tiling for macOS that keeps your native Spaces.
+            </p>
+
+            <p class="hero-desc">
+              Windows tile as you open them along their longer side. hyprMac works with the Desktops you already have in Mission Control. It doesn't replace them with virtual workspaces, and it doesn't need System Integrity Protection turned off. The layout engine is C++20 behind a C API, the macOS layer is Swift, and the config is sandboxed Lua.
+            </p>
+
+            <!-- Wrapped Quickstart Install Snippet with 1-click Copy -->
+            <div class="install-block">
+              <div class="install-bar">
+                <span class="install-label">// QUICKSTART</span>
+                <button class="btn-copy" id="copy-btn" aria-label="Copy install command">copy</button>
+              </div>
+              <div class="install-cmd-wrap">
+                <span class="prompt">$</span>
+                <code class="cmd-text" id="install-cmd"><span class="cmd-line"><span class="sh-cmd">git</span> <span class="sh-sub">clone</span> <span class="sh-arg">https://github.com/Codesmith28/hyprMac.git</span></span> <span class="cmd-line"><span class="syn-punct">&amp;&amp;</span> <span class="sh-cmd">cd</span> <span class="sh-arg">hyprMac</span> <span class="syn-punct">&amp;&amp;</span> <span class="sh-cmd">make</span> <span class="sh-sub">install</span></span></code>
+              </div>
+            </div>
+            <div class="install-note">
+              Run <code>make preflight</code> to audit changes before installing. Fully reversible with <code>make uninstall</code>.
+            </div>
+          </div>
+
+          <!-- Right Column: End-to-End macOS Desktop Preview -->
+          <div class="hero-right-col">
+            <div class="hero-desktop-preview" aria-label="End-to-end preview: How you use your Mac with hyprMac">
+              <div class="macos-desktop">
+                <div class="macos-menubar">
+                  <div class="menubar-left">
+                    <svg class="apple-logo" viewBox="0 0 170 170" fill="currentColor" aria-label="Apple logo"><path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.04-7.66-7.85-11.89-14.43-5.22-8.14-9.41-17.6-12.57-28.37-3.16-10.77-4.74-21.28-4.74-31.54 0-14.07 3.5-25.75 10.5-35.03 7-9.28 15.93-13.97 26.79-14.08 4.79 0 10.15 1.25 16.08 3.75 5.93 2.5 9.77 3.75 11.53 3.75 1.52 0 5.48-1.29 11.89-3.87 6.41-2.58 11.75-3.81 16.03-3.69 12.39.65 22.38 5.45 29.97 14.4-10.88 6.64-16.21 15.77-16 27.4.21 9.15 3.82 16.88 10.83 23.2 7.02 6.32 15.22 9.89 24.6 10.72-2.18 6.75-4.94 13.53-8.29 20.35zM119.22 31.84c0-7.39 2.65-14.28 7.95-20.67 5.3-6.39 11.77-10.37 19.41-11.17.22 1.3.33 2.4.33 3.3 0 7.39-2.73 14.38-8.19 20.97-5.46 6.59-12.06 10.51-19.8 10.77-.11-1.08-.17-2.15-.17-3.2z"/></svg>
+                    <span class="menu-app">hyprMac</span>
+                    <span class="menu-item">File</span>
+                    <span class="menu-item">Edit</span>
+                    <span class="menu-item">View</span>
+                  </div>
+                  <div class="menubar-right">
+                    <span class="menu-space-badge hero-space-badge">
+                      <span class="badge-d1">Desktop 1</span>
+                      <span class="badge-d2">Desktop 2</span>
+                    </span>
+                    <img src="icon.svg" class="menubar-icon" alt="">
+                    <span class="menu-time">9:41</span>
+                  </div>
+                </div>
+
+                <div class="desktop-workspace">
+                  <!-- Window 1: Terminal (Dummy Terminal) -->
+                  <div class="mac-window win-hero-term">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">terminal ~ zsh (80x24)</span>
+                    </div>
+                    <div class="mac-body dummy-term">
+                      <div class="term-line"><span class="term-prompt">codesmith@mac:~/hyprMac$</span> <span class="term-cmd">make run</span></div>
+                      <div class="term-line term-out"><span class="term-ok">[ok]</span> hyprcore: C++20 BSP initialized</div>
+                      <div class="term-line term-out"><span class="term-ok">[ok]</span> spaces: native Mission Control (1, 2)</div>
+                      <div class="term-line"><span class="term-prompt">codesmith@mac:~/hyprMac$</span> <span class="term-cursor">█</span></div>
+                    </div>
+                  </div>
+
+                  <!-- Window 2: File Manager (Dummy Finder) -->
+                  <div class="mac-window win-hero-edit">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">Finder ~ hyprMac</span>
+                    </div>
+                    <div class="mac-body dummy-finder">
+                      <div class="finder-sidebar">
+                        <div class="finder-side-title">Places</div>
+                        <div class="finder-side-item">▸ Apps</div>
+                        <div class="finder-side-item active">▸ hyprMac</div>
+                        <div class="finder-side-item">▸ Docs</div>
+                      </div>
+                      <div class="finder-files">
+                        <div class="finder-file"><span class="f-icon">📁</span> core/</div>
+                        <div class="finder-file"><span class="f-icon">📁</span> macos/</div>
+                        <div class="finder-file"><span class="f-icon">📄</span> Makefile</div>
+                        <div class="finder-file"><span class="f-icon">📄</span> init.lua</div>
+                        <div class="finder-file"><span class="f-icon">📄</span> README.md</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Window 3: Code Editor -->
+                  <div class="mac-window win-hero-web">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">nvim ~ init.lua</span>
+                    </div>
+                    <div class="mac-body">
+                      <span style="color:#86efac;">gaps</span> = { inner = 8 }<br>
+                      <span style="color:#93c5fd;">split_ratio</span> = 0.5<br>
+                      <span style="color:#fde047;">osd_popup</span> = true
+                    </div>
+                  </div>
+
+                  <!-- Window 4: Floating Calculator (Dummy Calc) -->
+                  <div class="mac-window win-hero-calc">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">Calculator</span>
+                    </div>
+                    <div class="mac-body dummy-calc">
+                      <div class="calc-screen">1,337.00</div>
+                      <div class="calc-grid">
+                        <div class="calc-btn calc-fn">C</div>
+                        <div class="calc-btn calc-fn">±</div>
+                        <div class="calc-btn calc-fn">%</div>
+                        <div class="calc-btn calc-op">÷</div>
+                        <div class="calc-btn">7</div>
+                        <div class="calc-btn">8</div>
+                        <div class="calc-btn">9</div>
+                        <div class="calc-btn calc-op">×</div>
+                        <div class="calc-btn">4</div>
+                        <div class="calc-btn">5</div>
+                        <div class="calc-btn">6</div>
+                        <div class="calc-btn calc-op">−</div>
+                        <div class="calc-btn">1</div>
+                        <div class="calc-btn">2</div>
+                        <div class="calc-btn">3</div>
+                        <div class="calc-btn calc-op">+</div>
+                        <div class="calc-btn calc-zero">0</div>
+                        <div class="calc-btn">.</div>
+                        <div class="calc-btn calc-eq">=</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Real-time OSD HUD Notifier: synchronized with actions -->
+                  <div class="hero-osd-container">
+                    <div class="hero-osd-pill osd-step-1">
+                      <span class="osd-icon">❖</span> <span>Tiling started (8pt gaps)</span>
+                    </div>
+                    <div class="hero-osd-pill osd-step-2">
+                      <span class="osd-icon">⬌</span> <span>Open Finder ➔ Longer-Axis BSP Split</span>
+                    </div>
+                    <div class="hero-osd-pill osd-step-3">
+                      <span class="osd-icon">⬍</span> <span>Open Editor ➔ Vertical Split</span>
+                    </div>
+                    <div class="hero-osd-pill osd-step-4">
+                      <span class="osd-icon">⇄</span> <span>⌥⇧⌘L Swap Windows</span>
+                    </div>
+                    <div class="hero-osd-pill osd-step-5">
+                      <span class="osd-icon">⟳</span> <span>⌥⇧R Flip Split Orientation</span>
+                    </div>
+                    <div class="hero-osd-pill osd-step-6">
+                      <span class="osd-icon">❐</span> <span>⌥⇧F Float Calculator</span>
+                    </div>
+                    <div class="hero-osd-pill osd-step-7">
+                      <span class="osd-icon">➔</span> <span>⌥⇧2 Throw Finder ➔ Desktop 2</span>
+                    </div>
+                    <div class="hero-osd-pill osd-step-8">
+                      <span class="osd-icon">⇲</span> <span>⌥1 Switch Desktop 1</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Slightly Bouncing Button: Explore Features -->
+      <div class="hero-explore-wrap">
+        <a href="#features" class="btn-explore" aria-label="Scroll down to explore features">↓ explore features</a>
+      </div>
+    </section>
+
+    <!-- Alternating Feature Showcase -->
+    <section id="features" class="features-section">
+      <div class="container">
+        <div class="section-label">// SHOWCASE</div>
+        <h2 class="section-title">Core Features &amp; macOS Desktop Visualizations</h2>
+
+        <!-- Feature 1: Move Focus (Desc Left, Anim Right) -->
+        <div class="feature-row">
+          <div class="feature-text-col">
+            <div class="feature-tag">01 / Navigation</div>
+            <h3 class="feature-heading">Move Focus</h3>
+            <p class="feature-desc">
+              Focus walks cleanly between neighboring tiles in the BSP tree. A new window splits the focused tile along its longer side and takes the second half.
+            </p>
+            <div class="keycap-row">
+              <kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">H</kbd> / <kbd class="kbd">J</kbd> / <kbd class="kbd">K</kbd> / <kbd class="kbd">L</kbd>
+              <span class="key-hint" style="color: var(--text-dim); font-size: 13px; margin-left: 8px;">(or arrow keys ← ↓ ↑ →)</span>
+            </div>
+          </div>
+          <div class="feature-anim-col">
+            <div class="feature-anim" aria-label="Move Focus on Desktop">
+              <div class="macos-desktop">
+                <div class="macos-menubar">
+                  <div class="menubar-left">
+                    <svg class="apple-logo" viewBox="0 0 170 170" fill="currentColor" aria-label="Apple logo"><path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.04-7.66-7.85-11.89-14.43-5.22-8.14-9.41-17.6-12.57-28.37-3.16-10.77-4.74-21.28-4.74-31.54 0-14.07 3.5-25.75 10.5-35.03 7-9.28 15.93-13.97 26.79-14.08 4.79 0 10.15 1.25 16.08 3.75 5.93 2.5 9.77 3.75 11.53 3.75 1.52 0 5.48-1.29 11.89-3.87 6.41-2.58 11.75-3.81 16.03-3.69 12.39.65 22.38 5.45 29.97 14.4-10.88 6.64-16.21 15.77-16 27.4.21 9.15 3.82 16.88 10.83 23.2 7.02 6.32 15.22 9.89 24.6 10.72-2.18 6.75-4.94 13.53-8.29 20.35zM119.22 31.84c0-7.39 2.65-14.28 7.95-20.67 5.3-6.39 11.77-10.37 19.41-11.17.22 1.3.33 2.4.33 3.3 0 7.39-2.73 14.38-8.19 20.97-5.46 6.59-12.06 10.51-19.8 10.77-.11-1.08-.17-2.15-.17-3.2z"/></svg>
+                    <span class="menu-app">hyprMac</span>
+                    <span class="menu-item">File</span>
+                    <span class="menu-item">Edit</span>
+                  </div>
+                  <div class="menubar-right">
+                    <span class="menu-space-badge">Desktop 1</span>
+                    <img src="icon.svg" class="menubar-icon" alt="">
+                    <span class="menu-time">9:41</span>
+                  </div>
+                </div>
+                <div class="desktop-workspace">
+                  <div class="mac-window win-focus-1">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">terminal ~ zsh</span>
+                    </div>
+                    <div class="mac-body dummy-term">
+                      <div class="term-line"><span class="term-prompt">$</span> cd hyprMac</div>
+                      <div class="term-line term-out"><span class="term-ok">[ok]</span> make build</div>
+                      <div class="term-line"><span class="term-prompt">$</span> <span class="term-cursor">█</span></div>
+                    </div>
+                  </div>
+                  <div class="mac-window win-focus-2">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">Finder ~ hyprMac</span>
+                    </div>
+                    <div class="mac-body dummy-finder">
+                      <div class="finder-sidebar">
+                        <div class="finder-side-item active">▸ hyprMac</div>
+                        <div class="finder-side-item">▸ core</div>
+                      </div>
+                      <div class="finder-files">
+                        <div class="finder-file">📁 core/</div>
+                        <div class="finder-file">📄 Makefile</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mac-window win-focus-3">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">Calculator</span>
+                    </div>
+                    <div class="mac-body dummy-calc">
+                      <div class="calc-screen">42.0</div>
+                      <div class="calc-grid">
+                        <div class="calc-btn calc-fn">C</div>
+                        <div class="calc-btn calc-op">÷</div>
+                        <div class="calc-btn">7</div>
+                        <div class="calc-btn calc-op">×</div>
+                        <div class="calc-btn">4</div>
+                        <div class="calc-btn calc-op">−</div>
+                        <div class="calc-btn">1</div>
+                        <div class="calc-btn calc-op">+</div>
+                        <div class="calc-btn calc-zero">0</div>
+                        <div class="calc-btn calc-eq">=</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feature 2: Native Spaces & Throwing (Anim Left, Desc Right) -->
+        <div class="feature-row row-reverse">
+          <div class="feature-text-col">
+            <div class="feature-tag">02 / Spaces &amp; Throwing</div>
+            <h3 class="feature-heading">Throw Window</h3>
+            <p class="feature-desc">
+              Send the focused window to Desktop N across native Spaces. macOS has no public API for moving windows between Desktops, so hyprMac uses an accessibility drag trick without requiring SIP disabled.
+            </p>
+            <div class="keycap-row">
+              <kbd class="kbd">⌥</kbd><kbd class="kbd">1–9</kbd> <span style="color:#666; font-size:12px; margin: 0 4px;">switch</span>
+              <kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">1–9</kbd> <span style="color:#666; font-size:12px; margin: 0 4px;">throw</span>
+            </div>
+          </div>
+          <div class="feature-anim-col">
+            <div class="feature-anim" aria-label="Throw Window across Desktop Spaces">
+              <div class="macos-desktop">
+                <div class="macos-menubar">
+                  <div class="menubar-left">
+                    <svg class="apple-logo" viewBox="0 0 170 170" fill="currentColor" aria-label="Apple logo"><path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.04-7.66-7.85-11.89-14.43-5.22-8.14-9.41-17.6-12.57-28.37-3.16-10.77-4.74-21.28-4.74-31.54 0-14.07 3.5-25.75 10.5-35.03 7-9.28 15.93-13.97 26.79-14.08 4.79 0 10.15 1.25 16.08 3.75 5.93 2.5 9.77 3.75 11.53 3.75 1.52 0 5.48-1.29 11.89-3.87 6.41-2.58 11.75-3.81 16.03-3.69 12.39.65 22.38 5.45 29.97 14.4-10.88 6.64-16.21 15.77-16 27.4.21 9.15 3.82 16.88 10.83 23.2 7.02 6.32 15.22 9.89 24.6 10.72-2.18 6.75-4.94 13.53-8.29 20.35zM119.22 31.84c0-7.39 2.65-14.28 7.95-20.67 5.3-6.39 11.77-10.37 19.41-11.17.22 1.3.33 2.4.33 3.3 0 7.39-2.73 14.38-8.19 20.97-5.46 6.59-12.06 10.51-19.8 10.77-.11-1.08-.17-2.15-.17-3.2z"/></svg>
+                    <span class="menu-app">hyprMac</span>
+                    <span class="menu-item">Spaces</span>
+                  </div>
+                  <div class="menubar-right">
+                    <span class="menu-space-badge throw-space-badge">Desktop 1 ⌥⇧2</span>
+                    <img src="icon.svg" class="menubar-icon" alt="">
+                    <span class="menu-time">9:41</span>
+                  </div>
+                </div>
+                <div class="desktop-workspace dual-spaces-workspace">
+                  <!-- Desktop 1 Zone -->
+                  <div class="space-zone space-zone-1">
+                    <div class="space-zone-header">
+                      <span class="space-zone-name">Desktop 1</span>
+                      <span class="space-zone-tag zone-tag-1">Active</span>
+                    </div>
+                    <div class="space-zone-body">
+                      <div class="mac-window win-throw-stay">
+                        <div class="mac-titlebar">
+                          <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                          <span class="win-title">terminal ~ zsh</span>
+                        </div>
+                        <div class="mac-body dummy-term">
+                          <div class="term-line"><span class="term-prompt">$</span> make run</div>
+                          <div class="term-line term-out"><span class="term-ok">[ok]</span> tile expanded</div>
+                        </div>
+                      </div>
+                      <div class="mac-window win-throw-move">
+                        <div class="mac-titlebar">
+                          <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                          <span class="win-title">Finder [⌥⇧2]</span>
+                        </div>
+                        <div class="mac-body dummy-finder">
+                          <div class="finder-sidebar">
+                            <div class="finder-side-item active">▸ hyprMac</div>
+                          </div>
+                          <div class="finder-files">
+                            <div class="finder-file">📁 core/</div>
+                            <div class="finder-file">📄 Makefile</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Desktop 2 Zone -->
+                  <div class="space-zone space-zone-2">
+                    <div class="space-zone-header">
+                      <span class="space-zone-name">Desktop 2</span>
+                      <span class="space-zone-tag zone-tag-2">Target</span>
+                    </div>
+                    <div class="space-zone-body">
+                      <div class="space-drop-target">
+                        <span class="drop-hint">Desktop 2 Workspace</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feature 3: Navigation & Move (Desc Left, Anim Right) -->
+        <div class="feature-row">
+          <div class="feature-text-col">
+            <div class="feature-tag">03 / Movement</div>
+            <h3 class="feature-heading">Swap Windows</h3>
+            <p class="feature-desc">
+              Trade places with the neighboring tile. Windows swap cleanly without altering the rest of your BSP hierarchy or disrupting adjacent displays.
+            </p>
+            <div class="keycap-row">
+              <kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">⌘</kbd><kbd class="kbd">H</kbd> / <kbd class="kbd">J</kbd> / <kbd class="kbd">K</kbd> / <kbd class="kbd">L</kbd>
+              <span class="key-hint" style="color: var(--text-dim); font-size: 13px; margin-left: 8px;">(or ⌥⇧⌘ + arrow keys ← ↓ ↑ →)</span>
+            </div>
+          </div>
+          <div class="feature-anim-col">
+            <div class="feature-anim" aria-label="Swap Windows on Desktop">
+              <div class="macos-desktop">
+                <div class="macos-menubar">
+                  <div class="menubar-left">
+                    <svg class="apple-logo" viewBox="0 0 170 170" fill="currentColor" aria-label="Apple logo"><path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.04-7.66-7.85-11.89-14.43-5.22-8.14-9.41-17.6-12.57-28.37-3.16-10.77-4.74-21.28-4.74-31.54 0-14.07 3.5-25.75 10.5-35.03 7-9.28 15.93-13.97 26.79-14.08 4.79 0 10.15 1.25 16.08 3.75 5.93 2.5 9.77 3.75 11.53 3.75 1.52 0 5.48-1.29 11.89-3.87 6.41-2.58 11.75-3.81 16.03-3.69 12.39.65 22.38 5.45 29.97 14.4-10.88 6.64-16.21 15.77-16 27.4.21 9.15 3.82 16.88 10.83 23.2 7.02 6.32 15.22 9.89 24.6 10.72-2.18 6.75-4.94 13.53-8.29 20.35zM119.22 31.84c0-7.39 2.65-14.28 7.95-20.67 5.3-6.39 11.77-10.37 19.41-11.17.22 1.3.33 2.4.33 3.3 0 7.39-2.73 14.38-8.19 20.97-5.46 6.59-12.06 10.51-19.8 10.77-.11-1.08-.17-2.15-.17-3.2z"/></svg>
+                    <span class="menu-app">hyprMac</span>
+                  </div>
+                  <div class="menubar-right">
+                    <span class="menu-space-badge">Desktop 1</span>
+                    <img src="icon.svg" class="menubar-icon" alt="">
+                    <span class="menu-time">9:41</span>
+                  </div>
+                </div>
+                <div class="desktop-workspace">
+                  <div class="mac-window win-swap-1">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">terminal ~ zsh</span>
+                    </div>
+                    <div class="mac-body dummy-term">
+                      <div class="term-line"><span class="term-prompt">$</span> git status</div>
+                      <div class="term-line term-out">Swapping on ⌥⇧⌘L</div>
+                      <div class="term-line"><span class="term-prompt">$</span> <span class="term-cursor">█</span></div>
+                    </div>
+                  </div>
+                  <div class="mac-window win-swap-2">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">Finder ~ hyprMac</span>
+                    </div>
+                    <div class="mac-body dummy-finder">
+                      <div class="finder-sidebar">
+                        <div class="finder-side-item active">▸ hyprMac</div>
+                      </div>
+                      <div class="finder-files">
+                        <div class="finder-file">📁 core/</div>
+                        <div class="finder-file">📁 macos/</div>
+                        <div class="finder-file">📄 init.lua</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feature 4: Floating Rules (Anim Left, Desc Right) -->
+        <div class="feature-row row-reverse">
+          <div class="feature-text-col">
+            <div class="feature-tag">04 / Window State</div>
+            <h3 class="feature-heading">Float / Tile</h3>
+            <p class="feature-desc">
+              Pop the focused window out of the layout as a floating window, or pop it back into the BSP tree. Dialogs, sheets, Calculator, and non-resizable panels float automatically.
+            </p>
+            <div class="keycap-row">
+              <kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">F</kbd>
+              <span style="color:#666; font-size:12px; margin-left: 8px;">or ⌥⇧C to center</span>
+            </div>
+          </div>
+          <div class="feature-anim-col">
+            <div class="feature-anim" aria-label="Float / Tile on Desktop">
+              <div class="macos-desktop">
+                <div class="macos-menubar">
+                  <div class="menubar-left">
+                    <svg class="apple-logo" viewBox="0 0 170 170" fill="currentColor" aria-label="Apple logo"><path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.04-7.66-7.85-11.89-14.43-5.22-8.14-9.41-17.6-12.57-28.37-3.16-10.77-4.74-21.28-4.74-31.54 0-14.07 3.5-25.75 10.5-35.03 7-9.28 15.93-13.97 26.79-14.08 4.79 0 10.15 1.25 16.08 3.75 5.93 2.5 9.77 3.75 11.53 3.75 1.52 0 5.48-1.29 11.89-3.87 6.41-2.58 11.75-3.81 16.03-3.69 12.39.65 22.38 5.45 29.97 14.4-10.88 6.64-16.21 15.77-16 27.4.21 9.15 3.82 16.88 10.83 23.2 7.02 6.32 15.22 9.89 24.6 10.72-2.18 6.75-4.94 13.53-8.29 20.35zM119.22 31.84c0-7.39 2.65-14.28 7.95-20.67 5.3-6.39 11.77-10.37 19.41-11.17.22 1.3.33 2.4.33 3.3 0 7.39-2.73 14.38-8.19 20.97-5.46 6.59-12.06 10.51-19.8 10.77-.11-1.08-.17-2.15-.17-3.2z"/></svg>
+                    <span class="menu-app">hyprMac</span>
+                  </div>
+                  <div class="menubar-right">
+                    <span class="menu-space-badge">Desktop 1</span>
+                    <img src="icon.svg" class="menubar-icon" alt="">
+                    <span class="menu-time">9:41</span>
+                  </div>
+                </div>
+                <div class="desktop-workspace">
+                  <div class="mac-window win-float-base">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">Finder ~ hyprMac</span>
+                    </div>
+                    <div class="mac-body dummy-finder">
+                      <div class="finder-sidebar">
+                        <div class="finder-side-item active">▸ hyprMac</div>
+                        <div class="finder-side-item">▸ core</div>
+                      </div>
+                      <div class="finder-files">
+                        <div class="finder-file">📁 core/</div>
+                        <div class="finder-file">📁 macos/</div>
+                        <div class="finder-file">📄 init.lua</div>
+                        <div class="finder-file">📄 README.md</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="mac-window win-float-overlay">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">Calculator [Floating]</span>
+                    </div>
+                    <div class="mac-body dummy-calc">
+                      <div class="calc-screen">1,337.00</div>
+                      <div class="calc-grid">
+                        <div class="calc-btn calc-fn">C</div>
+                        <div class="calc-btn calc-fn">±</div>
+                        <div class="calc-btn calc-fn">%</div>
+                        <div class="calc-btn calc-op">÷</div>
+                        <div class="calc-btn">7</div>
+                        <div class="calc-btn">8</div>
+                        <div class="calc-btn">9</div>
+                        <div class="calc-btn calc-op">×</div>
+                        <div class="calc-btn">4</div>
+                        <div class="calc-btn">5</div>
+                        <div class="calc-btn">6</div>
+                        <div class="calc-btn calc-op">−</div>
+                        <div class="calc-btn">1</div>
+                        <div class="calc-btn">2</div>
+                        <div class="calc-btn">3</div>
+                        <div class="calc-btn calc-op">+</div>
+                        <div class="calc-btn calc-zero">0</div>
+                        <div class="calc-btn">.</div>
+                        <div class="calc-btn calc-eq">=</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feature 5: Flip Split & Gaps (Desc Left, Anim Right) -->
+        <div class="feature-row">
+          <div class="feature-text-col">
+            <div class="feature-tag">05 / Geometry &amp; Splits</div>
+            <h3 class="feature-heading">Re-Split &amp; Flip</h3>
+            <p class="feature-desc">
+              Flip a split between horizontal (side-by-side) and vertical (stacked) instantly. Drop a window on a tile edge or press <code>⌥⇧R</code>. 8pt inner gaps and 12pt outer screen margins are preserved automatically.
+            </p>
+            <div class="keycap-row">
+              <kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">R</kbd>
+              <span style="color:#666; font-size:12px; margin-left: 8px;">or ⇧-Drop on edge</span>
+            </div>
+          </div>
+          <div class="feature-anim-col">
+            <div class="feature-anim" aria-label="Flip Split on Desktop">
+              <div class="macos-desktop">
+                <div class="macos-menubar">
+                  <div class="menubar-left">
+                    <svg class="apple-logo" viewBox="0 0 170 170" fill="currentColor" aria-label="Apple logo"><path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.04-7.66-7.85-11.89-14.43-5.22-8.14-9.41-17.6-12.57-28.37-3.16-10.77-4.74-21.28-4.74-31.54 0-14.07 3.5-25.75 10.5-35.03 7-9.28 15.93-13.97 26.79-14.08 4.79 0 10.15 1.25 16.08 3.75 5.93 2.5 9.77 3.75 11.53 3.75 1.52 0 5.48-1.29 11.89-3.87 6.41-2.58 11.75-3.81 16.03-3.69 12.39.65 22.38 5.45 29.97 14.4-10.88 6.64-16.21 15.77-16 27.4.21 9.15 3.82 16.88 10.83 23.2 7.02 6.32 15.22 9.89 24.6 10.72-2.18 6.75-4.94 13.53-8.29 20.35zM119.22 31.84c0-7.39 2.65-14.28 7.95-20.67 5.3-6.39 11.77-10.37 19.41-11.17.22 1.3.33 2.4.33 3.3 0 7.39-2.73 14.38-8.19 20.97-5.46 6.59-12.06 10.51-19.8 10.77-.11-1.08-.17-2.15-.17-3.2z"/></svg>
+                    <span class="menu-app">hyprMac</span>
+                  </div>
+                  <div class="menubar-right">
+                    <span class="menu-space-badge">Desktop 1</span>
+                    <img src="icon.svg" class="menubar-icon" alt="">
+                    <span class="menu-time">9:41</span>
+                  </div>
+                </div>
+                <div class="desktop-workspace">
+                  <div class="mac-window win-split-1">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">terminal ~ zsh</span>
+                    </div>
+                    <div class="mac-body dummy-term">
+                      <div class="term-line"><span class="term-prompt">$</span> hyprMac status</div>
+                      <div class="term-line term-out">Split: ⌥⇧R flip</div>
+                      <div class="term-line"><span class="term-prompt">$</span> <span class="term-cursor">█</span></div>
+                    </div>
+                  </div>
+                  <div class="mac-window win-split-2">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">Finder ~ hyprMac</span>
+                    </div>
+                    <div class="mac-body dummy-finder">
+                      <div class="finder-sidebar">
+                        <div class="finder-side-item active">▸ hyprMac</div>
+                      </div>
+                      <div class="finder-files">
+                        <div class="finder-file">📁 core/</div>
+                        <div class="finder-file">📁 macos/</div>
+                        <div class="finder-file">📄 init.lua</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Comparison Matrix Section -->
+    <section id="comparison" class="matrix-section">
+      <div class="container">
+        <div class="section-label">// COMPARISON</div>
+        <h2 class="section-title">How hyprMac Compares</h2>
+
+        <div class="matrix-table-wrap">
+          <table class="matrix-table">
+            <thead>
+              <tr>
+                <th>Dimension</th>
+                <th class="col-highlight">hyprMac</th>
+                <th>yabai</th>
+                <th>Amethyst</th>
+                <th>AeroSpace</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>SIP Status</strong></td>
+                <td class="col-highlight"><strong>Untouched (ON)</strong><span class="matrix-sub">Safe for Apple Pay & OS updates</span></td>
+                <td>Requires SIP Disabled<span class="matrix-sub">`csrutil disable` in recovery</span></td>
+                <td>Untouched (ON)<span class="matrix-sub">Standard Accessibility</span></td>
+                <td>Untouched (ON)<span class="matrix-sub">Standard Accessibility</span></td>
+              </tr>
+              <tr>
+                <td><strong>Tiling Engine</strong></td>
+                <td class="col-highlight"><strong>Dynamic BSP</strong><span class="matrix-sub">Splits longer side automatically</span></td>
+                <td>Dynamic BSP<span class="matrix-sub">Flexible manual/auto</span></td>
+                <td>Fixed Layouts<span class="matrix-sub">Cycles tall, wide, column</span></td>
+                <td>Tree-based<span class="matrix-sub">i3-style manual tree</span></td>
+              </tr>
+              <tr>
+                <td><strong>Native Spaces</strong></td>
+                <td class="col-highlight"><strong>Preserved (1-9)</strong><span class="matrix-sub">Native Mission Control swipes</span></td>
+                <td>Broken without SIP<span class="matrix-sub">Injects code into Dock.app</span></td>
+                <td>Preserved (1-9)<span class="matrix-sub">Works with native Spaces</span></td>
+                <td>Destroys Spaces<span class="matrix-sub">Hides windows on single desktop</span></td>
+              </tr>
+              <tr>
+                <td><strong>Window Throwing</strong></td>
+                <td class="col-highlight"><strong>⌥⇧1–⌥⇧9</strong><span class="matrix-sub">Drag trick without private APIs</span></td>
+                <td>Fast (with SIP off)<span class="matrix-sub">Broken when SIP enabled</span></td>
+                <td>Clunky / Limited<span class="matrix-sub">Slow multi-display moves</span></td>
+                <td>Instant (Fake)<span class="matrix-sub">Window unhiding trick</span></td>
+              </tr>
+              <tr>
+                <td><strong>Core Architecture</strong></td>
+                <td class="col-highlight"><strong>C++20 + Swift</strong><span class="matrix-sub">Per-app isolated serial queues</span></td>
+                <td>C + Daemon<span class="matrix-sub">Single process queue</span></td>
+                <td>Swift UI<span class="matrix-sub">Prone to event hitching</span></td>
+                <td>Swift daemon<span class="matrix-sub">Client/server architecture</span></td>
+              </tr>
+              <tr>
+                <td><strong>Configuration</strong></td>
+                <td class="col-highlight"><strong>Sandboxed Lua</strong><span class="matrix-sub">`~/.config/hyprmac/init.lua`</span></td>
+                <td>Shell scripts / skhd<span class="matrix-sub">Unchecked shell commands</span></td>
+                <td>GUI Preferences<span class="matrix-sub">Non-declarative</span></td>
+                <td>TOML<span class="matrix-sub">Static file</span></td>
+              </tr>
+              <tr>
+                <td><strong>Install Reversibility</strong></td>
+                <td class="col-highlight"><strong>Verified Rollback</strong><span class="matrix-sub">Manifest snapshot on install</span></td>
+                <td>Leaves NVRAM/SIP dirty<span class="matrix-sub">Manual cleanup required</span></td>
+                <td>Standard App Drag<span class="matrix-sub">Orphaned preferences</span></td>
+                <td>Standard App Drag<span class="matrix-sub">Orphaned LaunchAgents</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Authentic Monospace Cheatsheet -->
+    <section id="cheatsheet" class="cheatsheet-section">
+      <div class="container">
+        <div class="section-label">// CHEATSHEET</div>
+        <h2 class="section-title">Keyboard Shortcuts (Press ⌥⇧/)</h2>
+        <p class="hero-desc" style="margin-bottom: 20px;">
+          Press <code>⌥⇧/</code> (or select <strong>Keyboard Shortcuts…</strong> from the menu) inside hyprMac to display this cheatsheet HUD mapped to your <code>init.lua</code> bindings.
+        </p>
+
+        <div class="matrix-table-wrap">
+          <table class="cheatsheet-table">
+            <thead>
+              <tr>
+                <th style="width: 25%;">Shortcut</th>
+                <th style="width: 35%;">Action</th>
+                <th style="width: 40%;">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><kbd class="kbd">⌥</kbd><kbd class="kbd">1–9</kbd></td>
+                <td>Switch to Desktop N</td>
+                <td>macOS Mission Control shortcut; hyprMac listens passively.</td>
+              </tr>
+              <tr>
+                <td><kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">1–9</kbd></td>
+                <td>Throw Window to Desktop N</td>
+                <td>Moves focused tile to space N via drag trick (~0.5s).</td>
+              </tr>
+              <tr>
+                <td><kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">H</kbd> / <kbd class="kbd">J</kbd> / <kbd class="kbd">K</kbd> / <kbd class="kbd">L</kbd></td>
+                <td>Focus Left / Down / Up / Right</td>
+                <td>Arrow keys (← ↓ ↑ →) also supported.</td>
+              </tr>
+              <tr>
+                <td><kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">⌘</kbd><kbd class="kbd">H</kbd> / <kbd class="kbd">J</kbd> / <kbd class="kbd">K</kbd> / <kbd class="kbd">L</kbd></td>
+                <td>Move Tile Left / Down / Up / Right</td>
+                <td>Swaps positions in the binary space partitioning tree. Arrow keys (← ↓ ↑ →) also supported.</td>
+              </tr>
+              <tr>
+                <td><kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">F</kbd></td>
+                <td>Toggle Float / Tile</td>
+                <td>Floats a tiled window or tiles a floating window.</td>
+              </tr>
+              <tr>
+                <td><kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">R</kbd></td>
+                <td>Flip Split</td>
+                <td>Flips focused split orientation between horizontal &amp; vertical.</td>
+              </tr>
+              <tr>
+                <td><kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">C</kbd></td>
+                <td>Center Window</td>
+                <td>Centers the window on current display.</td>
+              </tr>
+              <tr>
+                <td><kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">/</kbd></td>
+                <td>Open Cheatsheet HUD</td>
+                <td>On-screen tutorial showing all active hotkeys.</td>
+              </tr>
+              <tr>
+                <td><kbd class="kbd">Drag border</kbd></td>
+                <td>Resize Split</td>
+                <td>Drag tile edge by hand; split follows.</td>
+              </tr>
+              <tr>
+                <td><kbd class="kbd">⇧</kbd>-<kbd class="kbd">drop window</kbd></td>
+                <td>Re-split Tile</td>
+                <td>Drop window onto the side of another tile to partition it.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Real init.lua Config Block -->
+    <section id="config" class="config-section">
+      <div class="container">
+        <div class="section-label">// CONFIGURATION</div>
+        <h2 class="section-title">~/.config/hyprmac/init.lua</h2>
+        <p class="hero-desc" style="margin-bottom: 20px;">
+          Every key is optional; with no file you get defaults. Strict schema checking rejects unknown keys. Reloads automatically on save, from the menu, or via <code>pkill -HUP -x hyprMac</code>.
+        </p>
+
+        <pre class="code-block"><code><span class="syn-key">config</span> <span class="syn-punct">=</span> <span class="syn-punct">{</span>
+    <span class="syn-prop">gaps</span> <span class="syn-punct">=</span> <span class="syn-punct">{</span>
+        <span class="syn-prop">inner</span> <span class="syn-punct">=</span> <span class="syn-num">8</span><span class="syn-punct">,</span>   <span class="syn-comment">-- points between adjacent windows      (0 – 200)</span>
+        <span class="syn-prop">outer</span> <span class="syn-punct">=</span> <span class="syn-num">12</span><span class="syn-punct">,</span>  <span class="syn-comment">-- points between windows and the edges (0 – 200)</span>
+    <span class="syn-punct">},</span>
+    <span class="syn-prop">split_ratio</span> <span class="syn-punct">=</span> <span class="syn-num">0.5</span><span class="syn-punct">,</span> <span class="syn-comment">-- share of a split given to the existing window (0.1 – 0.9)</span>
+    <span class="syn-prop">resize_step</span> <span class="syn-punct">=</span> <span class="syn-num">5</span><span class="syn-punct">,</span>   <span class="syn-comment">-- percent of a split per keyboard resize press (1 – 25)</span>
+    <span class="syn-prop">float</span> <span class="syn-punct">=</span> <span class="syn-punct">{</span> <span class="syn-prop">min_width</span> <span class="syn-punct">=</span> <span class="syn-num">400</span><span class="syn-punct">,</span> <span class="syn-prop">min_height</span> <span class="syn-punct">=</span> <span class="syn-num">300</span> <span class="syn-punct">},</span> <span class="syn-comment">-- smaller windows float (0 – 2000, 0 = off)</span>
+    <span class="syn-prop">osd_popup</span> <span class="syn-punct">=</span> <span class="syn-bool">true</span><span class="syn-punct">,</span>  <span class="syn-comment">-- brief on-screen popup on window and Desktop actions</span>
+    <span class="syn-prop">keys</span> <span class="syn-punct">=</span> <span class="syn-punct">{</span>           <span class="syn-comment">-- shortcuts (defaults shown)</span>
+        <span class="syn-prop">throw</span> <span class="syn-punct">=</span> <span class="syn-str">"alt+shift"</span><span class="syn-punct">,</span> <span class="syn-prop">toggle_float</span> <span class="syn-punct">=</span> <span class="syn-str">"alt+shift+f"</span><span class="syn-punct">,</span> <span class="syn-prop">switch</span> <span class="syn-punct">=</span> <span class="syn-str">"alt"</span><span class="syn-punct">,</span>
+        <span class="syn-prop">center_window</span> <span class="syn-punct">=</span> <span class="syn-str">"alt+shift+c"</span><span class="syn-punct">,</span>
+        <span class="syn-prop">focus_left</span> <span class="syn-punct">=</span> <span class="syn-str">"alt+shift+h"</span><span class="syn-punct">,</span> <span class="syn-prop">focus_down</span> <span class="syn-punct">=</span> <span class="syn-str">"alt+shift+j"</span><span class="syn-punct">,</span> <span class="syn-prop">focus_up</span> <span class="syn-punct">=</span> <span class="syn-str">"alt+shift+k"</span><span class="syn-punct">,</span> <span class="syn-prop">focus_right</span> <span class="syn-punct">=</span> <span class="syn-str">"alt+shift+l"</span><span class="syn-punct">,</span>
+        <span class="syn-prop">move_left</span> <span class="syn-punct">=</span> <span class="syn-str">"alt+shift+cmd+h"</span><span class="syn-punct">,</span> <span class="syn-prop">move_down</span> <span class="syn-punct">=</span> <span class="syn-str">"alt+shift+cmd+j"</span><span class="syn-punct">,</span> <span class="syn-prop">move_up</span> <span class="syn-punct">=</span> <span class="syn-str">"alt+shift+cmd+k"</span><span class="syn-punct">,</span> <span class="syn-prop">move_right</span> <span class="syn-punct">=</span> <span class="syn-str">"alt+shift+cmd+l"</span><span class="syn-punct">,</span>
+        <span class="syn-prop">rotate_split</span> <span class="syn-punct">=</span> <span class="syn-str">"alt+shift+r"</span><span class="syn-punct">,</span>
+        <span class="syn-comment">-- unbound by default: resize_left/down/up/right, equalize, toggle_zoom, move_display_next/prev, toggle_pause</span>
+    <span class="syn-punct">},</span>
+    <span class="syn-prop">rules</span> <span class="syn-punct">=</span> <span class="syn-punct">{</span> <span class="syn-prop">ignore</span> <span class="syn-punct">=</span> <span class="syn-punct">{},</span> <span class="syn-prop">float</span> <span class="syn-punct">=</span> <span class="syn-punct">{}</span> <span class="syn-punct">},</span>           <span class="syn-comment">-- bundle ids: never managed / always floating</span>
+    <span class="syn-prop">smart_gaps</span> <span class="syn-punct">=</span> <span class="syn-bool">false</span><span class="syn-punct">,</span>           <span class="syn-comment">-- one tiled window on a Space: zero gaps</span>
+    <span class="syn-prop">focus_follows_mouse</span> <span class="syn-punct">=</span> <span class="syn-bool">false</span><span class="syn-punct">,</span>  <span class="syn-comment">-- hover focuses a window after ~120 ms</span>
+    <span class="syn-comment">-- displays = { ["Studio Display"] = { inner = 4, outer = 8 } },</span>
+    <span class="syn-comment">-- rules.float_title / rules.ignore_title = { "regex" }</span>
+    <span class="syn-comment">-- rules.desktop = { ["com.example.app"] = 3 }</span>
+<span class="syn-punct">}</span></code></pre>
+      </div>
+    </section>
+
+    <!-- Architecture Section -->
+    <section id="architecture" class="arch-section">
+      <div class="container">
+        <div class="section-label">// ARCHITECTURE</div>
+        <h2 class="section-title">Swift + C++20 Core Design</h2>
+        <p class="hero-desc" style="margin-bottom: 20px;">
+          Window events schedule a reconcile. The C++20 engine calculates target frames and writes them via Accessibility using one isolated serial queue per application. A hung application can never stall your desktop.
+        </p>
+
+        <pre class="code-block"><code><span class="arch-comp">HyprApp</span> <span class="arch-lang">(Swift)</span>           <span class="arch-desc">menu bar, onboarding, notifications</span>
+  <span class="arch-tree">└</span> <span class="arch-comp">HyprKit</span> <span class="arch-lang">(Swift)</span>       <span class="arch-desc">coordinator: one serial queue</span>
+      <span class="arch-tree">├</span> <span class="arch-comp">HyprPlatform</span>      <span class="arch-desc">Accessibility, Spaces, hotkeys, window writes</span>
+      <span class="arch-tree">└</span> <span class="arch-comp">hyprcore</span> <span class="arch-lang">(C++20)</span>  <span class="arch-desc">BSP layout, gaps, Lua config</span>
+                          <span class="arch-desc">C API: core/include/hypr/hypr_core.h</span></code></pre>
+      </div>
+    </section>
+
+    <!-- Requirements & Make Targets -->
+    <section class="targets-section">
+      <div class="container">
+        <div class="targets-grid">
+          <div>
+            <div class="section-label">// REQUIREMENTS</div>
+            <h3 class="subsection-title">System Prerequisites</h3>
+            <ul class="item-list">
+              <li>macOS 14 or later. Tested on macOS 27.2, Apple Silicon.</li>
+              <li>Command Line Tools (<code>xcode-select --install</code>).</li>
+              <li>Displays have separate Spaces enabled in System Settings.</li>
+              <li>Stage Manager is off. <code>make install</code> turns it off.</li>
+              <li>⌥1–⌥9 bound to "Switch to Desktop N" in Mission Control.</li>
+            </ul>
+          </div>
+
+          <div>
+            <div class="section-label">// MAKE TARGETS</div>
+            <h3 class="subsection-title">Terminal Commands</h3>
+            <ul class="item-list">
+              <li><code><span class="sh-cmd">make</span></code> — Build core engine and build/hyprMac.app</li>
+              <li><code><span class="sh-cmd">make</span> <span class="sh-sub">run</span></code> — Run the app in foreground without installing</li>
+              <li><code><span class="sh-cmd">make</span> <span class="sh-sub">test</span></code> — Non-privileged test suite</li>
+              <li><code><span class="sh-cmd">make</span> <span class="sh-sub">preflight</span></code> — Audit system mutations without changing anything</li>
+              <li><code><span class="sh-cmd">make</span> <span class="sh-sub">install</span></code> — Install to ~/Applications and start at login</li>
+              <li><code><span class="sh-cmd">make</span> <span class="sh-sub">update</span></code> — Rebuild, update ~/Applications/hyprMac.app, and reload</li>
+              <li><code><span class="sh-cmd">make</span> <span class="sh-sub">uninstall</span></code> — Cleanly undo all modifications</li>
+              <li><code><span class="sh-cmd">make</span> <span class="sh-sub">verify-rollback</span></code> — Compare system state against pre-install snapshot</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Site Footer -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div>hyprMac prototype • &copy; 2026 Codesmith28 • GPLv3</div>
+      <ul class="footer-links">
+        <li><a href="https://github.com/Codesmith28/hyprMac/blob/main/docs/USAGE.md" target="_blank" rel="noopener">docs/USAGE</a></li>
+        <li><a href="https://github.com/Codesmith28/hyprMac/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener">docs/ARCHITECTURE</a></li>
+        <li><a href="https://github.com/Codesmith28/hyprMac/blob/main/docs/LIMITATIONS.md" target="_blank" rel="noopener">docs/LIMITATIONS</a></li>
+        <li><a href="https://github.com/Codesmith28/hyprMac" target="_blank" rel="noopener">github.com/Codesmith28/hyprMac</a></li>
+      </ul>
+    </div>
+  </footer>
+
+  <!-- 1-Click Copy Script -->
+  <script>
+    const copyBtn = document.getElementById('copy-btn');
+    const cmdText = document.getElementById('install-cmd');
+    if (copyBtn && cmdText) {
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(cmdText.textContent.replace(/\s+/g, ' ').trim());
+          const prev = copyBtn.textContent;
+          copyBtn.textContent = 'copied!';
+          copyBtn.classList.add('copied');
+          setTimeout(() => {
+            copyBtn.textContent = prev;
+            copyBtn.classList.remove('copied');
+          }, 2000);
+        } catch (e) {
+          console.warn('Clipboard write failed', e);
+        }
+      });
+    }
+  </script>
+</body>
+</html>
