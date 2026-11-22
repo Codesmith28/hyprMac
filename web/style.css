@@ -1,10 +1,12 @@
 /* ==========================================================================
    hyprMac — Human-Refined Swiss Monospace Stylesheet
-   Pure System Monospace • Handcrafted Geometry • Physical Tactility • Zero External Fonts
+   Pure System Monospace • Handcrafted Geometry • Physical Tactility
+   Full Light & Dark Theme System • Zero External Fonts
    ========================================================================== */
 
-:root {
-  /* Surface & Background Hierarchy */
+/* Dark Theme (Default) */
+:root,
+[data-theme="dark"] {
   --bg: #0c0d10;
   --bg-surface: #12141a;
   --bg-subtle: #171a22;
@@ -12,19 +14,16 @@
   --bg-tile: #1e222c;
   --bg-tile-active: #282e3c;
 
-  /* Border Tiers */
   --border-subtle: #1b1e27;
   --border: #222632;
   --border-strong: #343b4c;
   --border-focus: #e2e8f0;
 
-  /* Typography Optical Hierarchy */
   --text: #c2c8d2;
   --text-bright: #f3f6fa;
   --text-muted: #798394;
   --text-dim: #4b5262;
 
-  /* Accents */
   --accent: #f8fafc;
   --accent-inverse: #090a0f;
   --accent-blue: #38bdf8;
@@ -32,15 +31,114 @@
   --accent-yellow: #fbbf24;
   --accent-red: #f87171;
 
-  /* Mathematical Radius Scale: 12px outer -> 8px cards -> 5px micro */
+  --kbd-bg: #181b22;
+  --kbd-border: #333947;
+  --kbd-border-bottom: #222631;
+  --kbd-text: #f1f5f9;
+  --kbd-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14),
+                0 2px 0 #0d0f14,
+                0 3px 5px rgba(0, 0, 0, 0.45);
+
+  --win-titlebar: #16181f;
+  --win-body: #0b0c10;
+  --win-border: #282d38;
+  --win-title-color: #828a99;
+  --header-bg: rgba(12, 13, 16, 0.92);
+  --osd-bg: rgba(18, 20, 26, 0.94);
+  --preview-shadow: 0 16px 40px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.04);
+
   --radius-outer: 12px;
   --radius-card: 8px;
   --radius-sm: 5px;
   --radius-pill: 9999px;
 
-  /* Layout Rhythm */
   --max-width: 1140px;
   --content-measure: 62ch;
+}
+
+/* Light Theme — macOS Cupertino Craftsmanship (No Stark White Glare) */
+[data-theme="light"] {
+  --bg: #f5f5f7;
+  --bg-surface: #ffffff;
+  --bg-subtle: #eaeaea;
+  --bg-card: #ffffff;
+  --bg-tile: #e5e5ea;
+  --bg-tile-active: #d1d1d6;
+
+  --border-subtle: #e5e5ea;
+  --border: #d2d2d7;
+  --border-strong: #b0b0b8;
+  --border-focus: #1d1d1f;
+
+  --text: #3a3a3c;
+  --text-bright: #1d1d1f;
+  --text-muted: #6e6e73;
+  --text-dim: #8e8e93;
+
+  --accent: #1d1d1f;
+  --accent-inverse: #ffffff;
+  --accent-blue: #0284c7;
+  --accent-green: #16a34a;
+  --accent-yellow: #d97706;
+  --accent-red: #dc2626;
+
+  /* Classic Apple White Chiclet Keycap */
+  --kbd-bg: #ffffff;
+  --kbd-border: #d1d1d6;
+  --kbd-border-bottom: #b0b0b8;
+  --kbd-text: #1d1d1f;
+  --kbd-shadow: 0 1px 0 #9e9ea6, 0 2px 2px rgba(0, 0, 0, 0.08), inset 0 1px 0 #ffffff;
+
+  --win-titlebar: #ececec;
+  --win-body: #ffffff;
+  --win-border: #d1d1d6;
+  --win-title-color: #6e6e73;
+  --header-bg: rgba(245, 245, 247, 0.92);
+  --osd-bg: rgba(255, 255, 255, 0.96);
+  --preview-shadow: 0 16px 40px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* Media Query Fallback when no data-theme override is present */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f5f5f7;
+    --bg-surface: #ffffff;
+    --bg-subtle: #eaeaea;
+    --bg-card: #ffffff;
+    --bg-tile: #e5e5ea;
+    --bg-tile-active: #d1d1d6;
+
+    --border-subtle: #e5e5ea;
+    --border: #d2d2d7;
+    --border-strong: #b0b0b8;
+    --border-focus: #1d1d1f;
+
+    --text: #3a3a3c;
+    --text-bright: #1d1d1f;
+    --text-muted: #6e6e73;
+    --text-dim: #8e8e93;
+
+    --accent: #1d1d1f;
+    --accent-inverse: #ffffff;
+    --accent-blue: #0284c7;
+    --accent-green: #16a34a;
+    --accent-yellow: #d97706;
+    --accent-red: #dc2626;
+
+    --kbd-bg: #ffffff;
+    --kbd-border: #d1d1d6;
+    --kbd-border-bottom: #b0b0b8;
+    --kbd-text: #1d1d1f;
+    --kbd-shadow: 0 1px 0 #9e9ea6, 0 2px 2px rgba(0, 0, 0, 0.08), inset 0 1px 0 #ffffff;
+
+    --win-titlebar: #ececec;
+    --win-body: #ffffff;
+    --win-border: #d1d1d6;
+    --win-title-color: #6e6e73;
+    --header-bg: rgba(245, 245, 247, 0.92);
+    --osd-bg: rgba(255, 255, 255, 0.96);
+    --preview-shadow: 0 16px 40px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  }
 }
 
 /* Base Reset & Monospace Lock */
@@ -68,6 +166,7 @@ body {
   font-size: 14px;
   overflow-x: hidden;
   position: relative;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Universal Monospace Enforcement */
@@ -103,10 +202,11 @@ a:hover {
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  background-color: rgba(12, 13, 16, 0.92);
+  background-color: var(--header-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   z-index: 100;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .header-inner {
@@ -128,6 +228,7 @@ a:hover {
   padding: 6px 0;
 }
 
+/* Adaptive Logo Sizing & Theme Inversion (Guarantees 100% visibility) */
 .brand-icon {
   width: 20px;
   height: 20px;
@@ -148,7 +249,7 @@ a:hover {
 .nav-links {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 18px;
   list-style: none;
 }
 
@@ -164,6 +265,43 @@ a:hover {
 
 .nav-links a:hover {
   color: var(--text-bright);
+}
+
+/* Tactile Theme Toggle Button */
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-bright);
+  font-family: monospace;
+  font-size: 12px;
+  padding: 5px 10px;
+  cursor: pointer;
+  min-height: 34px;
+  user-select: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.08s ease;
+}
+
+.theme-toggle-btn:hover {
+  background-color: var(--bg-card);
+  border-color: var(--border-focus);
+}
+
+.theme-toggle-btn:active {
+  transform: translateY(1px);
+}
+
+.theme-toggle-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.theme-toggle-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
 }
 
 /* ==========================================================================
@@ -231,6 +369,27 @@ a:hover {
   flex-shrink: 0;
 }
 
+/* Dynamic Logo Inversion Filters for 100% Theme Contrast */
+[data-theme="light"] .brand-icon,
+[data-theme="light"] .hero-brand-icon,
+[data-theme="light"] .menubar-icon {
+  filter: brightness(0);
+}
+
+[data-theme="dark"] .brand-icon,
+[data-theme="dark"] .hero-brand-icon,
+[data-theme="dark"] .menubar-icon {
+  filter: brightness(0) invert(1);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .brand-icon,
+  :root:not([data-theme="dark"]) .hero-brand-icon,
+  :root:not([data-theme="dark"]) .menubar-icon {
+    filter: brightness(0);
+  }
+}
+
 .hero-title {
   font-size: 54px;
   font-weight: 700;
@@ -271,10 +430,10 @@ a:hover {
   flex-direction: column;
   user-select: none;
   box-sizing: border-box;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  box-shadow: var(--preview-shadow);
 }
 
-/* Subtle, Craftsperson Scroll Indicator (Replacing generic bounce button) */
+/* Subtle, Craftsperson Scroll Indicator */
 .hero-scroll-indicator {
   position: absolute;
   bottom: 24px;
@@ -317,11 +476,11 @@ a:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #181b22;
-  border: 1px solid #333947;
-  border-bottom-color: #222631;
+  background: var(--kbd-bg);
+  border: 1px solid var(--kbd-border);
+  border-bottom-color: var(--kbd-border-bottom);
   border-radius: var(--radius-sm);
-  color: #f1f5f9;
+  color: var(--kbd-text);
   font-family: monospace;
   font-size: 12px;
   font-weight: 600;
@@ -329,21 +488,17 @@ a:hover {
   padding: 4px 7px;
   min-width: 25px;
   height: 25px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14),
-              0 2px 0 #0d0f14,
-              0 3px 5px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--kbd-shadow);
   margin: 0 2px;
   vertical-align: middle;
   user-select: none;
   box-sizing: border-box;
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background-color 0.15s ease;
 }
 
 .kbd:active {
   transform: translateY(1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
-              0 1px 0 #0d0f14,
-              0 1px 3px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 0 transparent, inset 0 1px 0 rgba(0, 0, 0, 0.1);
 }
 
 .keycap-row {
@@ -466,7 +621,7 @@ a:hover {
 
 .install-note code {
   color: var(--text-bright);
-  background: var(--bg-surface);
+  background: var(--bg-subtle);
   border: 1px solid var(--border);
   padding: 1px 5px;
   border-radius: 3px;
@@ -574,7 +729,7 @@ a:hover {
   border-radius: var(--radius-outer);
   position: relative;
   overflow: hidden;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
 /* ==========================================================================
@@ -582,13 +737,14 @@ a:hover {
    ========================================================================== */
 .mac-window {
   border-radius: var(--radius-card);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--win-border);
+  background-color: var(--win-body);
 }
 
 .mac-titlebar {
   height: 24px;
-  background-color: #16181f;
-  border-bottom: 1px solid #222630;
+  background-color: var(--win-titlebar);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   padding: 0 9px;
@@ -602,7 +758,7 @@ a:hover {
   gap: 6px;
 }
 
-/* Refined 9px traffic lights with subtle 0.5px inner borders */
+/* Refined 9px traffic lights with subtle 0.5px inner strokes */
 .traffic-lights .tl {
   width: 9px;
   height: 9px;
@@ -617,7 +773,7 @@ a:hover {
 
 .win-title {
   font-size: 10.5px;
-  color: #828a99;
+  color: var(--win-title-color);
   font-family: monospace;
   white-space: nowrap;
   overflow: hidden;
@@ -626,8 +782,8 @@ a:hover {
 
 /* Code Editor in Window 3 (replacing repetitive calculator in feature 1) */
 .dummy-code {
-  background-color: #0b0c10;
-  color: #c2c8d2;
+  background-color: var(--win-body);
+  color: var(--text);
   font-family: monospace;
   font-size: 9.5px;
   line-height: 1.55;
@@ -652,20 +808,20 @@ a:hover {
   bottom: 14px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(18, 20, 26, 0.92);
+  background: var(--osd-bg);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
   padding: 6px 14px;
   font-size: 11px;
-  color: #f1f5f9;
+  color: var(--text-bright);
   display: flex;
   align-items: center;
   gap: 8px;
   white-space: nowrap;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  z-index: 10;
+  z-index: 30;
   pointer-events: none;
 }
 
@@ -727,7 +883,7 @@ a:hover {
 
 .matrix-table th.col-highlight,
 .matrix-table td.col-highlight {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: var(--bg-subtle);
   border-left: 2px solid var(--border-strong);
   border-right: 2px solid var(--border-strong);
 }
@@ -772,22 +928,22 @@ a:hover {
 }
 
 /* Refined Minimalist Syntax Highlighting */
-.syn-key { color: #f8fafc; font-weight: 700; }
-.syn-prop { color: #cbd5e1; }
-.syn-str { color: #86efac; }
-.syn-num { color: #93c5fd; }
-.syn-bool { color: #fca5a5; }
-.syn-comment { color: #64748b; font-style: italic; }
-.syn-punct { color: #64748b; }
+.syn-key { color: var(--text-bright); font-weight: 700; }
+.syn-prop { color: var(--text); }
+.syn-str { color: var(--accent-green); }
+.syn-num { color: var(--accent-blue); }
+.syn-bool { color: var(--accent-red); }
+.syn-comment { color: var(--text-muted); font-style: italic; }
+.syn-punct { color: var(--text-dim); }
 
-.sh-cmd { color: #f8fafc; font-weight: 700; }
-.sh-sub { color: #93c5fd; }
-.sh-arg { color: #cbd5e1; }
+.sh-cmd { color: var(--text-bright); font-weight: 700; }
+.sh-sub { color: var(--accent-blue); }
+.sh-arg { color: var(--text); }
 
-.arch-comp { color: #f8fafc; font-weight: 700; }
-.arch-lang { color: #93c5fd; }
-.arch-tree { color: #64748b; }
-.arch-desc { color: #94a3b8; }
+.arch-comp { color: var(--text-bright); font-weight: 700; }
+.arch-lang { color: var(--accent-blue); }
+.arch-tree { color: var(--text-dim); }
+.arch-desc { color: var(--text-muted); }
 
 /* ==========================================================================
    Requirements & Make Targets Grid
@@ -828,7 +984,7 @@ a:hover {
 
 .item-list li code {
   color: var(--text-bright);
-  background: var(--bg-surface);
+  background: var(--bg-subtle);
   border: 1px solid var(--border);
   padding: 1px 5px;
   border-radius: 3px;

@@ -3,7 +3,7 @@
   <style>
     :root { color: #ffffff; }
     @media (prefers-color-scheme: light) {
-      :root { color: #0e0e0e; }
+      :root { color: #1d1d1f; }
     }
     .tile-ring {
       fill: currentColor;
