@@ -1,0 +1,1193 @@
+/* ==========================================================================
+   hyprMac — Full macOS Desktop Showcase Animations
+   The full container IS the macOS desktop with native menu bar and tiling windows.
+   Zero nested miniature screens. 8pt inner / 12pt outer gaps.
+   ========================================================================== */
+
+/* Full Desktop Stage */
+.feature-anim {
+  width: 100%;
+  max-width: 540px;
+  height: 330px;
+  background-color: #0d0d0d;
+  border: 1px solid #262626;
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.macos-desktop {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  background: #0d0d0d;
+}
+
+/* Native macOS Menu Bar */
+.macos-menubar {
+  height: 24px;
+  background-color: #161616;
+  border-bottom: 1px solid #222222;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  font-size: 10px;
+  color: #888888;
+  user-select: none;
+  z-index: 5;
+}
+
+.menubar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.apple-logo {
+  width: 10px;
+  height: 12px;
+  display: inline-block;
+  vertical-align: middle;
+  color: #ffffff;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Realistic Dynamic Dummy App Components
+   Fluidly resizing Terminal, Calculator, and File Manager
+   ========================================================================== */
+
+/* 1. Dummy Terminal */
+.dummy-term {
+  background-color: #0b0b0b;
+  color: #888888;
+  font-family: monospace;
+  font-size: 9.5px;
+  line-height: 1.45;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.term-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.term-prompt { color: #38bdf8; }
+.term-cmd { color: #ffffff; }
+.term-ok { color: #22c55e; font-weight: bold; }
+.term-out { color: #888888; }
+.term-note { color: #555555; font-style: italic; }
+.term-cursor {
+  color: #ffffff;
+  animation: blinkCursor 1s step-start infinite;
+}
+
+@keyframes blinkCursor {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* 2. Dummy Calculator */
+.dummy-calc {
+  background-color: #141414;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.calc-screen {
+  background-color: #0a0a0a;
+  border: 1px solid #222222;
+  border-radius: 4px;
+  color: #ffffff;
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: bold;
+  text-align: right;
+  padding: 3px 6px;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.calc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  flex: 1;
+}
+
+.calc-btn {
+  background-color: #1e1e1e;
+  border: 1px solid #2a2a2a;
+  border-radius: 3px;
+  color: #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  user-select: none;
+}
+
+.calc-fn { background-color: #262626; color: #999999; }
+.calc-op { background-color: #2d2d2d; color: #38bdf8; font-weight: bold; }
+.calc-eq { background-color: #38bdf8; color: #000000; font-weight: bold; }
+.calc-zero { grid-column: span 2; }
+
+/* 3. Dummy File Manager (Finder) */
+.dummy-finder {
+  display: flex;
+  height: 100%;
+  padding: 0;
+  background-color: #101010;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.finder-sidebar {
+  width: 36%;
+  max-width: 110px;
+  background-color: #141414;
+  border-right: 1px solid #1f1f1f;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 9px;
+  color: #777777;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.finder-side-title {
+  font-size: 8px;
+  text-transform: uppercase;
+  color: #555555;
+  margin-bottom: 2px;
+  letter-spacing: 0.05em;
+}
+
+.finder-side-item {
+  padding: 2px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.finder-side-item.active {
+  background-color: #262626;
+  color: #ffffff;
+}
+
+.finder-files {
+  flex: 1;
+  padding: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  align-content: start;
+  font-size: 8.5px;
+  color: #cccccc;
+  overflow: hidden;
+}
+
+.finder-file {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.f-icon { font-size: 9px; flex-shrink: 0; }
+
+.menu-app {
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.menu-item {
+  color: #888888;
+}
+
+.menubar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-space-badge {
+  background-color: #242424;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: #ffffff;
+  font-size: 9px;
+  font-family: monospace;
+}
+
+.menubar-icon {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.menu-time {
+  color: #888888;
+  font-family: monospace;
+}
+
+/* Desktop Workspace Area (where windows tile) */
+.desktop-workspace {
+  flex: 1;
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Realistic macOS Window Chrome */
+.mac-window {
+  position: absolute;
+  border-radius: 6px;
+  overflow: hidden;
+  background-color: #141414;
+  border: 1px solid #333333;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.mac-titlebar {
+  height: 22px;
+  background-color: #1a1a1a;
+  border-bottom: 1px solid #262626;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 8px;
+  user-select: none;
+}
+
+.traffic-lights {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.tl {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: block;
+}
+
+.tl-red { background-color: #ff5f56; }
+.tl-yellow { background-color: #ffbd2e; }
+.tl-green { background-color: #27c93f; }
+
+.win-title {
+  font-size: 10px;
+  color: #777777;
+  font-family: monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mac-body {
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #777777;
+  font-family: monospace;
+  background-color: #111111;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   01 / Move Focus (ShortcutIllustration.focus)
+   3 BSP tiles fill desktop. Active border walks Window 1 -> 2 -> 3
+   ========================================================================== */
+.win-focus-1 {
+  left: 12px;
+  top: 12px;
+  width: calc(50% - 16px);
+  height: calc(100% - 24px);
+  animation: animFocusCycle1 6s infinite;
+}
+
+.win-focus-2 {
+  left: calc(50% + 4px);
+  top: 12px;
+  width: calc(50% - 16px);
+  height: calc(50% - 16px);
+  animation: animFocusCycle2 6s infinite;
+}
+
+.win-focus-3 {
+  left: calc(50% + 4px);
+  top: calc(50% + 4px);
+  width: calc(50% - 16px);
+  height: calc(50% - 16px);
+  animation: animFocusCycle3 6s infinite;
+}
+
+@keyframes animFocusCycle1 {
+  0%, 30% {
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+  }
+  33%, 95% {
+    border-color: #333333;
+    box-shadow: none;
+  }
+  100% {
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+  }
+}
+
+@keyframes animFocusCycle2 {
+  0%, 30% {
+    border-color: #333333;
+    box-shadow: none;
+  }
+  33%, 63% {
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+  }
+  66%, 100% {
+    border-color: #333333;
+    box-shadow: none;
+  }
+}
+
+@keyframes animFocusCycle3 {
+  0%, 63% {
+    border-color: #333333;
+    box-shadow: none;
+  }
+  66%, 95% {
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+  }
+  100% {
+    border-color: #333333;
+    box-shadow: none;
+  }
+}
+
+/* ==========================================================================
+   02 / Native Spaces & Dual-Desktop Window Throwing
+   Desktop 1 and Desktop 2 are shown side-by-side. Window is thrown across into Desktop 2.
+   ========================================================================== */
+.dual-spaces-workspace {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  background-color: #0c0c0c;
+}
+
+.space-zone {
+  flex: 1;
+  height: 100%;
+  border: 1px solid #222222;
+  border-radius: 6px;
+  background-color: #090909;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.space-zone-1 {
+  overflow: visible; /* Allows thrown window to glide across into Space 2 */
+}
+
+.space-zone-2 {
+  background-color: #090909;
+}
+
+.space-zone-header {
+  height: 20px;
+  background-color: #141414;
+  border-bottom: 1px solid #1c1c1c;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  font-size: 9px;
+  color: #777777;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.space-zone-tag {
+  font-size: 8px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-family: monospace;
+}
+
+.zone-tag-1 {
+  animation: animZoneTag1 5s infinite;
+}
+
+.zone-tag-2 {
+  animation: animZoneTag2 5s infinite;
+}
+
+@keyframes animZoneTag1 {
+  0%, 35% {
+    background-color: #38bdf8;
+    color: #000000;
+  }
+  42%, 85% {
+    background-color: #242424;
+    color: #777777;
+  }
+  92%, 100% {
+    background-color: #38bdf8;
+    color: #000000;
+  }
+}
+
+@keyframes animZoneTag2 {
+  0%, 35% {
+    background-color: #242424;
+    color: #777777;
+  }
+  42%, 85% {
+    background-color: #38bdf8;
+    color: #000000;
+  }
+  92%, 100% {
+    background-color: #242424;
+    color: #777777;
+  }
+}
+
+.space-zone-body {
+  flex: 1;
+  position: relative;
+  padding: 6px;
+  box-sizing: border-box;
+}
+
+.space-drop-target {
+  width: 100%;
+  height: 100%;
+  border: 1px dashed #222222;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.drop-hint {
+  font-size: 9px;
+  color: #444444;
+  font-family: monospace;
+}
+
+.win-throw-stay {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  height: calc(100% - 12px);
+  animation: animThrowStay 5s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+}
+
+.win-throw-move {
+  position: absolute;
+  top: 6px;
+  height: calc(100% - 12px);
+  animation: animThrowMoveDual 5s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+  border-color: #ffffff;
+  z-index: 10;
+}
+
+.throw-space-badge {
+  animation: animThrowSpaceBadge 5s infinite;
+}
+
+@keyframes animThrowStay {
+  0%, 25% {
+    width: calc(50% - 10px);
+  }
+  38%, 85% {
+    width: calc(100% - 12px);
+  }
+  92%, 100% {
+    width: calc(50% - 10px);
+  }
+}
+
+@keyframes animThrowMoveDual {
+  0%, 25% {
+    left: calc(50% + 2px);
+    width: calc(50% - 10px);
+    opacity: 1;
+    transform: translateY(0);
+    box-shadow: none;
+    border-color: #ffffff;
+  }
+  /* Lifts and glides across the gap into Desktop 2 */
+  34% {
+    left: calc(100% + 14px);
+    width: calc(100% - 12px);
+    opacity: 0.95;
+    transform: translateY(-6px);
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.95);
+    border-color: #38bdf8;
+  }
+  /* Docks and tiles in Desktop 2 */
+  42%, 85% {
+    left: calc(100% + 14px);
+    width: calc(100% - 12px);
+    opacity: 1;
+    transform: translateY(0);
+    box-shadow: none;
+    border-color: #ffffff;
+  }
+  90% {
+    opacity: 0;
+    left: calc(100% + 14px);
+  }
+  94% {
+    opacity: 0;
+    left: calc(50% + 2px);
+    width: calc(50% - 10px);
+  }
+  98%, 100% {
+    opacity: 1;
+    left: calc(50% + 2px);
+    width: calc(50% - 10px);
+    border-color: #ffffff;
+  }
+}
+
+@keyframes animThrowSpaceBadge {
+  0%, 35% {
+    background-color: #242424;
+    color: #ffffff;
+  }
+  42%, 85% {
+    background-color: #38bdf8;
+    color: #000000;
+  }
+  92%, 100% {
+    background-color: #242424;
+    color: #ffffff;
+  }
+}
+
+/* ==========================================================================
+   03 / Swap Windows (ShortcutIllustration.swap)
+   Two windows trade positions cleanly across the desktop
+   ========================================================================== */
+.win-swap-1 {
+  top: 12px;
+  height: calc(100% - 24px);
+  width: calc(50% - 16px);
+  border-color: #ffffff;
+  animation: animSwapWin1 6s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+}
+
+.win-swap-2 {
+  top: 12px;
+  height: calc(100% - 24px);
+  width: calc(50% - 16px);
+  animation: animSwapWin2 6s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+}
+
+@keyframes animSwapWin1 {
+  0%, 20% {
+    left: 12px;
+  }
+  38%, 75% {
+    left: calc(50% + 4px);
+  }
+  88%, 100% {
+    left: 12px;
+  }
+}
+
+@keyframes animSwapWin2 {
+  0%, 20% {
+    left: calc(50% + 4px);
+  }
+  38%, 75% {
+    left: 12px;
+  }
+  88%, 100% {
+    left: calc(50% + 4px);
+  }
+}
+
+/* ==========================================================================
+   04 / Float / Tile (ShortcutIllustration.toggleFloat)
+   Window pops out of tiling layout into floating center with shadow
+   ========================================================================== */
+.win-float-base {
+  left: 12px;
+  top: 12px;
+  height: calc(100% - 24px);
+  animation: animFloatBase 6s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+}
+
+.win-float-overlay {
+  animation: animFloatOverlay 6s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+  border-color: #ffffff;
+  z-index: 10;
+}
+
+@keyframes animFloatBase {
+  0%, 20% {
+    width: calc(50% - 16px);
+  }
+  35%, 78% {
+    width: calc(100% - 24px);
+  }
+  90%, 100% {
+    width: calc(50% - 16px);
+  }
+}
+
+@keyframes animFloatOverlay {
+  0%, 20% {
+    left: calc(50% + 4px);
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    box-shadow: none;
+  }
+  35%, 78% {
+    left: calc(50% - 130px);
+    top: calc(50% - 105px);
+    width: 260px;
+    height: 210px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.95);
+  }
+  90%, 100% {
+    left: calc(50% + 4px);
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    box-shadow: none;
+  }
+}
+
+/* ==========================================================================
+   05 / Re-Split & Flip Split (ShortcutIllustration.reSplit)
+   Side-by-side horizontal split dynamically flips to vertical stacked split
+   ========================================================================== */
+.win-split-1 {
+  left: 12px;
+  top: 12px;
+  animation: animSplitWin1 6s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+}
+
+.win-split-2 {
+  animation: animSplitWin2 6s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+  border-color: #ffffff;
+}
+
+@keyframes animSplitWin1 {
+  0%, 25% {
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+  }
+  40%, 75% {
+    width: calc(100% - 24px);
+    height: calc(50% - 16px);
+  }
+  90%, 100% {
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+  }
+}
+
+@keyframes animSplitWin2 {
+  0%, 25% {
+    left: calc(50% + 4px);
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+  }
+  40%, 75% {
+    left: 12px;
+    top: calc(50% + 4px);
+    width: calc(100% - 24px);
+    height: calc(50% - 16px);
+  }
+  90%, 100% {
+    left: calc(50% + 4px);
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+  }
+}
+
+/* ==========================================================================
+   Hero End-to-End Workflow Demonstration Animations (10s Snappy Loop)
+   Full preview of opening windows, longer-axis BSP splits, recursive splits,
+   focus walking, swapping tiles, flipping split orientation, floating calculator,
+   throwing window to Space 2, and switching back.
+   ========================================================================== */
+
+.win-hero-term {
+  animation: animHeroTerm 10s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+}
+
+.win-hero-edit {
+  animation: animHeroEdit 10s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+}
+
+.win-hero-web {
+  animation: animHeroWeb 10s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+}
+
+.win-hero-calc {
+  animation: animHeroCalc 10s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+  z-index: 20;
+}
+
+/* Window 1: Terminal */
+@keyframes animHeroTerm {
+  /* 0 - 10%: Single window full screen */
+  0%, 10% {
+    left: 12px;
+    top: 12px;
+    width: calc(100% - 24px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+  }
+  /* 13 - 22%: Editor opens, Terminal shrinks to left half (50/50 split) */
+  13%, 22% {
+    left: 12px;
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* 25 - 35%: Browser opens in right half. Terminal stays in left half */
+  25%, 35% {
+    left: 12px;
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* 37 - 40%: Focus walking jumps to Terminal (⌥⇧H) */
+  37%, 40% {
+    left: 12px;
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+  }
+  /* 42 - 47%: Swap windows (⌥⇧⌘L)! Terminal swaps with Editor into top-right */
+  42%, 47% {
+    left: calc(50% + 4px);
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(50% - 16px);
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+  }
+  /* 50 - 59%: Flip split (⌥⇧R)! Right side flips to horizontal sub-split */
+  50%, 59% {
+    left: calc(50% + 4px);
+    top: 12px;
+    width: calc(25% - 12px);
+    height: calc(100% - 24px);
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* 61 - 72%: Calculator floats centered. Terminal remains in place */
+  61%, 72% {
+    left: calc(50% + 4px);
+    top: 12px;
+    width: calc(25% - 12px);
+    height: calc(100% - 24px);
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* 77 - 87%: Browser thrown to Space 2. Terminal expands to fill right half! */
+  77%, 87% {
+    left: calc(50% + 4px);
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+  }
+  /* 91 - 100%: Reset back to full single tile */
+  91%, 100% {
+    left: 12px;
+    top: 12px;
+    width: calc(100% - 24px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+  }
+}
+
+/* Window 2: Code Editor */
+@keyframes animHeroEdit {
+  /* 0 - 10%: Hidden */
+  0%, 10% {
+    left: 100%;
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    opacity: 0;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* 13 - 22%: Opens on right half (50/50 split) */
+  13%, 22% {
+    left: calc(50% + 4px);
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+  }
+  /* 25 - 35%: Browser opens. Editor takes top-right */
+  25%, 35% {
+    left: calc(50% + 4px);
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(50% - 16px);
+    opacity: 1;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* 37 - 40%: Focus moves away */
+  37%, 40% {
+    left: calc(50% + 4px);
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(50% - 16px);
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* 42 - 47%: Swap windows (⌥⇧⌘L)! Editor swaps into left column */
+  42%, 47% {
+    left: 12px;
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* 50 - 87%: Stays in left column while right side flips & throws */
+  50%, 87% {
+    left: 12px;
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* 91 - 100%: Fades out cleanly on reset */
+  91%, 100% {
+    left: 12px;
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    opacity: 0;
+  }
+}
+
+/* Window 3: Web Browser */
+@keyframes animHeroWeb {
+  /* 0 - 22%: Hidden */
+  0%, 22% {
+    left: calc(50% + 4px);
+    top: 100%;
+    width: calc(50% - 16px);
+    height: calc(50% - 16px);
+    opacity: 0;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* 25 - 35%: Opens bottom-right */
+  25%, 35% {
+    left: calc(50% + 4px);
+    top: calc(50% + 4px);
+    width: calc(50% - 16px);
+    height: calc(50% - 16px);
+    opacity: 1;
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+  }
+  /* 37 - 47%: Stays bottom-right */
+  37%, 47% {
+    left: calc(50% + 4px);
+    top: calc(50% + 4px);
+    width: calc(50% - 16px);
+    height: calc(50% - 16px);
+    opacity: 1;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* 50 - 59%: Flip split (⌥⇧R)! Moves to right sub-column */
+  50%, 59% {
+    left: 75%;
+    top: 12px;
+    width: calc(25% - 12px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+  }
+  /* 61 - 72%: Stays in place during float */
+  61%, 72% {
+    left: 75%;
+    top: 12px;
+    width: calc(25% - 12px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* 74 - 76%: Lift and glide off to Desktop 2 (⌥⇧2) */
+  74%, 76% {
+    left: 105%;
+    top: 12px;
+    width: calc(25% - 12px);
+    height: calc(100% - 24px);
+    opacity: 0.5;
+    transform: translateY(-8px);
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.9);
+  }
+  /* 77 - 87%: Off-screen in Desktop 2 */
+  77%, 87% {
+    left: 110%;
+    top: 12px;
+    width: calc(25% - 12px);
+    height: calc(100% - 24px);
+    opacity: 0;
+    transform: translateY(0);
+    box-shadow: none;
+  }
+  /* 90 - 100%: Reset */
+  90%, 100% {
+    opacity: 0;
+    left: calc(50% + 4px);
+    top: 100%;
+  }
+}
+
+/* Window 4: Calculator [Floating] */
+@keyframes animHeroCalc {
+  0%, 60% {
+    left: calc(50% - 110px);
+    top: calc(50% - 80px);
+    width: 220px;
+    height: 160px;
+    opacity: 0;
+    transform: scale(0.85);
+    box-shadow: none;
+    pointer-events: none;
+  }
+  /* 62 - 71%: Floats centered with elevation drop shadow */
+  62%, 71% {
+    left: calc(50% - 110px);
+    top: calc(50% - 80px);
+    width: 220px;
+    height: 160px;
+    opacity: 1;
+    transform: scale(1);
+    border-color: #ffffff;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.95);
+    pointer-events: auto;
+  }
+  /* 73 - 100%: Dismisses */
+  73%, 100% {
+    left: calc(50% - 110px);
+    top: calc(50% - 80px);
+    width: 220px;
+    height: 160px;
+    opacity: 0;
+    transform: scale(0.85);
+    box-shadow: none;
+    pointer-events: none;
+  }
+}
+
+/* Dynamic Space Badge in Hero Menubar */
+.hero-space-badge {
+  animation: animHeroSpaceBadge 10s infinite;
+}
+
+@keyframes animHeroSpaceBadge {
+  0%, 75% {
+    background-color: #242424;
+    color: #ffffff;
+  }
+  76%, 88% {
+    background-color: #38bdf8;
+    color: #000000;
+  }
+  89%, 100% {
+    background-color: #242424;
+    color: #ffffff;
+  }
+}
+
+.badge-d1 {
+  display: inline;
+  animation: animBadgeD1 10s infinite;
+}
+
+.badge-d2 {
+  display: none;
+  animation: animBadgeD2 10s infinite;
+}
+
+@keyframes animBadgeD1 {
+  0%, 75% { display: inline; }
+  76%, 88% { display: none; }
+  89%, 100% { display: inline; }
+}
+
+@keyframes animBadgeD2 {
+  0%, 75% { display: none; }
+  76%, 88% { display: inline; }
+  89%, 100% { display: none; }
+}
+
+/* Real-time OSD HUD Notifier */
+.hero-osd-container {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-osd-pill {
+  position: absolute;
+  bottom: 0;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: rgba(20, 20, 20, 0.95);
+  border: 1px solid #444444;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 10px;
+  color: #ffffff;
+  font-family: monospace;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hero-osd-pill .osd-icon {
+  color: #38bdf8;
+  font-size: 11px;
+}
+
+.osd-step-1 { animation: animOsdStep1 10s infinite; }
+.osd-step-2 { animation: animOsdStep2 10s infinite; }
+.osd-step-3 { animation: animOsdStep3 10s infinite; }
+.osd-step-4 { animation: animOsdStep4 10s infinite; }
+.osd-step-5 { animation: animOsdStep5 10s infinite; }
+.osd-step-6 { animation: animOsdStep6 10s infinite; }
+.osd-step-7 { animation: animOsdStep7 10s infinite; }
+.osd-step-8 { animation: animOsdStep8 10s infinite; }
+
+@keyframes animOsdStep1 {
+  0% { opacity: 0; transform: translateY(4px); }
+  2%, 9% { opacity: 1; transform: translateY(0); }
+  11%, 100% { opacity: 0; transform: translateY(-4px); }
+}
+
+@keyframes animOsdStep2 {
+  0%, 12% { opacity: 0; transform: translateY(4px); }
+  14%, 21% { opacity: 1; transform: translateY(0); }
+  23%, 100% { opacity: 0; transform: translateY(-4px); }
+}
+
+@keyframes animOsdStep3 {
+  0%, 24% { opacity: 0; transform: translateY(4px); }
+  26%, 33% { opacity: 1; transform: translateY(0); }
+  35%, 100% { opacity: 0; transform: translateY(-4px); }
+}
+
+@keyframes animOsdStep4 {
+  0%, 36% { opacity: 0; transform: translateY(4px); }
+  38%, 45% { opacity: 1; transform: translateY(0); }
+  47%, 100% { opacity: 0; transform: translateY(-4px); }
+}
+
+@keyframes animOsdStep5 {
+  0%, 48% { opacity: 0; transform: translateY(4px); }
+  50%, 57% { opacity: 1; transform: translateY(0); }
+  59%, 100% { opacity: 0; transform: translateY(-4px); }
+}
+
+@keyframes animOsdStep6 {
+  0%, 60% { opacity: 0; transform: translateY(4px); }
+  62%, 70% { opacity: 1; transform: translateY(0); }
+  72%, 100% { opacity: 0; transform: translateY(-4px); }
+}
+
+@keyframes animOsdStep7 {
+  0%, 73% { opacity: 0; transform: translateY(4px); }
+  75%, 85% { opacity: 1; transform: translateY(0); }
+  87%, 100% { opacity: 0; transform: translateY(-4px); }
+}
+
+@keyframes animOsdStep8 {
+  0%, 88% { opacity: 0; transform: translateY(4px); }
+  90%, 97% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-4px); }
+}

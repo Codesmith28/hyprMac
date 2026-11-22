@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- hyprMac Official square.split.2x2 Icon (Ultra-High Resolution Vector) -->
+  <style>
+    :root { color: #ffffff; }
+    @media (prefers-color-scheme: light) {
+      :root { color: #0e0e0e; }
+    }
+    .tile-ring {
+      fill: currentColor;
+    }
+  </style>
+  <path class="tile-ring" fill-rule="evenodd" d="M 86 48 H 194 A 38 38 0 0 1 232 86 V 194 A 38 38 0 0 1 194 232 H 86 A 38 38 0 0 1 48 194 V 86 A 38 38 0 0 1 86 48 Z M 100 84 A 16 16 0 0 0 84 100 V 180 A 16 16 0 0 0 100 196 H 180 A 16 16 0 0 0 196 180 V 100 A 16 16 0 0 0 180 84 H 100 Z M 318 48 H 426 A 38 38 0 0 1 464 86 V 194 A 38 38 0 0 1 426 232 H 318 A 38 38 0 0 1 280 194 V 86 A 38 38 0 0 1 318 48 Z M 332 84 A 16 16 0 0 0 316 100 V 180 A 16 16 0 0 0 332 196 H 412 A 16 16 0 0 0 428 180 V 100 A 16 16 0 0 0 412 84 H 332 Z M 86 280 H 194 A 38 38 0 0 1 232 318 V 426 A 38 38 0 0 1 194 464 H 86 A 38 38 0 0 1 48 426 V 318 A 38 38 0 0 1 86 280 Z M 100 316 A 16 16 0 0 0 84 332 V 412 A 16 16 0 0 0 100 428 H 180 A 16 16 0 0 0 196 412 V 332 A 16 16 0 0 0 180 316 H 100 Z M 318 280 H 426 A 38 38 0 0 1 464 318 V 426 A 38 38 0 0 1 426 464 H 318 A 38 38 0 0 1 280 426 V 318 A 38 38 0 0 1 318 280 Z M 332 316 A 16 16 0 0 0 316 332 V 412 A 16 16 0 0 0 332 428 H 412 A 16 16 0 0 0 428 412 V 332 A 16 16 0 0 0 412 316 H 332 Z" />
+</svg>
