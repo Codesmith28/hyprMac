@@ -10,6 +10,20 @@
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <link rel="shortcut icon" href="favicon.ico">
+  <script>
+    (function() {
+      try {
+        var saved = localStorage.getItem('hyprmac-theme');
+        if (saved === 'light' || saved === 'dark') {
+          document.documentElement.setAttribute('data-theme', saved);
+        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        } else {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="animations.css">
 </head>
@@ -30,6 +44,12 @@
           <li><a href="#config">config</a></li>
           <li><a href="#architecture">architecture</a></li>
           <li><a href="https://github.com/Codesmith28/hyprMac" target="_blank" rel="noopener">github</a></li>
+          <li>
+            <button id="theme-toggle" class="theme-toggle-btn" aria-label="Toggle light and dark theme">
+              <span class="theme-toggle-icon">☼</span>
+              <span class="theme-toggle-label">theme</span>
+            </button>
+          </li>
         </ul>
       </nav>
     </div>
@@ -96,7 +116,7 @@
                 </div>
 
                 <div class="desktop-workspace">
-                  <!-- Window 1: Terminal (Dummy Terminal) -->
+                  <!-- Window 1: Terminal (Terminal ~ zsh) -->
                   <div class="mac-window win-hero-term">
                     <div class="mac-titlebar">
                       <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
@@ -110,8 +130,22 @@
                     </div>
                   </div>
 
-                  <!-- Window 2: File Manager (Dummy Finder) -->
+                  <!-- Window 2: Code Editor (nvim ~ init.lua) -->
                   <div class="mac-window win-hero-edit">
+                    <div class="mac-titlebar">
+                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
+                      <span class="win-title">nvim ~ init.lua</span>
+                    </div>
+                    <div class="mac-body dummy-code">
+                      <div class="code-line"><span class="syn-comment">-- hyprMac layout config</span></div>
+                      <div class="code-line"><span class="syn-prop">gaps</span> = { <span class="syn-prop">inner</span> = <span class="syn-num">8</span>, <span class="syn-prop">outer</span> = <span class="syn-num">12</span> }</div>
+                      <div class="code-line"><span class="syn-prop">split_ratio</span> = <span class="syn-num">0.5</span></div>
+                      <div class="code-line"><span class="syn-prop">osd_popup</span> = <span class="syn-bool">true</span></div>
+                    </div>
+                  </div>
+
+                  <!-- Window 3: Finder (~ hyprMac) -->
+                  <div class="mac-window win-hero-finder">
                     <div class="mac-titlebar">
                       <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
                       <span class="win-title">Finder ~ hyprMac</span>
@@ -133,24 +167,11 @@
                     </div>
                   </div>
 
-                  <!-- Window 3: Code Editor -->
-                  <div class="mac-window win-hero-web">
-                    <div class="mac-titlebar">
-                      <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
-                      <span class="win-title">nvim ~ init.lua</span>
-                    </div>
-                    <div class="mac-body">
-                      <span style="color:#86efac;">gaps</span> = { inner = 8 }<br>
-                      <span style="color:#93c5fd;">split_ratio</span> = 0.5<br>
-                      <span style="color:#fde047;">osd_popup</span> = true
-                    </div>
-                  </div>
-
-                  <!-- Window 4: Floating Calculator (Dummy Calc) -->
+                  <!-- Window 4: Calculator [Floating] -->
                   <div class="mac-window win-hero-calc">
                     <div class="mac-titlebar">
                       <div class="traffic-lights"><span class="tl tl-red"></span><span class="tl tl-yellow"></span><span class="tl tl-green"></span></div>
-                      <span class="win-title">Calculator</span>
+                      <span class="win-title">Calculator [Floating]</span>
                     </div>
                     <div class="mac-body dummy-calc">
                       <div class="calc-screen">1,337.00</div>
@@ -181,28 +202,28 @@
                   <!-- Real-time OSD HUD Notifier: synchronized with actions -->
                   <div class="hero-osd-container">
                     <div class="hero-osd-pill osd-step-1">
-                      <span class="osd-icon">❖</span> <span>Tiling started (8pt gaps)</span>
+                      <span class="osd-icon">❖</span> <span>Tiling active • 8pt gaps, 12pt margins</span>
                     </div>
                     <div class="hero-osd-pill osd-step-2">
-                      <span class="osd-icon">⬌</span> <span>Open Finder ➔ Longer-Axis BSP Split</span>
+                      <span class="osd-icon">⬌</span> <span>Open Editor ➔ Longer-Axis BSP Split (50/50)</span>
                     </div>
                     <div class="hero-osd-pill osd-step-3">
-                      <span class="osd-icon">⬍</span> <span>Open Editor ➔ Vertical Split</span>
+                      <span class="osd-icon">⬍</span> <span>Open Finder ➔ Stacked Sub-Split on Active Tile</span>
                     </div>
                     <div class="hero-osd-pill osd-step-4">
-                      <span class="osd-icon">⇄</span> <span>⌥⇧⌘L Swap Windows</span>
+                      <span class="osd-icon">⇄</span> <span>⌥⇧⌘K Swap Up (Finder ⇄ Editor)</span>
                     </div>
                     <div class="hero-osd-pill osd-step-5">
-                      <span class="osd-icon">⟳</span> <span>⌥⇧R Flip Split Orientation</span>
+                      <span class="osd-icon">⟳</span> <span>⌥⇧R Flip Split ➔ Stacked to Side-by-Side</span>
                     </div>
                     <div class="hero-osd-pill osd-step-6">
-                      <span class="osd-icon">❐</span> <span>⌥⇧F Float Calculator</span>
+                      <span class="osd-icon">❐</span> <span>Open Calculator ➔ Auto-Floated (Utility Window)</span>
                     </div>
                     <div class="hero-osd-pill osd-step-7">
-                      <span class="osd-icon">➔</span> <span>⌥⇧2 Throw Finder ➔ Desktop 2</span>
+                      <span class="osd-icon">➔</span> <span>⌥⇧2 Throw Finder to Space 2 ➔ Neighbor Expands</span>
                     </div>
                     <div class="hero-osd-pill osd-step-8">
-                      <span class="osd-icon">⇲</span> <span>⌥1 Switch Desktop 1</span>
+                      <span class="osd-icon">⇲</span> <span>⌥2 Switch to Desktop 2 ➔ Finder Tiled on Space 2</span>
                     </div>
                   </div>
                 </div>
@@ -232,7 +253,7 @@
             <div class="feature-tag">01 / NAVIGATION</div>
             <h3 class="feature-heading">Move Focus</h3>
             <p class="feature-desc">
-              Focus walks cleanly between neighboring tiles in the BSP tree. A new window splits the focused tile along its longer side and takes the second half.
+              Focus walks cleanly between neighboring tiles in the BSP tree using directional vim keys (H/J/K/L) or arrow keys. A new window splits the focused tile along its longer side and takes the second half.
             </p>
             <div class="keycap-row">
               <kbd class="kbd">⌥</kbd><kbd class="kbd">⇧</kbd><kbd class="kbd">H</kbd> / <kbd class="kbd">J</kbd> / <kbd class="kbd">K</kbd> / <kbd class="kbd">L</kbd>
@@ -839,8 +860,9 @@
     </div>
   </footer>
 
-  <!-- 1-Click Copy Script -->
+  <!-- Scripts: 1-Click Copy and Light/Dark Theme Switcher -->
   <script>
+    // 1-Click Copy Script
     const copyBtn = document.getElementById('copy-btn');
     const cmdText = document.getElementById('install-cmd');
     if (copyBtn && cmdText) {
@@ -857,6 +879,32 @@
         } catch (e) {
           console.warn('Clipboard write failed', e);
         }
+      });
+    }
+
+    // Theme Switcher with Persistence
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    function updateThemeUI(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      try {
+        localStorage.setItem('hyprmac-theme', theme);
+      } catch (e) {}
+      if (themeToggleBtn) {
+        const icon = themeToggleBtn.querySelector('.theme-toggle-icon');
+        const label = themeToggleBtn.querySelector('.theme-toggle-label');
+        if (icon) icon.textContent = theme === 'light' ? '☽' : '☼';
+        if (label) label.textContent = theme === 'light' ? 'dark' : 'light';
+      }
+    }
+
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+    updateThemeUI(currentTheme);
+
+    if (themeToggleBtn) {
+      themeToggleBtn.addEventListener('click', () => {
+        const active = document.documentElement.getAttribute('data-theme') || 'dark';
+        const next = active === 'light' ? 'dark' : 'light';
+        updateThemeUI(next);
       });
     }
   </script>

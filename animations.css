@@ -756,33 +756,40 @@
 }
 
 /* ==========================================================================
-   Hero End-to-End Workflow Demonstration Animations (10s Snappy Loop)
-   Full preview of opening windows, longer-axis BSP splits, recursive splits,
-   focus walking, swapping tiles, flipping split orientation, floating calculator,
-   throwing window to Space 2, and switching back.
+   Hero End-to-End Workflow Demonstration Animations (12s Consistent Loop)
+   Full physically and operationally consistent sequence:
+   Step 1 (0-12%): Single window full screen (8pt gaps, 12pt margins).
+   Step 2 (14-25%): Open Editor ➔ Longer-Axis BSP Split (50/50).
+   Step 3 (27-38%): Open Finder ➔ Stacked Sub-Split on Active Tile.
+   Step 4 (40-50%): ⌥⇧⌘K Swap Up (Finder ⇄ Editor).
+   Step 5 (52-62%): ⌥⇧R Flip Split ➔ Stacked to Side-by-Side.
+   Step 6 (64-74%): Open Calculator ➔ Auto-Floated (Utility Window).
+   Step 7 (76-86%): ⌥⇧2 Throw Finder to Space 2 ➔ Neighbor Expands.
+   Step 8 (88-97%): ⌥2 Switch to Desktop 2 ➔ Finder Tiled on Space 2.
+   Reset (98-100%): Seamlessly returns to Step 1.
    ========================================================================== */
 
 .win-hero-term {
-  animation: animHeroTerm 10s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+  animation: animHeroTerm 12s cubic-bezier(0.2, 0, 0.2, 1) infinite;
 }
 
 .win-hero-edit {
-  animation: animHeroEdit 10s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+  animation: animHeroEdit 12s cubic-bezier(0.2, 0, 0.2, 1) infinite;
 }
 
-.win-hero-web {
-  animation: animHeroWeb 10s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+.win-hero-finder {
+  animation: animHeroFinder 12s cubic-bezier(0.2, 0, 0.2, 1) infinite;
 }
 
 .win-hero-calc {
-  animation: animHeroCalc 10s cubic-bezier(0.2, 0, 0.2, 1) infinite;
-  z-index: 20;
+  animation: animHeroCalc 12s cubic-bezier(0.2, 0, 0.2, 1) infinite;
+  z-index: 25;
 }
 
-/* Window 1: Terminal */
+/* Window 1: Terminal (~ zsh) */
 @keyframes animHeroTerm {
-  /* 0 - 10%: Single window full screen */
-  0%, 10% {
+  /* Step 1 (0-12%): Single window full screen with 8pt gaps, 12pt margins. Active! */
+  0%, 12% {
     left: 12px;
     top: 12px;
     width: calc(100% - 24px);
@@ -791,8 +798,8 @@
     border-color: #ffffff;
     box-shadow: 0 0 0 1px #ffffff;
   }
-  /* 13 - 22%: Editor opens, Terminal shrinks to left half (50/50 split) */
-  13%, 22% {
+  /* Step 2 (14-25%): Editor opens on right half; Terminal takes left 50%. Inactive */
+  14%, 25% {
     left: 12px;
     top: 12px;
     width: calc(50% - 16px);
@@ -801,8 +808,8 @@
     border-color: #333333;
     box-shadow: none;
   }
-  /* 25 - 35%: Browser opens in right half. Terminal stays in left half */
-  25%, 35% {
+  /* Step 3 (27-38%): Finder opens in stacked sub-split on right; Terminal stays left 50% */
+  27%, 38% {
     left: 12px;
     top: 12px;
     width: calc(50% - 16px);
@@ -811,53 +818,58 @@
     border-color: #333333;
     box-shadow: none;
   }
-  /* 37 - 40%: Focus walking jumps to Terminal (⌥⇧H) */
-  37%, 40% {
+  /* Step 4 (40-50%): Swap Up occurs on right half; Terminal untouched on left 50% */
+  40%, 50% {
     left: 12px;
     top: 12px;
     width: calc(50% - 16px);
     height: calc(100% - 24px);
-    border-color: #ffffff;
-    box-shadow: 0 0 0 1px #ffffff;
-  }
-  /* 42 - 47%: Swap windows (⌥⇧⌘L)! Terminal swaps with Editor into top-right */
-  42%, 47% {
-    left: calc(50% + 4px);
-    top: 12px;
-    width: calc(50% - 16px);
-    height: calc(50% - 16px);
-    border-color: #ffffff;
-    box-shadow: 0 0 0 1px #ffffff;
-  }
-  /* 50 - 59%: Flip split (⌥⇧R)! Right side flips to horizontal sub-split */
-  50%, 59% {
-    left: calc(50% + 4px);
-    top: 12px;
-    width: calc(25% - 12px);
-    height: calc(100% - 24px);
+    opacity: 1;
     border-color: #333333;
     box-shadow: none;
   }
-  /* 61 - 72%: Calculator floats centered. Terminal remains in place */
-  61%, 72% {
-    left: calc(50% + 4px);
-    top: 12px;
-    width: calc(25% - 12px);
-    height: calc(100% - 24px);
-    border-color: #333333;
-    box-shadow: none;
-  }
-  /* 77 - 87%: Browser thrown to Space 2. Terminal expands to fill right half! */
-  77%, 87% {
-    left: calc(50% + 4px);
+  /* Step 5 (52-62%): Flip Split on right side; Terminal untouched on left 50% */
+  52%, 62% {
+    left: 12px;
     top: 12px;
     width: calc(50% - 16px);
     height: calc(100% - 24px);
-    border-color: #ffffff;
-    box-shadow: 0 0 0 1px #ffffff;
+    opacity: 1;
+    border-color: #333333;
+    box-shadow: none;
   }
-  /* 91 - 100%: Reset back to full single tile */
-  91%, 100% {
+  /* Step 6 (64-74%): Calculator floats in center; Terminal stays on left 50% */
+  64%, 74% {
+    left: 12px;
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* Step 7 (76-86%): Finder thrown to Space 2; Terminal stays on left 50% */
+  76%, 86% {
+    left: 12px;
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* Step 8 (88-97%): Switch to Desktop 2 ➔ Terminal & Editor fade out on Desktop 1! */
+  88%, 97% {
+    left: 12px;
+    top: 12px;
+    width: calc(50% - 16px);
+    height: calc(100% - 24px);
+    opacity: 0;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* Reset (98-100%): Returns seamlessly to Step 1 */
+  98%, 100% {
     left: 12px;
     top: 12px;
     width: calc(100% - 24px);
@@ -868,11 +880,11 @@
   }
 }
 
-/* Window 2: Code Editor */
+/* Window 2: Code Editor (nvim ~ init.lua) */
 @keyframes animHeroEdit {
-  /* 0 - 10%: Hidden */
-  0%, 10% {
-    left: 100%;
+  /* Step 1 (0-12%): Not yet open */
+  0%, 12% {
+    left: calc(50% + 4px);
     top: 12px;
     width: calc(50% - 16px);
     height: calc(100% - 24px);
@@ -880,8 +892,8 @@
     border-color: #333333;
     box-shadow: none;
   }
-  /* 13 - 22%: Opens on right half (50/50 split) */
-  13%, 22% {
+  /* Step 2 (14-25%): Opens in right 50% (50/50 split). Active! */
+  14%, 25% {
     left: calc(50% + 4px);
     top: 12px;
     width: calc(50% - 16px);
@@ -890,8 +902,8 @@
     border-color: #ffffff;
     box-shadow: 0 0 0 1px #ffffff;
   }
-  /* 25 - 35%: Browser opens. Editor takes top-right */
-  25%, 35% {
+  /* Step 3 (27-38%): Finder opens in bottom-right. Editor pushed to top-right stacked tile */
+  27%, 38% {
     left: calc(50% + 4px);
     top: 12px;
     width: calc(50% - 16px);
@@ -900,59 +912,77 @@
     border-color: #333333;
     box-shadow: none;
   }
-  /* 37 - 40%: Focus moves away */
-  37%, 40% {
+  /* Step 4 (40-50%): ⌥⇧⌘K Swap Up (Finder ⇄ Editor). Editor swaps DOWN to bottom-right! */
+  40%, 50% {
+    left: calc(50% + 4px);
+    top: calc(50% + 4px);
+    width: calc(50% - 16px);
+    height: calc(50% - 16px);
+    opacity: 1;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* Step 5 (52-62%): ⌥⇧R Flip Split. Stacked flips to side-by-side. Editor is in right-of-right (75%) */
+  52%, 62% {
+    left: 75%;
+    top: 12px;
+    width: calc(25% - 12px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* Step 6 (64-74%): Calculator floats in center. Editor stays in right-of-right (75%) */
+  64%, 74% {
+    left: 75%;
+    top: 12px;
+    width: calc(25% - 12px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #333333;
+    box-shadow: none;
+  }
+  /* Step 7 (76-86%): ⌥⇧2 Throw Finder to Space 2. Neighbor (Editor) expands to fill right 50%! Active! */
+  76%, 86% {
     left: calc(50% + 4px);
     top: 12px;
     width: calc(50% - 16px);
-    height: calc(50% - 16px);
-    border-color: #333333;
-    box-shadow: none;
-  }
-  /* 42 - 47%: Swap windows (⌥⇧⌘L)! Editor swaps into left column */
-  42%, 47% {
-    left: 12px;
-    top: 12px;
-    width: calc(50% - 16px);
     height: calc(100% - 24px);
     opacity: 1;
-    border-color: #333333;
-    box-shadow: none;
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
   }
-  /* 50 - 87%: Stays in left column while right side flips & throws */
-  50%, 87% {
-    left: 12px;
+  /* Step 8 (88-97%): Switch to Desktop 2. Editor on Desktop 1 fades out cleanly */
+  88%, 97% {
+    left: calc(50% + 4px);
     top: 12px;
     width: calc(50% - 16px);
     height: calc(100% - 24px);
-    opacity: 1;
+    opacity: 0;
     border-color: #333333;
     box-shadow: none;
   }
-  /* 91 - 100%: Fades out cleanly on reset */
-  91%, 100% {
-    left: 12px;
-    top: 12px;
-    width: calc(50% - 16px);
-    height: calc(100% - 24px);
+  /* Reset (98-100%): Hidden */
+  98%, 100% {
     opacity: 0;
   }
 }
 
-/* Window 3: Web Browser */
-@keyframes animHeroWeb {
-  /* 0 - 22%: Hidden */
-  0%, 22% {
+/* Window 3: Finder (~ hyprMac) */
+@keyframes animHeroFinder {
+  /* Step 1-2 (0-25%): Hidden */
+  0%, 25% {
     left: calc(50% + 4px);
-    top: 100%;
+    top: calc(50% + 4px);
     width: calc(50% - 16px);
     height: calc(50% - 16px);
     opacity: 0;
     border-color: #333333;
     box-shadow: none;
+    transform: none;
   }
-  /* 25 - 35%: Opens bottom-right */
-  25%, 35% {
+  /* Step 3 (27-38%): Opens in bottom-right stacked tile. Active! */
+  27%, 38% {
     left: calc(50% + 4px);
     top: calc(50% + 4px);
     width: calc(50% - 16px);
@@ -960,68 +990,95 @@
     opacity: 1;
     border-color: #ffffff;
     box-shadow: 0 0 0 1px #ffffff;
+    transform: none;
   }
-  /* 37 - 47%: Stays bottom-right */
-  37%, 47% {
+  /* Step 4 (40-50%): ⌥⇧⌘K Swap Up (Finder ⇄ Editor). Finder swaps UP to top-right! Active! */
+  40%, 50% {
     left: calc(50% + 4px);
-    top: calc(50% + 4px);
+    top: 12px;
     width: calc(50% - 16px);
     height: calc(50% - 16px);
     opacity: 1;
-    border-color: #333333;
-    box-shadow: none;
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+    transform: none;
   }
-  /* 50 - 59%: Flip split (⌥⇧R)! Moves to right sub-column */
-  50%, 59% {
-    left: 75%;
+  /* Step 5 (52-62%): ⌥⇧R Flip Split. Finder takes left-of-right (calc(50% + 4px) to 75%). Active! */
+  52%, 62% {
+    left: calc(50% + 4px);
     top: 12px;
     width: calc(25% - 12px);
     height: calc(100% - 24px);
     opacity: 1;
     border-color: #ffffff;
     box-shadow: 0 0 0 1px #ffffff;
+    transform: none;
   }
-  /* 61 - 72%: Stays in place during float */
-  61%, 72% {
-    left: 75%;
+  /* Step 6 (64-74%): Calculator floats in center. Finder remains in place */
+  64%, 74% {
+    left: calc(50% + 4px);
     top: 12px;
     width: calc(25% - 12px);
     height: calc(100% - 24px);
     opacity: 1;
     border-color: #333333;
     box-shadow: none;
+    transform: none;
   }
-  /* 74 - 76%: Lift and glide off to Desktop 2 (⌥⇧2) */
-  74%, 76% {
+  /* Step 7 (76-86%): ⌥⇧2 Throw Finder to Space 2 ➔ Glides off-screen right into Space 2! */
+  76% {
+    left: calc(50% + 4px);
+    top: 12px;
+    width: calc(25% - 12px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    transform: none;
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+  }
+  79% {
     left: 105%;
     top: 12px;
     width: calc(25% - 12px);
     height: calc(100% - 24px);
-    opacity: 0.5;
-    transform: translateY(-8px);
-    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.9);
+    opacity: 0.6;
+    transform: translateY(-4px);
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.8);
   }
-  /* 77 - 87%: Off-screen in Desktop 2 */
-  77%, 87% {
+  82%, 86% {
     left: 110%;
     top: 12px;
     width: calc(25% - 12px);
     height: calc(100% - 24px);
     opacity: 0;
-    transform: translateY(0);
+    transform: none;
     box-shadow: none;
   }
-  /* 90 - 100%: Reset */
-  90%, 100% {
+  /* Step 8 (88-97%): ⌥2 Switch to Desktop 2 ➔ Finder is tiled full screen on Desktop 2! Active! */
+  88%, 97% {
+    left: 12px;
+    top: 12px;
+    width: calc(100% - 24px);
+    height: calc(100% - 24px);
+    opacity: 1;
+    border-color: #ffffff;
+    box-shadow: 0 0 0 1px #ffffff;
+    transform: none;
+  }
+  /* Reset (98-100%): Fades out cleanly */
+  98%, 100% {
     opacity: 0;
     left: calc(50% + 4px);
-    top: 100%;
+    top: calc(50% + 4px);
+    width: calc(50% - 16px);
+    height: calc(50% - 16px);
   }
 }
 
 /* Window 4: Calculator [Floating] */
 @keyframes animHeroCalc {
-  0%, 60% {
+  /* Step 1-5 (0-62%): Hidden */
+  0%, 62% {
     left: calc(50% - 110px);
     top: calc(50% - 80px);
     width: 220px;
@@ -1031,8 +1088,8 @@
     box-shadow: none;
     pointer-events: none;
   }
-  /* 62 - 71%: Floats centered with elevation drop shadow */
-  62%, 71% {
+  /* Step 6 (64-74%): Open Calculator ➔ Auto-floats centered with elevation drop-shadow! */
+  64%, 74% {
     left: calc(50% - 110px);
     top: calc(50% - 80px);
     width: 220px;
@@ -1043,8 +1100,8 @@
     box-shadow: 0 20px 45px rgba(0, 0, 0, 0.95);
     pointer-events: auto;
   }
-  /* 73 - 100%: Dismisses */
-  73%, 100% {
+  /* Step 7-8 (76-100%): Dismissed */
+  76%, 100% {
     left: calc(50% - 110px);
     top: calc(50% - 80px);
     width: 220px;
@@ -1058,19 +1115,19 @@
 
 /* Dynamic Space Badge in Hero Menubar */
 .hero-space-badge {
-  animation: animHeroSpaceBadge 10s infinite;
+  animation: animHeroSpaceBadge 12s infinite;
 }
 
 @keyframes animHeroSpaceBadge {
-  0%, 75% {
+  0%, 86% {
     background-color: #242424;
     color: #ffffff;
   }
-  76%, 88% {
+  88%, 97% {
     background-color: #38bdf8;
     color: #000000;
   }
-  89%, 100% {
+  98%, 100% {
     background-color: #242424;
     color: #ffffff;
   }
@@ -1078,27 +1135,27 @@
 
 .badge-d1 {
   display: inline;
-  animation: animBadgeD1 10s infinite;
+  animation: animBadgeD1 12s infinite;
 }
 
 .badge-d2 {
   display: none;
-  animation: animBadgeD2 10s infinite;
+  animation: animBadgeD2 12s infinite;
 }
 
 @keyframes animBadgeD1 {
-  0%, 75% { display: inline; }
-  76%, 88% { display: none; }
-  89%, 100% { display: inline; }
+  0%, 86% { display: inline; }
+  88%, 97% { display: none; }
+  98%, 100% { display: inline; }
 }
 
 @keyframes animBadgeD2 {
-  0%, 75% { display: none; }
-  76%, 88% { display: inline; }
-  89%, 100% { display: none; }
+  0%, 86% { display: none; }
+  88%, 97% { display: inline; }
+  98%, 100% { display: none; }
 }
 
-/* Real-time OSD HUD Notifier */
+/* Real-time OSD HUD Notifier: 8 Distinct Synchronized Steps */
 .hero-osd-container {
   position: absolute;
   bottom: 12px;
@@ -1135,59 +1192,59 @@
   font-size: 11px;
 }
 
-.osd-step-1 { animation: animOsdStep1 10s infinite; }
-.osd-step-2 { animation: animOsdStep2 10s infinite; }
-.osd-step-3 { animation: animOsdStep3 10s infinite; }
-.osd-step-4 { animation: animOsdStep4 10s infinite; }
-.osd-step-5 { animation: animOsdStep5 10s infinite; }
-.osd-step-6 { animation: animOsdStep6 10s infinite; }
-.osd-step-7 { animation: animOsdStep7 10s infinite; }
-.osd-step-8 { animation: animOsdStep8 10s infinite; }
+.osd-step-1 { animation: animOsdStep1 12s infinite; }
+.osd-step-2 { animation: animOsdStep2 12s infinite; }
+.osd-step-3 { animation: animOsdStep3 12s infinite; }
+.osd-step-4 { animation: animOsdStep4 12s infinite; }
+.osd-step-5 { animation: animOsdStep5 12s infinite; }
+.osd-step-6 { animation: animOsdStep6 12s infinite; }
+.osd-step-7 { animation: animOsdStep7 12s infinite; }
+.osd-step-8 { animation: animOsdStep8 12s infinite; }
 
 @keyframes animOsdStep1 {
   0% { opacity: 0; transform: translateY(4px); }
-  2%, 9% { opacity: 1; transform: translateY(0); }
-  11%, 100% { opacity: 0; transform: translateY(-4px); }
+  2%, 10% { opacity: 1; transform: translateY(0); }
+  12%, 100% { opacity: 0; transform: translateY(-4px); }
 }
 
 @keyframes animOsdStep2 {
-  0%, 12% { opacity: 0; transform: translateY(4px); }
-  14%, 21% { opacity: 1; transform: translateY(0); }
-  23%, 100% { opacity: 0; transform: translateY(-4px); }
+  0%, 13% { opacity: 0; transform: translateY(4px); }
+  15%, 23% { opacity: 1; transform: translateY(0); }
+  25%, 100% { opacity: 0; transform: translateY(-4px); }
 }
 
 @keyframes animOsdStep3 {
-  0%, 24% { opacity: 0; transform: translateY(4px); }
-  26%, 33% { opacity: 1; transform: translateY(0); }
-  35%, 100% { opacity: 0; transform: translateY(-4px); }
+  0%, 26% { opacity: 0; transform: translateY(4px); }
+  28%, 36% { opacity: 1; transform: translateY(0); }
+  38%, 100% { opacity: 0; transform: translateY(-4px); }
 }
 
 @keyframes animOsdStep4 {
-  0%, 36% { opacity: 0; transform: translateY(4px); }
-  38%, 45% { opacity: 1; transform: translateY(0); }
-  47%, 100% { opacity: 0; transform: translateY(-4px); }
+  0%, 39% { opacity: 0; transform: translateY(4px); }
+  41%, 48% { opacity: 1; transform: translateY(0); }
+  50%, 100% { opacity: 0; transform: translateY(-4px); }
 }
 
 @keyframes animOsdStep5 {
-  0%, 48% { opacity: 0; transform: translateY(4px); }
-  50%, 57% { opacity: 1; transform: translateY(0); }
-  59%, 100% { opacity: 0; transform: translateY(-4px); }
+  0%, 51% { opacity: 0; transform: translateY(4px); }
+  53%, 60% { opacity: 1; transform: translateY(0); }
+  62%, 100% { opacity: 0; transform: translateY(-4px); }
 }
 
 @keyframes animOsdStep6 {
-  0%, 60% { opacity: 0; transform: translateY(4px); }
-  62%, 70% { opacity: 1; transform: translateY(0); }
-  72%, 100% { opacity: 0; transform: translateY(-4px); }
+  0%, 63% { opacity: 0; transform: translateY(4px); }
+  65%, 72% { opacity: 1; transform: translateY(0); }
+  74%, 100% { opacity: 0; transform: translateY(-4px); }
 }
 
 @keyframes animOsdStep7 {
-  0%, 73% { opacity: 0; transform: translateY(4px); }
-  75%, 85% { opacity: 1; transform: translateY(0); }
-  87%, 100% { opacity: 0; transform: translateY(-4px); }
+  0%, 75% { opacity: 0; transform: translateY(4px); }
+  77%, 84% { opacity: 1; transform: translateY(0); }
+  86%, 100% { opacity: 0; transform: translateY(-4px); }
 }
 
 @keyframes animOsdStep8 {
-  0%, 88% { opacity: 0; transform: translateY(4px); }
-  90%, 97% { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(-4px); }
+  0%, 87% { opacity: 0; transform: translateY(4px); }
+  89%, 95% { opacity: 1; transform: translateY(0); }
+  97%, 100% { opacity: 0; transform: translateY(-4px); }
 }
