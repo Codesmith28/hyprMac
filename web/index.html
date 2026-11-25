@@ -36,22 +36,35 @@
         <span>hyprMac</span>
         <span class="brand-tag">prototype</span>
       </a>
-      <nav>
-        <ul class="nav-links">
-          <li><a href="#features">features</a></li>
-          <li><a href="#comparison">comparison</a></li>
-          <li><a href="#cheatsheet">cheatsheet</a></li>
-          <li><a href="#config">config</a></li>
-          <li><a href="#architecture">architecture</a></li>
-          <li><a href="https://github.com/Codesmith28/hyprMac" target="_blank" rel="noopener">github</a></li>
-          <li>
-            <button id="theme-toggle" class="theme-toggle-btn" aria-label="Toggle light and dark theme">
-              <span class="theme-toggle-icon">☼</span>
-              <span class="theme-toggle-label">theme</span>
-            </button>
-          </li>
-        </ul>
-      </nav>
+      <div class="header-controls">
+        <nav id="primary-nav" class="site-nav" aria-label="Primary">
+          <ul class="nav-links">
+            <li><a href="#features">features</a></li>
+            <li><a href="#comparison">comparison</a></li>
+            <li><a href="#cheatsheet">cheatsheet</a></li>
+            <li><a href="#config">config</a></li>
+            <li><a href="#architecture">architecture</a></li>
+            <li><a href="https://github.com/Codesmith28/hyprMac" target="_blank" rel="noopener">github</a></li>
+          </ul>
+        </nav>
+        <div class="header-actions">
+          <button id="theme-toggle" class="theme-toggle-btn" type="button" aria-label="Toggle light and dark theme">
+            <span class="theme-toggle-icon" aria-hidden="true">
+              <svg class="theme-icon-sun" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="8" cy="8" r="3"></circle>
+                <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"></path>
+              </svg>
+              <svg class="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            </span>
+            <span class="theme-toggle-label">light</span>
+          </button>
+          <button id="nav-toggle" class="nav-toggle-btn" type="button" aria-expanded="false" aria-controls="primary-nav" aria-label="Toggle navigation menu">
+            <span class="nav-toggle-icon" aria-hidden="true">≡</span>
+          </button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -631,52 +644,52 @@
             <tbody>
               <tr>
                 <td><strong>SIP Status</strong></td>
-                <td class="col-highlight"><strong>Untouched (ON)</strong><span class="matrix-sub">Safe for Apple Pay &amp; OS updates</span></td>
-                <td>Requires SIP Disabled<span class="matrix-sub">`csrutil disable` in recovery</span></td>
-                <td>Untouched (ON)<span class="matrix-sub">Standard Accessibility</span></td>
-                <td>Untouched (ON)<span class="matrix-sub">Standard Accessibility</span></td>
+                <td class="col-highlight" data-tool="hyprMac"><strong>Untouched (ON)</strong><span class="matrix-sub">Safe for Apple Pay &amp; OS updates</span></td>
+                <td data-tool="yabai">Requires SIP Disabled<span class="matrix-sub">`csrutil disable` in recovery</span></td>
+                <td data-tool="Amethyst">Untouched (ON)<span class="matrix-sub">Standard Accessibility</span></td>
+                <td data-tool="AeroSpace">Untouched (ON)<span class="matrix-sub">Standard Accessibility</span></td>
               </tr>
               <tr>
                 <td><strong>Tiling Engine</strong></td>
-                <td class="col-highlight"><strong>Dynamic BSP</strong><span class="matrix-sub">Splits longer side automatically</span></td>
-                <td>Dynamic BSP<span class="matrix-sub">Flexible manual/auto</span></td>
-                <td>Fixed Layouts<span class="matrix-sub">Cycles tall, wide, column</span></td>
-                <td>Tree-based<span class="matrix-sub">i3-style manual tree</span></td>
+                <td class="col-highlight" data-tool="hyprMac"><strong>Dynamic BSP</strong><span class="matrix-sub">Splits longer side automatically</span></td>
+                <td data-tool="yabai">Dynamic BSP<span class="matrix-sub">Flexible manual/auto</span></td>
+                <td data-tool="Amethyst">Fixed Layouts<span class="matrix-sub">Cycles tall, wide, column</span></td>
+                <td data-tool="AeroSpace">Tree-based<span class="matrix-sub">i3-style manual tree</span></td>
               </tr>
               <tr>
                 <td><strong>Native Spaces</strong></td>
-                <td class="col-highlight"><strong>Preserved (1-9)</strong><span class="matrix-sub">Native Mission Control swipes</span></td>
-                <td>Broken without SIP<span class="matrix-sub">Injects code into Dock.app</span></td>
-                <td>Preserved (1-9)<span class="matrix-sub">Works with native Spaces</span></td>
-                <td>Destroys Spaces<span class="matrix-sub">Hides windows on single desktop</span></td>
+                <td class="col-highlight" data-tool="hyprMac"><strong>Preserved (1-9)</strong><span class="matrix-sub">Native Mission Control swipes</span></td>
+                <td data-tool="yabai">Broken without SIP<span class="matrix-sub">Injects code into Dock.app</span></td>
+                <td data-tool="Amethyst">Preserved (1-9)<span class="matrix-sub">Works with native Spaces</span></td>
+                <td data-tool="AeroSpace">Destroys Spaces<span class="matrix-sub">Hides windows on single desktop</span></td>
               </tr>
               <tr>
                 <td><strong>Window Throwing</strong></td>
-                <td class="col-highlight"><strong>⌥⇧1–⌥⇧9</strong><span class="matrix-sub">Drag trick without private APIs</span></td>
-                <td>Fast (with SIP off)<span class="matrix-sub">Broken when SIP enabled</span></td>
-                <td>Clunky / Limited<span class="matrix-sub">Slow multi-display moves</span></td>
-                <td>Instant (Fake)<span class="matrix-sub">Window unhiding trick</span></td>
+                <td class="col-highlight" data-tool="hyprMac"><strong>⌥⇧1–⌥⇧9</strong><span class="matrix-sub">Drag trick without private APIs</span></td>
+                <td data-tool="yabai">Fast (with SIP off)<span class="matrix-sub">Broken when SIP enabled</span></td>
+                <td data-tool="Amethyst">Clunky / Limited<span class="matrix-sub">Slow multi-display moves</span></td>
+                <td data-tool="AeroSpace">Instant (Fake)<span class="matrix-sub">Window unhiding trick</span></td>
               </tr>
               <tr>
                 <td><strong>Core Architecture</strong></td>
-                <td class="col-highlight"><strong>C++20 + Swift</strong><span class="matrix-sub">Per-app isolated serial queues</span></td>
-                <td>C + Daemon<span class="matrix-sub">Single process queue</span></td>
-                <td>Swift UI<span class="matrix-sub">Prone to event hitching</span></td>
-                <td>Swift daemon<span class="matrix-sub">Client/server architecture</span></td>
+                <td class="col-highlight" data-tool="hyprMac"><strong>C++20 + Swift</strong><span class="matrix-sub">Per-app isolated serial queues</span></td>
+                <td data-tool="yabai">C + Daemon<span class="matrix-sub">Single process queue</span></td>
+                <td data-tool="Amethyst">Swift UI<span class="matrix-sub">Prone to event hitching</span></td>
+                <td data-tool="AeroSpace">Swift daemon<span class="matrix-sub">Client/server architecture</span></td>
               </tr>
               <tr>
                 <td><strong>Configuration</strong></td>
-                <td class="col-highlight"><strong>Sandboxed Lua</strong><span class="matrix-sub">`~/.config/hyprmac/init.lua`</span></td>
-                <td>Shell scripts / skhd<span class="matrix-sub">Unchecked shell commands</span></td>
-                <td>GUI Preferences<span class="matrix-sub">Non-declarative</span></td>
-                <td>TOML<span class="matrix-sub">Static file</span></td>
+                <td class="col-highlight" data-tool="hyprMac"><strong>Sandboxed Lua</strong><span class="matrix-sub">`~/.config/hyprmac/init.lua`</span></td>
+                <td data-tool="yabai">Shell scripts / skhd<span class="matrix-sub">Unchecked shell commands</span></td>
+                <td data-tool="Amethyst">GUI Preferences<span class="matrix-sub">Non-declarative</span></td>
+                <td data-tool="AeroSpace">TOML<span class="matrix-sub">Static file</span></td>
               </tr>
               <tr>
                 <td><strong>Install Reversibility</strong></td>
-                <td class="col-highlight"><strong>Verified Rollback</strong><span class="matrix-sub">Manifest snapshot on install</span></td>
-                <td>Leaves NVRAM/SIP dirty<span class="matrix-sub">Manual cleanup required</span></td>
-                <td>Standard App Drag<span class="matrix-sub">Orphaned preferences</span></td>
-                <td>Standard App Drag<span class="matrix-sub">Orphaned LaunchAgents</span></td>
+                <td class="col-highlight" data-tool="hyprMac"><strong>Verified Rollback</strong><span class="matrix-sub">Manifest snapshot on install</span></td>
+                <td data-tool="yabai">Leaves NVRAM/SIP dirty<span class="matrix-sub">Manual cleanup required</span></td>
+                <td data-tool="Amethyst">Standard App Drag<span class="matrix-sub">Orphaned preferences</span></td>
+                <td data-tool="AeroSpace">Standard App Drag<span class="matrix-sub">Orphaned LaunchAgents</span></td>
               </tr>
             </tbody>
           </table>
@@ -697,9 +710,9 @@
           <table class="cheatsheet-table">
             <thead>
               <tr>
-                <th style="width: 28%;">Shortcut</th>
-                <th style="width: 32%;">Action</th>
-                <th style="width: 40%;">Notes</th>
+                <th>Shortcut</th>
+                <th>Action</th>
+                <th>Notes</th>
               </tr>
             </thead>
             <tbody>
@@ -890,10 +903,10 @@
         localStorage.setItem('hyprmac-theme', theme);
       } catch (e) {}
       if (themeToggleBtn) {
-        const icon = themeToggleBtn.querySelector('.theme-toggle-icon');
         const label = themeToggleBtn.querySelector('.theme-toggle-label');
-        if (icon) icon.textContent = theme === 'light' ? '☽' : '☼';
-        if (label) label.textContent = theme === 'light' ? 'dark' : 'light';
+        const nextTheme = theme === 'light' ? 'dark' : 'light';
+        if (label) label.textContent = nextTheme;
+        themeToggleBtn.setAttribute('aria-label', 'Switch to ' + nextTheme + ' theme');
       }
     }
 
@@ -905,6 +918,40 @@
         const active = document.documentElement.getAttribute('data-theme') || 'dark';
         const next = active === 'light' ? 'dark' : 'light';
         updateThemeUI(next);
+      });
+    }
+
+    // Mobile Navigation Drawer Toggle
+    const navToggleBtn = document.getElementById('nav-toggle');
+    const primaryNav = document.getElementById('primary-nav');
+    if (navToggleBtn && primaryNav) {
+      function setNavOpen(open) {
+        primaryNav.classList.toggle('is-open', open);
+        navToggleBtn.setAttribute('aria-expanded', String(open));
+        const icon = navToggleBtn.querySelector('.nav-toggle-icon');
+        if (icon) icon.textContent = open ? '×' : '≡';
+      }
+
+      navToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setNavOpen(!primaryNav.classList.contains('is-open'));
+      });
+
+      primaryNav.querySelectorAll('a').forEach((link) => {
+        link.addEventListener('click', () => setNavOpen(false));
+      });
+
+      document.addEventListener('click', (e) => {
+        if (primaryNav.classList.contains('is-open') && !e.target.closest('.site-header')) {
+          setNavOpen(false);
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && primaryNav.classList.contains('is-open')) {
+          setNavOpen(false);
+          navToggleBtn.focus();
+        }
       });
     }
   </script>
